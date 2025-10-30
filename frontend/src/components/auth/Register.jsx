@@ -13,6 +13,9 @@ export default function Register() {
     parola: ''
   });
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -23,6 +26,16 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!emailRegex.test(formData.email)) {
+      setError("Adresa de email nu este valida. (ceva@ceva.ceva)");
+      return;
+    }
+
+    if (!passwordRegex.test(formData.parola)) {
+      setError("Parola trebuie sa contina minim 8 caractere, o litera mare si un caracter special.");
+      return;
+    }
+
     try {
       await api.post('/auth/register', formData);
       navigate('/login');

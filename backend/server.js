@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
+import forgotPasswordRoutes from "./routes/forgot-password.js";
+import resetPasswordRoutes from "./routes/reset-password.js";
 import { db } from "./db.js";             // conexiunea MySQL
 
 dotenv.config();
@@ -21,6 +23,8 @@ app.use((req, res, next) => {
 
 // Rute
 app.use("/api/auth", authRoutes);
+app.use("/api/auth", forgotPasswordRoutes);
+app.use("/api/auth", resetPasswordRoutes);
 
 // Test server
 app.get("/", (req, res) => {

@@ -155,7 +155,20 @@ export default function Login() {
           >
             {loading ? 'Se încarcă...' : 'Autentificare'}
           </Button>
-          
+          <Box sx={{ textAlign: 'center', mt: 2 }}>
+            <Link
+              component="button"
+              variant="body2"
+              onClick={() => navigate('/forgot-password')}
+              sx={{
+                textDecoration: 'none',
+                '&:hover': { textDecoration: 'underline' },
+          }}
+      >
+                Ai uitat parola?
+            </Link>
+        </Box>
+
           <Box sx={{ textAlign: 'center', mt: 2 }}>
             <Link
               component="button"
