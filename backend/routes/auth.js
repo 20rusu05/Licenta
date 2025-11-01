@@ -5,22 +5,29 @@ import bcrypt from "bcrypt";
 const router = express.Router();
 
 router.post("/register", async (req, res) => {
-  const { nume, email, parola } = req.body;
-  if (!nume || !email || !parola)
+  const { nume, prenume, email, parola, telefon } = req.body;
+  if (!nume || !prenume || !email || !parola || !telefon)
     return res.status(400).json({ error: "Campuri lipsa" });
 
   try {
-    const [exists] = await db.promise().query(
+    const [existsEmail] = await db.promise().query(
       "SELECT id FROM pacienti WHERE email = ?",
       [email]
     );
-    if (exists.length)
+    if (existsEmail.length)
       return res.status(400).json({ error: "Email deja folosit" });
+
+    const [existsTelefon] = await db.promise().query(
+      "SELECT id FROM pacienti WHERE telefon = ?",
+      [telefon]
+    );
+    if (existsTelefon.length)
+      return res.status(400).json({ error: "Număr de telefon deja folosit" });
 
     const hash = await bcrypt.hash(parola, 10);
     await db.promise().query(
-      "INSERT INTO pacienti (nume, email, parola) VALUES (?, ?, ?)",
-      [nume, email, hash]
+      "INSERT INTO pacienti (nume, prenume, email, parola, telefon) VALUES (?, ?, ?, ?, ?)",
+      [nume, prenume, email, hash, telefon]
     );
 
     res.json({ message: "Utilizator creat" });

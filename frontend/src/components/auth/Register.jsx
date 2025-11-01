@@ -9,15 +9,21 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     nume: '',
+    prenume: '',
     email: '',
-    parola: ''
+    parola: '',
+    telefon: ''
   });
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+  const phoneRegex = /^(07\d{8}|02\d{8}|03\d{8})$/;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'telefon' && !/^\d*$/.test(value)) {
+      return;
+    }
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -27,12 +33,17 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!emailRegex.test(formData.email)) {
-      setError("Adresa de email nu este valida. (ceva@ceva.ceva)");
+      setError("Adresa de email nu este validă. (ceva@ceva.ceva)");
       return;
     }
 
     if (!passwordRegex.test(formData.parola)) {
-      setError("Parola trebuie sa contina minim 8 caractere, o litera mare si un caracter special.");
+      setError("Parola trebuie să conțină minim 8 caractere, o literă mare și un caracter special.");
+      return;
+    }
+
+    if (!phoneRegex.test(formData.telefon)) {
+      setError("Numărul de telefon trebuie să înceapă cu 07, 02 sau 03 și să aibă exact 10 cifre.");
       return;
     }
 
@@ -112,11 +123,23 @@ export default function Register() {
             required
             fullWidth
             id="nume"
-            label="Nume complet"
+            label="Nume"
             name="nume"
-            autoComplete="name"
+            autoComplete="family-name"
             autoFocus
             value={formData.nume}
+            onChange={handleChange}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            id="prenume"
+            label="Prenume"
+            name="prenume"
+            autoComplete="given-name"
+            value={formData.prenume}
             onChange={handleChange}
             sx={{ mb: 2 }}
           />
@@ -128,6 +151,7 @@ export default function Register() {
             label="Email"
             name="email"
             autoComplete="email"
+            placeholder="ceva@ceva.ceva"
             value={formData.email}
             onChange={handleChange}
             sx={{ mb: 2 }}
@@ -142,6 +166,24 @@ export default function Register() {
             id="parola"
             autoComplete="new-password"
             value={formData.parola}
+            onChange={handleChange}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            name="telefon"
+            label="Număr de telefon"
+            type="tel"
+            id="telefon"
+            autoComplete="tel"
+            inputProps={{
+              maxLength: 10,
+              pattern: "[0-9]*"
+            }}
+            placeholder="0712345678"
+            value={formData.telefon}
             onChange={handleChange}
             sx={{ mb: 3 }}
           />

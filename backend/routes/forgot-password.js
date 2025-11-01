@@ -42,7 +42,7 @@ router.post('/forgot-password', async (req, res) => {
     const resetUrl = `http://localhost:3000/reset-password/${token}`;
 
     await transporter.sendMail({
-      from: '"NewMed" <noreply@newmed.com>',
+      from: '"NewMed System" <rusucristian554@gmail.com>',
       to: email,
       subject: 'Resetare parolă NewMed',
       html: `
