@@ -53,6 +53,12 @@ export default function Login() {
   };
 
   return (
+    <Box sx={{
+      minHeight: '100vh',
+      background: (theme) => theme.palette.mode === 'dark'
+        ? 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.15), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.12), transparent)'
+        : 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.10), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.08), transparent)'
+    }}>
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
@@ -188,5 +194,6 @@ export default function Login() {
         </Paper>
       </Box>
     </Container>
+    </Box>
   );
 }
