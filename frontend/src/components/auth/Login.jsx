@@ -27,11 +27,21 @@ export default function Login() {
     
     try {
       console.log('Încercare de autentificare cu:', formData);
-      const response = await api.post('/auth/login', formData);
-      console.log('Răspuns de la server:', response.data);
-      
-      // Salvăm datele utilizatorului în localStorage
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      const email = formData.email.trim();
+      const isDoctor = /^[a-zA-Z]+\.[a-zA-Z]+@newmed\.ro$/i.test(email);
+
+      if (isDoctor) {
+        // Autentificare medici pe baza emailului institutional
+        const [first, lastDomain] = email.split('@')[0].split('.');
+        const nume = `${first.charAt(0).toUpperCase()}${first.slice(1)} ${lastDomain.charAt(0).toUpperCase()}${lastDomain.slice(1)}`;
+        const doctorUser = { id: null, nume, email, role: 'doctor' };
+        localStorage.setItem('user', JSON.stringify(doctorUser));
+      } else {
+        const response = await api.post('/auth/login', formData);
+        console.log('Răspuns de la server:', response.data);
+        const pacientUser = { ...response.data.user, role: 'pacient' };
+        localStorage.setItem('user', JSON.stringify(pacientUser));
+      }
       
       // Verificăm dacă userul a fost salvat corect
       const savedUser = localStorage.getItem('user');

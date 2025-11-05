@@ -11,13 +11,20 @@ const drawerWidth = 240;
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = JSON.parse(localStorage.getItem('user'));
 
-  const items = useMemo(() => ([
-    { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
-    { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' },
-    { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
-    { label: 'Analize', icon: <HealthAndSafetyIcon />, path: '/dashboard/analize' },
-  ]), []);
+  const items = useMemo(() => {
+    const base = [
+      { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
+      { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
+      { label: 'Analize', icon: <HealthAndSafetyIcon />, path: '/dashboard/analize' },
+    ];
+    if (user?.role === 'doctor') {
+      base.splice(1, 0, { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });
+      base.splice(2, 0, { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' });
+    }
+    return base;
+  }, [user?.role]);
 
   return (
     <Drawer
@@ -37,7 +44,9 @@ export default function Sidebar() {
       <Box sx={{ overflow: 'auto' }}>
         <List>
           {items.map((item) => {
-            const selected = location.pathname.startsWith(item.path);
+            const selected = item.path === '/dashboard'
+              ? location.pathname === '/dashboard'
+              : location.pathname.startsWith(item.path);
             return (
               <ListItemButton
                 key={item.path}

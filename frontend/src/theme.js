@@ -43,6 +43,28 @@ export function getTheme(mode) {
     },
     shape: { borderRadius: 12 },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          'input:-webkit-autofill, textarea:-webkit-autofill, select:-webkit-autofill': {
+            WebkitTextFillColor: isDark ? '#E5E7EB' : '#2C3E50',
+            caretColor: isDark ? '#E5E7EB' : '#2C3E50',
+            backgroundColor: 'transparent !important',
+            WebkitBoxShadow: '0 0 0 1000px transparent inset !important',
+            boxShadow: '0 0 0 1000px transparent inset !important',
+            transition: 'background-color 99999s ease-in-out 0s',
+            borderRadius: 'inherit',
+          },
+          'input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active, textarea:-webkit-autofill:hover, textarea:-webkit-autofill:focus, select:-webkit-autofill:hover, select:-webkit-autofill:focus': {
+            backgroundColor: 'transparent !important',
+            WebkitBoxShadow: '0 0 0 1000px transparent inset !important',
+            boxShadow: '0 0 0 1000px transparent inset !important',
+          },
+          'input:-moz-autofill, textarea:-moz-autofill, select:-moz-autofill': {
+            backgroundColor: 'transparent !important',
+            boxShadow: '0 0 0 1000px transparent inset !important',
+          },
+        },
+      },
       MuiButton: {
         styleOverrides: {
           root: {
@@ -69,8 +91,34 @@ export function getTheme(mode) {
           root: {
             '& .MuiOutlinedInput-root': {
               '& fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E0' },
-              '&:hover fieldset': { borderColor: '#2196F3' },
+              '&:hover fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.20)' : '#BDBDBD' },
+              '&.Mui-focused fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.20)' : '#BDBDBD' },
+              '& .MuiOutlinedInput-input': {
+                backgroundColor: 'transparent',
+              },
+              '& .MuiOutlinedInput-input:focus': {
+                backgroundColor: 'transparent',
+              },
             },
+          },
+        },
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            '&.Mui-focused': { color: isDark ? '#9CA3AF' : '#616161' },
+          },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: isDark ? 'rgba(255,255,255,0.20)' : '#BDBDBD',
+            },
+          },
+          notchedOutline: {
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E0',
           },
         },
       },

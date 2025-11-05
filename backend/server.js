@@ -3,8 +3,10 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
+import pacientiRoutes from "./routes/pacienti.js";
 import forgotPasswordRoutes from "./routes/forgot-password.js";
 import resetPasswordRoutes from "./routes/reset-password.js";
+import medicamenteRoutes from "./routes/medicamente.js";
 import { db } from "./db.js";             // conexiunea MySQL
 
 dotenv.config();
@@ -21,10 +23,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// (Schema DB gestionată manual în SQL, fără creare automată din cod)
+
 // Rute
 app.use("/api/auth", authRoutes);
 app.use("/api/auth", forgotPasswordRoutes);
 app.use("/api/auth", resetPasswordRoutes);
+app.use("/api/pacienti", pacientiRoutes);
+app.use("/api/medicamente", medicamenteRoutes);
 
 // Test server
 app.get("/", (req, res) => {
