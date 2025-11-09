@@ -10,7 +10,9 @@ import { api } from '../services/api';
 
 export default function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user'));
-  const isDoctor = user?.role === 'doctor';
+  const userEmail = (user?.email || '').toLowerCase();
+  const isDoctor = userEmail.endsWith('@newmed.ro');
+  const displayName = isDoctor ? user?.nume?.split(' ')[1] || user?.nume : user?.prenume;
   const [meds, setMeds] = useState([]);
   const [loadingMeds, setLoadingMeds] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -20,22 +22,29 @@ export default function Dashboard() {
   const [pendingReqs, setPendingReqs] = useState([]);
   const [loadingReqs, setLoadingReqs] = useState(false);
 
+  // Încarcă date doar când userul este doctor sau pacient, nu la fiecare randare
   useEffect(() => {
+    // Nu face request dacă nu avem un user valid
+    if (!user?.id) return;
+
     if (!isDoctor) {
+      // Pentru pacienți: încarcă lista de medicamente disponibile
       setLoadingMeds(true);
       api.get('/medicamente')
         .then(res => setMeds(res.data || []))
         .catch(() => {})
         .finally(() => setLoadingMeds(false));
     } else {
-      // doctor: fetch pending applications
-      setLoadingReqs(true);
-      api.get('/medicamente/aplicari', { params: { status: 'pending' }})
-        .then(res => setPendingReqs(res.data || []))
-        .catch(() => {})
-        .finally(() => setLoadingReqs(false));
+      // Pentru doctori: încarcă doar dacă secțiunea de cereri este vizibilă
+      if (!pendingReqs.length) {
+        setLoadingReqs(true);
+        api.get('/medicamente/aplicari', { params: { status: 'pending' }})
+          .then(res => setPendingReqs(res.data || []))
+          .catch(() => {})
+          .finally(() => setLoadingReqs(false));
+      }
     }
-  }, [isDoctor]);
+  }, [isDoctor, user?.id]);
 
   const handleAddMed = async () => {
     if (!newMed.denumire.trim()) return;
@@ -76,7 +85,7 @@ export default function Dashboard() {
     <AppLayout>
       <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
         <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-          Bun venit, {user?.nume}!
+          Bun venit, {isDoctor ? `Dr. ${displayName}` : displayName}!
         </Typography>
 
         <Grid container spacing={3}>
