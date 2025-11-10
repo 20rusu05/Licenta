@@ -17,11 +17,11 @@ export default function Sidebar() {
     const base = [
       { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
       { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
+      { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
       { label: 'Analize', icon: <HealthAndSafetyIcon />, path: '/dashboard/analize' },
     ];
     if (user?.role === 'doctor') {
       base.splice(1, 0, { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });
-      base.splice(2, 0, { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' });
     }
     return base;
   }, [user?.role]);

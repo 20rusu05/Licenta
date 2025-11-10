@@ -1,4 +1,4 @@
-import { Box, Typography, Container, Grid, Paper, LinearProgress, Divider, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Table, TableHead, TableRow, TableCell, TableBody, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Container, Grid, Paper, LinearProgress, Divider,Fade, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Table, TableHead, TableRow, TableCell, TableBody, Snackbar, Alert } from '@mui/material';
 import { useEffect, useState } from 'react';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
@@ -213,7 +213,8 @@ export default function Dashboard() {
           )}
         </Grid>
 
-        <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">
+        <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm" TransitionComponent={Fade}
+        transitionDuration={500}>
           <DialogTitle>Adaugă medicament</DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             <TextField

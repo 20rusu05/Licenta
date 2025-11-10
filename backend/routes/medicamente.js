@@ -1,14 +1,27 @@
 import express from "express";
 import { db } from "../db.js";
+import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
-// List all medications
+// Middleware JWT
+function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Token lipsa" });
+
+  try {
+    const user = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = user;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Token invalid" });
+  }
+}
+
+// List medicamente
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await db.promise().query(
-      "SELECT id, denumire, descriere FROM medicamente ORDER BY id DESC"
-    );
+    const [rows] = await db.promise().query("SELECT id, denumire, descriere FROM medicamente ORDER BY id DESC");
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -16,29 +29,32 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Add a new medication
-router.post("/", async (req, res) => {
+// Add medicament (doctors only)
+router.post("/", authMiddleware, async (req, res) => {
   const { denumire, descriere } = req.body;
   if (!denumire) return res.status(400).json({ error: "Denumire necesara" });
+
   try {
+    const doctorId = req.user.id;
     const [result] = await db
       .promise()
-      .query(
-        "INSERT INTO medicamente (denumire, descriere) VALUES (?, ?)",
-        [denumire, descriere || null]
-      );
-    res.json({ id: result.insertId, denumire, descriere: descriere || null });
+      .query("INSERT INTO medicamente (denumire, descriere, doctor_id) VALUES (?, ?, ?)", [
+        denumire,
+        descriere || null,
+        doctorId
+      ]);
+    res.status(201).json({ message: "Medicament adaugat", id: result.insertId });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Eroare server" });
+    res.status(500).json({ error: "Eroare la inserare medicament" });
   }
 });
 
-// Apply for a medication (patient)
+// Aplicare medicament (pacient)
 router.post("/apply", async (req, res) => {
   const { pacientId, medicamentId } = req.body;
-  if (!pacientId || !medicamentId)
-    return res.status(400).json({ error: "Campuri lipsa" });
+  if (!pacientId || !medicamentId) return res.status(400).json({ error: "Campuri lipsa" });
+
   try {
     await db
       .promise()
@@ -53,8 +69,8 @@ router.post("/apply", async (req, res) => {
   }
 });
 
-// List applications (optionally filter by status)
-router.get("/aplicari", async (req, res) => {
+// List aplicari
+router.get("/aplicari", authMiddleware, async (req, res) => {
   const { status } = req.query;
   try {
     const where = status ? "WHERE a.status = ?" : "";
@@ -79,17 +95,16 @@ router.get("/aplicari", async (req, res) => {
   }
 });
 
-// Update application status (accept or reject)
-router.post("/aplicari/:id/status", async (req, res) => {
+// Update aplicare
+router.post("/aplicari/:id/status", authMiddleware, async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body; // 'acceptat' | 'respins'
-  if (!id || !status || !['acceptat','respins'].includes(status)) {
+  const { status } = req.body;
+  if (!id || !status || !["acceptat", "respins"].includes(status)) {
     return res.status(400).json({ error: "Parametri invalidi" });
   }
+
   try {
-    await db
-      .promise()
-      .query("UPDATE aplicari_medicamente SET status = ? WHERE id = ?", [status, id]);
+    await db.promise().query("UPDATE aplicari_medicamente SET status = ? WHERE id = ?", [status, id]);
     res.json({ message: "Status actualizat" });
   } catch (err) {
     console.error(err);
@@ -98,5 +113,3 @@ router.post("/aplicari/:id/status", async (req, res) => {
 });
 
 export default router;
-
-

@@ -24,36 +24,23 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
-    try {
-      console.log('Încercare de autentificare cu:', formData);
-      const email = formData.email.trim();
-      const isDoctor = /^[a-zA-Z]+\.[a-zA-Z]+@newmed\.ro$/i.test(email);
 
-      if (isDoctor) {
-        // Autentificare medici pe baza emailului institutional
-        const [first, lastDomain] = email.split('@')[0].split('.');
-        const nume = `${first.charAt(0).toUpperCase()}${first.slice(1)} ${lastDomain.charAt(0).toUpperCase()}${lastDomain.slice(1)}`;
-        const doctorUser = { id: null, nume, email, role: 'doctor' };
-        localStorage.setItem('user', JSON.stringify(doctorUser));
-      } else {
-        const response = await api.post('/auth/login', formData);
-        console.log('Răspuns de la server:', response.data);
-        const pacientUser = { ...response.data.user, role: 'pacient' };
-        localStorage.setItem('user', JSON.stringify(pacientUser));
-      }
-      
-      // Verificăm dacă userul a fost salvat corect
-      const savedUser = localStorage.getItem('user');
-      console.log('User salvat în localStorage:', savedUser);
-      
-      // Emitem un eveniment custom pentru a notifica App.jsx
+    try {
+      // apel backend login
+      const response = await api.post('/auth/login', formData);
+
+      // salvăm user și token în localStorage
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('token', response.data.token);
+
+      console.log('Token salvat:', response.data.token);
+      console.log('User salvat:', response.data.user);
+
+      // emitem eveniment storage pentru a notifica componentele
       window.dispatchEvent(new Event('storage'));
-      
-      // Așteptăm puțin pentru a permite stării să se actualizeze
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 100);
+
+      // redirect către dashboard
+      navigate('/dashboard');
     } catch (err) {
       console.error('Eroare la autentificare:', err);
       setError(err.response?.data?.error || 'Eroare la autentificare');
@@ -69,141 +56,70 @@ export default function Login() {
         ? 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.15), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.12), transparent)'
         : 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.10), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.08), transparent)'
     }}>
-    <Container component="main" maxWidth="xs">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Typography
-          component="h1"
-          variant="h4"
-          sx={{
-            mb: 4,
-            color: 'primary.main',
-            fontWeight: 600,
-          }}
-        >
-          NewMed
-        </Typography>
-        
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            width: '100%',
-            borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'background.paper',
-          }}
-        >
-          <Typography
-            component="h2"
-            variant="h5"
-            sx={{
-              mb: 3,
-              textAlign: 'center',
-              fontWeight: 500,
-            }}
-          >
-            Autentificare
+      <Container component="main" maxWidth="xs">
+        <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Typography component="h1" variant="h4" sx={{ mb: 4, color: 'primary.main', fontWeight: 600 }}>
+            NewMed
           </Typography>
-          
-          {error && (
-            <Alert 
-              severity="error" 
-              sx={{ 
-                width: '100%', 
-                mb: 2,
-                borderRadius: 1,
-              }}
-            >
-              {error}
-            </Alert>
-          )}
 
-          <Box 
-            component="form" 
-            onSubmit={handleSubmit} 
-            sx={{ mt: 1 }}
-          >
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            id="email"
-            label="Email"
-            name="email"
-            autoComplete="email"
-            autoFocus
-            value={formData.email}
-            onChange={handleChange}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="parola"
-            label="Parola"
-            type="password"
-            id="parola"
-            autoComplete="current-password"
-            value={formData.parola}
-            onChange={handleChange}
-            sx={{ mb: 3 }}
-          />
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ 
-              mt: 2,
-              mb: 2,
-              py: 1.5,
-              fontSize: '1rem',
-            }}
-            disabled={loading}
-          >
-            {loading ? 'Se încarcă...' : 'Autentificare'}
-          </Button>
-          <Box sx={{ textAlign: 'center', mt: 2 }}>
-            <Link
-              component="button"
-              variant="body2"
-              onClick={() => navigate('/forgot-password')}
-              sx={{
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-          }}
-      >
-                Ai uitat parola?
-            </Link>
-        </Box>
+          <Paper elevation={0} sx={{ p: 4, width: '100%', borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Typography component="h2" variant="h5" sx={{ mb: 3, textAlign: 'center', fontWeight: 500 }}>
+              Autentificare
+            </Typography>
 
-          <Box sx={{ textAlign: 'center', mt: 2 }}>
-            <Link
-              component="button"
-              variant="body2"
-              onClick={() => navigate('/register')}
-              sx={{
-                textDecoration: 'none',
-                '&:hover': {
-                  textDecoration: 'underline',
-                },
-              }}
-            >
-              Nu ai cont? Înregistrează-te
-            </Link>
-          </Box>
+            {error && <Alert severity="error" sx={{ width: '100%', mb: 2, borderRadius: 1 }}>{error}</Alert>}
+
+            <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                id="email"
+                label="Email"
+                name="email"
+                autoComplete="email"
+                autoFocus
+                value={formData.email}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="parola"
+                label="Parola"
+                type="password"
+                id="parola"
+                autoComplete="current-password"
+                value={formData.parola}
+                onChange={handleChange}
+                sx={{ mb: 3 }}
+              />
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                sx={{ mt: 2, mb: 2, py: 1.5, fontSize: '1rem' }}
+                disabled={loading}
+              >
+                {loading ? 'Se încarcă...' : 'Autentificare'}
+              </Button>
+
+              <Box sx={{ textAlign: 'center', mt: 2 }}>
+                <Link component="button" variant="body2" onClick={() => navigate('/forgot-password')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                  Ai uitat parola?
+                </Link>
+              </Box>
+              <Box sx={{ textAlign: 'center', mt: 2 }}>
+                <Link component="button" variant="body2" onClick={() => navigate('/register')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                  Nu ai cont? Înregistrează-te
+                </Link>
+              </Box>
+            </Box>
+          </Paper>
         </Box>
-        </Paper>
-      </Box>
-    </Container>
+      </Container>
     </Box>
   );
 }
