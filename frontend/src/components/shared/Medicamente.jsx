@@ -7,19 +7,48 @@ import {
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import AppLayout from "../layout/AppLayout";
 import { api } from "../../services/api";
 
 function StatusChip({ status }) {
-  const color = status === "acceptat" ? "success" : status === "respins" ? "error" : "warning";
-  return <Chip size="small" color={color} label={status || "-"} />;
+  if (!status) return <Chip size="small" label="-" color="default" />;
+
+  const normalized = status.toLowerCase();
+  let label = "";
+  let color = "default";
+
+  switch (normalized) {
+    case "pending":
+      label = "In asteptare";
+      color = "warning";
+      break;
+    case "acceptat":
+      label = "Acceptat";
+      color = "success";
+      break;
+    case "respins":
+      label = "Respins";
+      color = "error";
+      break;
+    default:
+      label = status.charAt(0).toUpperCase() + status.slice(1);
+      color = "default";
+  }
+
+  return <Chip size="small" color={color} label={label} />;
 }
+
 
 export default function Medicamente() {
   const [loading, setLoading] = useState(true);
   const [medicamente, setMedicamente] = useState([]);
   const [openRows, setOpenRows] = useState({});
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedMed, setSelectedMed] = useState(null);
   const [newMed, setNewMed] = useState({ denumire: "", descriere: "" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState("");
@@ -50,35 +79,32 @@ export default function Medicamente() {
   const toggleRow = (id) => setOpenRows((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const applyMedicament = async (med) => {
-    try {
-      const aplicare = med.aplicanti?.find((a) => a.pacient_id === user.id);
+  try {
+    const aplicare = med.aplicanti?.find(a => a.pacient_id === user.id);
 
-      if (aplicare) {
-        // renunță la cerere
-        await api.post(
-          `/medicamente/aplicari/${aplicare.id}/status`,
-          { status: "respins" },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setDialogMessage("Ai renunțat la cererea ta.");
-      } else {
-        // aplică
-        await api.post(
-          `/medicamente/${med.id}/aplica`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setDialogMessage("Cererea a fost trimisă și este în așteptare.");
-      }
-
-      setDialogOpen(true);
-      await reload();
-    } catch (err) {
-      console.error("Eroare la aplicare:", err);
-      setDialogMessage(err.response?.data?.error || "Eroare la trimiterea cererii");
-      setDialogOpen(true);
+    if (aplicare) {
+      // daca exista aplicare -> stergem (renuntare)
+      await api.delete(`/medicamente/aplicari/${aplicare.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDialogMessage('Ai renunțat la cererea ta.');
+    } else {
+      // daca nu exista -> cream aplicarea
+      await api.post(`/medicamente/${med.id}/aplica`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDialogMessage('Cererea a fost trimisă și este în așteptare.');
     }
-  };
+
+    setDialogOpen(true);
+    await reload();
+  } catch (err) {
+    console.error('Eroare la aplicare/renuntare:', err);
+    setDialogMessage(err.response?.data?.error || 'Eroare la trimiterea cererii');
+    setDialogOpen(true);
+  }
+};
+
 
   const updateStatus = async (id, status) => {
     try {
@@ -93,17 +119,34 @@ export default function Medicamente() {
     }
   };
 
+  const handleEdit = (med) => {
+    setSelectedMed(med);
+    setNewMed({ denumire: med.denumire, descriere: med.descriere });
+    setEditOpen(true);
+  };
+
+  const handleDelete = (med) => {
+    setSelectedMed(med);
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await api.delete(`/medicamente/${selectedMed.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setConfirmOpen(false);
+      setSelectedMed(null);
+      await reload();
+    } catch (err) {
+      console.error("Eroare la ștergere:", err);
+    }
+  };
+
   return (
     <AppLayout>
       <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 3,
-          }}
-        >
+        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
             Medicamente disponibile
           </Typography>
@@ -125,13 +168,11 @@ export default function Medicamente() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell />
+                  {isDoctor && <TableCell />}
                   <TableCell>Denumire</TableCell>
                   <TableCell>Descriere</TableCell>
                   {!isDoctor && <TableCell>Stare</TableCell>}
-                  <TableCell align="right">
-                    {isDoctor ? "Aplicanți" : "Acțiune"}
-                  </TableCell>
+                  <TableCell align="right">{isDoctor ? "Acțiuni" : "Opțiune"}</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -139,17 +180,13 @@ export default function Medicamente() {
                 {medicamente.map((m) => (
                   <React.Fragment key={m.id}>
                     <TableRow>
-                      <TableCell width={56}>
-                        {isDoctor && (
+                      {isDoctor && (
+                        <TableCell width={56}>
                           <IconButton size="small" onClick={() => toggleRow(m.id)}>
-                            {openRows[m.id] ? (
-                              <KeyboardArrowUpIcon />
-                            ) : (
-                              <KeyboardArrowDownIcon />
-                            )}
+                            {openRows[m.id] ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                           </IconButton>
-                        )}
-                      </TableCell>
+                        </TableCell>
+                      )}
                       <TableCell>{m.denumire}</TableCell>
                       <TableCell>{m.descriere}</TableCell>
 
@@ -158,8 +195,7 @@ export default function Medicamente() {
                           {m.aplicanti?.find((a) => a.pacient_id === user.id) ? (
                             <StatusChip
                               status={
-                                m.aplicanti.find((a) => a.pacient_id === user.id)
-                                  .status
+                                m.aplicanti.find((a) => a.pacient_id === user.id).status
                               }
                             />
                           ) : (
@@ -169,7 +205,29 @@ export default function Medicamente() {
                       )}
 
                       <TableCell align="right">
-                        {!isDoctor && (
+                        {isDoctor ? (
+                          <>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              startIcon={<EditIcon />}
+                              onClick={() => handleEdit(m)}
+                              sx={{ mr: 1 }}
+                            >
+                              Editează
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              startIcon={<DeleteIcon />}
+                              onClick={() => handleDelete(m)}
+                            >
+                              Șterge
+                            </Button>
+                          </>
+                        ) : (
                           <Button
                             variant={
                               m.aplicanti?.find((a) => a.pacient_id === user.id)
@@ -180,8 +238,8 @@ export default function Medicamente() {
                             size="small"
                             onClick={() => applyMedicament(m)}
                             disabled={
-                              m.aplicanti?.find((a) => a.pacient_id === user.id)
-                                ?.status === "acceptat"
+                              m.aplicanti?.find((a) => a.pacient_id === user.id)?.status ===
+                              "acceptat"
                             }
                           >
                             {m.aplicanti?.find((a) => a.pacient_id === user.id)
@@ -259,18 +317,26 @@ export default function Medicamente() {
           </Paper>
         )}
 
-        <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
-          <DialogTitle>Notificare</DialogTitle>
+        {/* Confirmare stergere */}
+        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+          <DialogTitle>Confirmă ștergerea</DialogTitle>
           <DialogContent>
-            <Typography>{dialogMessage}</Typography>
+            <Typography>
+              Sigur dorești să ștergi medicamentul „{selectedMed?.denumire}”? Această acțiune
+              este ireversibilă.
+            </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setDialogOpen(false)}>OK</Button>
+            <Button onClick={() => setConfirmOpen(false)}>Anulează</Button>
+            <Button color="error" variant="contained" onClick={confirmDelete}>
+              Șterge
+            </Button>
           </DialogActions>
         </Dialog>
 
-        <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">
-          <DialogTitle>Adaugă medicament</DialogTitle>
+        {/* Editare medicament */}
+        <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="sm">
+          <DialogTitle>Editează medicament</DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             <TextField
               fullWidth
@@ -287,37 +353,22 @@ export default function Medicamente() {
               value={newMed.descriere}
               onChange={(e) => setNewMed({ ...newMed, descriere: e.target.value })}
             />
-            {error && (
-              <Typography color="error" variant="body2" sx={{ mt: 2 }}>
-                {error}
-              </Typography>
-            )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setAddOpen(false)}>Anulează</Button>
+            <Button onClick={() => setEditOpen(false)}>Anulează</Button>
             <Button
               variant="contained"
               onClick={async () => {
-                setError("");
-                if (!newMed.denumire.trim()) {
-                  setError("Introduceți denumirea medicamentului");
-                  return;
-                }
                 try {
-                  await api.post(
-                    "/medicamente",
-                    {
-                      denumire: newMed.denumire.trim(),
-                      descriere: newMed.descriere.trim(),
-                    },
+                  await api.put(
+                    `/medicamente/${selectedMed.id}`,
+                    newMed,
                     { headers: { Authorization: `Bearer ${token}` } }
                   );
-                  setAddOpen(false);
-                  setNewMed({ denumire: "", descriere: "" });
+                  setEditOpen(false);
                   await reload();
                 } catch (err) {
-                  console.error("Eroare la adăugare:", err);
-                  setError(err.response?.data?.error || "Eroare la adăugarea medicamentului");
+                  console.error("Eroare la editare:", err);
                 }
               }}
             >

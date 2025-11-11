@@ -66,6 +66,68 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
+// Editare medicament (doctor)
+router.put("/:id", authMiddleware, async (req, res) => {
+  if (req.user.role !== "doctor") return res.status(403).json({ error: "Doar doctorii pot edita medicamente" });
+
+  const medicamentId = req.params.id;
+  const { denumire, descriere } = req.body;
+
+  try {
+    await db.promise().query(
+      "UPDATE medicamente SET denumire = ?, descriere = ? WHERE id = ? AND doctor_id = ?",
+      [denumire, descriere, medicamentId, req.user.id]
+    );
+    res.json({ message: "Medicament actualizat" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare la actualizare medicament" });
+  }
+});
+
+// Stergere medicament (doctor)
+router.delete("/:id", authMiddleware, async (req, res) => {
+  if (req.user.role !== "doctor") return res.status(403).json({ error: "Doar doctorii pot sterge medicamente" });
+
+  const medicamentId = req.params.id;
+
+  try {
+    await db.promise().query("DELETE FROM medicamente WHERE id = ? AND doctor_id = ?", [medicamentId, req.user.id]);
+    res.json({ message: "Medicament sters" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare la stergere medicament" });
+  }
+});
+
+// DELETE aplicare (pacient renunta) -> /medicamente/aplicari/:id
+router.delete("/aplicari/:id", authMiddleware, async (req, res) => {
+  // doar pacientul care a creat aplicarea sau un doctor/admin poate sterge; aici permitem doar pacientul
+  const aplicareId = req.params.id;
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  try {
+    // verificam proprietatea: cine este pacientul in acea aplicare
+    const [rows] = await db.promise().query(
+      "SELECT pacient_id FROM aplicari_medicamente WHERE id = ?",
+      [aplicareId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Aplicare inexistenta" });
+
+    const aplicare = rows[0];
+    if (userRole !== "pacient" || aplicare.pacient_id !== userId) {
+      return res.status(403).json({ error: "Nu ai dreptul sa stergi aceasta aplicare" });
+    }
+
+    await db.promise().query("DELETE FROM aplicari_medicamente WHERE id = ?", [aplicareId]);
+    return res.json({ message: "Aplicare stearsa" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Eroare server" });
+  }
+});
+
 // Adăugare medicament
 router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "doctor")
