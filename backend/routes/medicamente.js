@@ -260,24 +260,30 @@ router.post("/aplicari/:id/status", authMiddleware, async (req, res) => {
   }
 });
 
-// ------------------------
-// DELETE /api/medicamente/aplicari/:id – pacient renunta la aplicare
-// ------------------------
-router.delete("/aplicari/:id", authMiddleware, async (req, res) => {
-  if (req.user.role !== "pacient")
-    return res.status(403).json({ error: "Doar pacientii pot sterge aplicari" });
-
+// Stergere aplicare medicament (renuntare)
+router.delete("/aplicare/:id", authMiddleware, async (req, res) => {
   const aplicareId = req.params.id;
-  const pacientId = req.user.id;
 
   try {
-    await db
-      .promise()
-      .query(
-        "DELETE FROM aplicari_medicamente WHERE id = ? AND pacient_id = ?",
-        [aplicareId, pacientId]
-      );
-    res.json({ message: "Aplicare stearsa" });
+    // Verificam daca aplicarea exista si apartine utilizatorului
+    const [rows] = await db.promise().query(
+      "SELECT * FROM aplicari_medicamente WHERE id = ? AND pacient_id = ?",
+      [aplicareId, req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Aplicarea nu exista sau nu iti apartine" });
+    }
+
+    // Verificare status
+    if (rows[0].status !== "pending") {
+      return res.status(400).json({ error: "Nu poti renunta daca aplicarea nu este pending" });
+    }
+
+    // Stergere aplicare
+    await db.promise().query("DELETE FROM aplicari_medicamente WHERE id = ?", [aplicareId]);
+
+    res.json({ message: "Aplicarea a fost stearsa (renuntare efectuata)." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Eroare server" });

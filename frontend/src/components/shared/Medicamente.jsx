@@ -50,6 +50,8 @@ export default function Medicamente() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedMed, setSelectedMed] = useState(null);
   const [newMed, setNewMed] = useState({ denumire: "", descriere: "" });
+  const [confirmRenuntaOpen, setConfirmRenuntaOpen] = useState(false);
+  const [renuntaId, setRenuntaId] = useState(null);
 
   const [formularOpen, setFormularOpen] = useState(false);
   const [selectedMedForm, setSelectedMedForm] = useState(null);
@@ -196,6 +198,46 @@ export default function Medicamente() {
     }
   };
 
+const handleRenunta = async (id) => {
+  // Pop-up de confirmare
+  const confirmRenuntare = window.confirm("Ești sigur că vrei să renunți la această aplicare?");
+  if (!confirmRenuntare) return; // dacă utilizatorul apasă "Anulează", nu se face nimic
+
+  try {
+    // Șterge aplicația
+    await axios.delete(`${API_URL}/aplicare/${id}`, { withCredentials: true, headers });
+
+    // Reîncarcă lista de medicamente/aplicări
+    await reload();
+  } catch (err) {
+    console.error("Eroare renuntare:", err);
+    // Afișează mesaj doar în caz de eroare
+    setDialogMessage(err.response?.data?.error || "Eroare server");
+    setDialogOpen(true);
+  }
+};
+
+
+const openConfirmRenunta = (id) => {
+  setRenuntaId(id);
+  setConfirmRenuntaOpen(true);
+};
+
+const handleConfirmRenunta = async () => {
+  try {
+    await axios.delete(`${API_URL}/aplicare/${renuntaId}`, { withCredentials: true, headers });
+    setConfirmRenuntaOpen(false);
+    setRenuntaId(null);
+    await reload();
+  } catch (err) {
+    console.error("Eroare renuntare:", err);
+    setDialogMessage(err.response?.data?.error || "Eroare server");
+    setDialogOpen(true);
+    setConfirmRenuntaOpen(false);
+  }
+};
+
+
   const addMedicament = async () => {
     try {
       await axios.post(API_URL, newMed, { headers });
@@ -265,19 +307,38 @@ export default function Medicamente() {
                           <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDelete(m)} sx={{ mr: 1 }}>Șterge</Button>
                         </>
                       ) : (
-                        <Button
-                          variant={m.aplicanti?.find(a => a.pacient_id === user.id) ? "outlined" : "contained"}
-                          color="primary"
-                          size="small"
-                          onClick={() => {
-                            const aplicare = m.aplicanti?.find(a => a.pacient_id === user.id);
-                            if (aplicare) return;
-                            openFormular(m);
-                          }}
-                          disabled={m.aplicanti?.find(a => a.pacient_id === user.id)?.status === "acceptat"}
-                        >
-                          {m.aplicanti?.find(a => a.pacient_id === user.id) ? "Renunță" : "Aplică"}
-                        </Button>
+<Button
+  variant={m.aplicanti?.find(a => a.pacient_id === user.id) ? "outlined" : "contained"}
+  color="primary"
+  size="small"
+  disabled={
+    (() => {
+      const aplicare = m.aplicanti?.find(a => a.pacient_id === user.id);
+      if (!aplicare) return false; // dacă nu există → poate aplica
+      return aplicare.status !== "pending"; // doar pending e activ
+    })()
+  }
+  onClick={() => {
+    const aplicare = m.aplicanti?.find(a => a.pacient_id === user.id);
+
+    if (!aplicare) {
+      openFormular(m); // dacă nu există aplicare → deschide formularul
+      return;
+    }
+
+    if (aplicare.status === "pending") {
+      openConfirmRenunta(aplicare.id); // dacă e pending → pop-up confirmare
+      return;
+    }
+
+    setDialogMessage("Nu poti renunta daca statusul nu este pending.");
+    setDialogOpen(true); // dacă status e acceptat/respins
+  }}
+>
+  {m.aplicanti?.find(a => a.pacient_id === user.id) ? "Renunță" : "Aplică"}
+</Button>
+
+
                       )}
                     </TableCell>
                   </TableRow>
@@ -421,6 +482,22 @@ export default function Medicamente() {
           <Button onClick={() => setDialogOpen(false)}>OK</Button>
         </DialogActions>
       </Dialog>
+      {/* Dialog confirmare renuntare */}
+<Dialog
+  open={confirmRenuntaOpen}
+  onClose={() => setConfirmRenuntaOpen(false)}
+>
+  <DialogTitle>Confirmare renunțare</DialogTitle>
+  <DialogContent>
+    <Typography>Sigur vrei să renunți la această aplicare?</Typography>
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setConfirmRenuntaOpen(false)}>Anulează</Button>
+    <Button onClick={handleConfirmRenunta} variant="contained" color="error">
+      Da, renunță
+    </Button>
+  </DialogActions>
+</Dialog>
 
     </Container>
   </AppLayout>
