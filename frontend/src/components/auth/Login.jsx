@@ -107,12 +107,12 @@ export default function Login() {
               </Button>
 
               <Box sx={{ textAlign: 'center', mt: 2 }}>
-                <Link component="button" variant="body2" onClick={() => navigate('/forgot-password')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                <Link component="button" type="button" variant="body2" onClick={() => navigate('/forgot-password')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                   Ai uitat parola?
                 </Link>
               </Box>
               <Box sx={{ textAlign: 'center', mt: 2 }}>
-                <Link component="button" variant="body2" onClick={() => navigate('/register')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                <Link component="button" type="button" variant="body2" onClick={() => navigate('/register')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                   Nu ai cont? Înregistrează-te
                 </Link>
               </Box>

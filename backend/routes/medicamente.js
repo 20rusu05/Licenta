@@ -22,70 +22,196 @@ function authMiddleware(req, res, next) {
 // GET medicamente cu aplicanti
 // ------------------------
 router.get("/", authMiddleware, async (req, res) => {
-  try {
-    const whereClause = req.user.role === "doctor" ? "WHERE m.doctor_id = ?" : "";
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+  
+  // Parametri pentru paginarea aplicantilor per medicament
+  const medicamentId = req.query.medicamentId ? parseInt(req.query.medicamentId) : null;
+  const aplicantiPage = parseInt(req.query.aplicantiPage) || 1;
+  const aplicantiLimit = parseInt(req.query.aplicantiLimit) || 5;
+  const aplicantiOffset = (aplicantiPage - 1) * aplicantiLimit;
 
-    const [rows] = await db.promise().query(
-      `
-      SELECT 
-        m.id, 
-        m.denumire, 
-        m.descriere,
-        a.id AS aplicare_id,
-        a.status,
-        a.fumeaza,
-        a.activitate_fizica,
-        a.probleme_inima,
-        a.alergii,
-        a.boli_cronice,
-        a.medicamente_curente,
-        a.greutate,
-        a.inaltime,
-        a.observatii,
-        p.id AS pacient_id,
-        p.nume AS pacient_nume,
-        p.email AS pacient_email
-      FROM medicamente m
-      LEFT JOIN aplicari_medicamente a ON a.medicament_id = m.id
-      LEFT JOIN pacienti p ON p.id = a.pacient_id
-      ${whereClause}
-      ORDER BY m.id DESC, a.id ASC
-      `,
-      req.user.role === "doctor" ? [req.user.id] : []
+  try {
+    // Total medicamente (count)
+    const [[{ total }]] = await db.promise().query(
+      "SELECT COUNT(*) AS total FROM medicamente"
     );
 
-    const medicamenteMap = new Map();
+    // Lista medicamente (fara aplicanti)
+    const [medicamente] = await db.promise().query(
+      `SELECT id, denumire, descriere FROM medicamente ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
 
-    for (const row of rows) {
-      if (!medicamenteMap.has(row.id)) {
-        medicamenteMap.set(row.id, {
-          id: row.id,
-          denumire: row.denumire,
-          descriere: row.descriere,
-          aplicanti: [],
-        });
+    // Daca se cere un medicament specific, returnam doar acel medicament cu aplicantii
+    if (medicamentId) {
+      const [medicamentSpecific] = await db.promise().query(
+        `SELECT id, denumire, descriere FROM medicamente WHERE id = ?`,
+        [medicamentId]
+      );
+
+      if (medicamentSpecific.length === 0) {
+        return res.status(404).json({ error: "Medicament inexistent" });
       }
-      if (row.aplicare_id) {
-        medicamenteMap.get(row.id).aplicanti.push({
-          id: row.aplicare_id,
-          pacient_id: row.pacient_id,
-          pacient_nume: row.pacient_nume,
-          pacient_email: row.pacient_email,
-          status: row.status,
-          fumeaza: row.fumeaza,
-          activitate_fizica: row.activitate_fizica,
-          probleme_inima: row.probleme_inima,
-          alergii: row.alergii,
-          boli_cronice: row.boli_cronice,
-          medicamente_curente: row.medicamente_curente,
-          greutate: row.greutate,
-          inaltime: row.inaltime,
-          observatii: row.observatii,
-        });
-      }
+
+      const m = medicamentSpecific[0];
+
+      // Count total aplicanti pentru acest medicament
+      const [[{ totalAplicanti }]] = await db.promise().query(
+        `SELECT COUNT(*) AS totalAplicanti FROM aplicari_medicamente WHERE medicament_id = ?`,
+        [m.id]
+      );
+
+      // Aplicanti paginati
+      const [aplicantiRows] = await db.promise().query(
+        `
+        SELECT 
+          a.id,
+          a.status,
+          a.fumeaza,
+          a.activitate_fizica,
+          a.probleme_inima,
+          a.alergii,
+          a.boli_cronice,
+          a.medicamente_curente,
+          a.greutate,
+          a.inaltime,
+          a.observatii,
+          p.id AS pacient_id,
+          p.nume AS pacient_nume,
+          p.email AS pacient_email
+        FROM aplicari_medicamente a
+        JOIN pacienti p ON p.id = a.pacient_id
+        WHERE a.medicament_id = ?
+        ORDER BY a.id ASC
+        LIMIT ? OFFSET ?
+        `,
+        [m.id, aplicantiLimit, aplicantiOffset]
+      );
+
+      return res.json({
+        medicament: {
+          id: m.id,
+          denumire: m.denumire,
+          descriere: m.descriere,
+          aplicanti: aplicantiRows,
+          aplicantiTotal: totalAplicanti,
+          aplicantiPage: aplicantiPage,
+          aplicantiLimit: aplicantiLimit,
+        }
+      });
     }
 
-    res.json([...medicamenteMap.values()]);
+    // Pentru fiecare medicament, luam count-ul aplicantilor 
+    // Si pentru pacienti, returnam aplicarea lor daca exista
+    const medicamenteWithAplicanti = await Promise.all(
+      medicamente.map(async (m) => {
+        // Count total aplicanti pentru acest medicament
+        const [[{ totalAplicanti }]] = await db.promise().query(
+          `SELECT COUNT(*) AS totalAplicanti FROM aplicari_medicamente WHERE medicament_id = ?`,
+          [m.id]
+        );
+
+        let aplicantiArray = [];
+        
+        // Daca utilizatorul e pacient, returnam doar aplicarea lui (daca exista)
+        if (req.user.role === 'pacient') {
+          const [aplicarePacient] = await db.promise().query(
+            `
+            SELECT 
+              a.id,
+              a.status,
+              a.fumeaza,
+              a.activitate_fizica,
+              a.probleme_inima,
+              a.alergii,
+              a.boli_cronice,
+              a.medicamente_curente,
+              a.greutate,
+              a.inaltime,
+              a.observatii,
+              p.id AS pacient_id,
+              p.nume AS pacient_nume,
+              p.email AS pacient_email
+            FROM aplicari_medicamente a
+            JOIN pacienti p ON p.id = a.pacient_id
+            WHERE a.medicament_id = ? AND a.pacient_id = ?
+            `,
+            [m.id, req.user.id]
+          );
+          aplicantiArray = aplicarePacient;
+        }
+
+        return {
+          id: m.id,
+          denumire: m.denumire,
+          descriere: m.descriere,
+          aplicanti: aplicantiArray,
+          aplicantiTotal: totalAplicanti,
+          aplicantiPage: 1,
+          aplicantiLimit: aplicantiLimit,
+        };
+      })
+    );
+
+    res.json({
+      total,
+      page,
+      limit,
+      medicamente: medicamenteWithAplicanti,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare server" });
+  }
+});
+
+router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
+  if (req.user.role !== "doctor")
+    return res.status(403).json({ error: "Doar doctorii pot crea programari" });
+
+  const aplicareId = req.params.id;
+  const { dataProgramare } = req.body;
+
+  if (!dataProgramare)
+    return res.status(400).json({ error: "Data programarii este obligatorie" });
+
+  // Validare: data nu poate fi în trecut
+  const dataSelectata = new Date(dataProgramare);
+  const now = new Date();
+  if (dataSelectata < now) {
+    return res.status(400).json({ error: "Nu poti seta o programare in trecut" });
+  }
+
+  try {
+    // luam pacientul si medicamentul din aplicare
+    const [rows] = await db.promise().query(
+      "SELECT pacient_id, medicament_id FROM aplicari_medicamente WHERE id = ?",
+      [aplicareId]
+    );
+
+    if (rows.length === 0) return res.status(404).json({ error: "Aplicare inexistenta" });
+
+    const { pacient_id, medicament_id } = rows[0];
+
+    // Validare: nu pot exista 2 programari la aceeasi ora pentru acelasi doctor
+    const [existing] = await db.promise().query(
+      "SELECT id FROM programari WHERE doctor_id = ? AND data_ora = ?",
+      [req.user.id, dataProgramare]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ error: "Exista deja o programare la aceasta ora" });
+    }
+
+    // Tabelul programari are: doctor_id, pacient_id, data_ora
+    await db.promise().query(
+      "INSERT INTO programari (doctor_id, pacient_id, data_ora) VALUES (?, ?, ?)",
+      [req.user.id, pacient_id, dataProgramare]
+    );
+
+    res.json({ message: "Programare creata" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Eroare server" });
@@ -236,6 +362,48 @@ router.post("/:id/aplica", authMiddleware, async (req, res) => {
   }
 });
 
+router.post("/programari", authMiddleware, async (req, res) => {
+  if (req.user.role !== "doctor")
+    return res.status(403).json({ error: "Doar doctorii pot crea programari" });
+
+  const { aplicareId, data } = req.body;
+
+  if (!aplicareId || !data)
+    return res.status(400).json({ error: "Date insuficiente" });
+
+  const dataSelectata = new Date(data);
+  const now = new Date();
+
+  // 1. Verificare sa nu fie in trecut
+  if (dataSelectata < now)
+    return res.status(400).json({ error: "Nu poti seta o programare in trecut" });
+
+  try {
+    // 2. Verifica daca exista deja o programare la aceeasi ora
+    const [existing] = await db
+      .promise()
+      .query(
+        "SELECT id FROM programari WHERE doctor_id = ? AND data = ?",
+        [req.user.id, data]
+      );
+
+    if (existing.length > 0)
+      return res.status(400).json({ error: "Exista deja o programare la aceasta ora" });
+
+    // 3. Creeaza programarea
+    await db
+      .promise()
+      .query(
+        "INSERT INTO programari (doctor_id, aplicare_id, data) VALUES (?, ?, ?)",
+        [req.user.id, aplicareId, data]
+      );
+
+    res.json({ message: "Programare creata" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare server" });
+  }
+});
 
 
 router.post("/aplicari/:id/status", authMiddleware, async (req, res) => {
@@ -289,5 +457,40 @@ router.delete("/aplicare/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Eroare server" });
   }
 });
+router.get("/aplicari", authMiddleware, async (req, res) => {
+  if (req.user.role !== "doctor") {
+    return res.status(403).json({ error: "Doar doctorii pot vizualiza aplicările" });
+  }
 
+  const { status } = req.query; // Preluam status din query params
+
+  let sql = `
+    SELECT 
+      a.id,
+      a.status,
+      a.created_at,
+      m.denumire AS medicament_denumire,
+      p.nume AS pacient_nume,
+      p.email AS pacient_email
+    FROM aplicari_medicamente a
+    JOIN medicamente m ON m.id = a.medicament_id
+    JOIN pacienti p ON p.id = a.pacient_id
+  `;
+  const params = [];
+
+  if (status) {
+    sql += " WHERE a.status = ?";
+    params.push(status);
+  }
+
+  sql += " ORDER BY a.created_at DESC";
+
+  try {
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare server" });
+  }
+});
 export default router;

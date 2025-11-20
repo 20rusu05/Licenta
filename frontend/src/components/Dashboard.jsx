@@ -31,7 +31,7 @@ export default function Dashboard() {
       // Pentru pacienți: încarcă lista de medicamente disponibile
       setLoadingMeds(true);
       api.get('/medicamente')
-        .then(res => setMeds(res.data || []))
+        .then(res => setMeds(res.data.medicamente || []))
         .catch(() => {})
         .finally(() => setLoadingMeds(false));
     } else {

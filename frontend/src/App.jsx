@@ -8,6 +8,7 @@ import Register from './components/auth/Register'
 import Dashboard from './components/Dashboard'
 import ForgotPassword from './components/auth/ForgotPassword'
 import ResetPassword from './components/auth/ResetPassword';
+import Programari from './components/shared/Programari';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -16,21 +17,21 @@ function App() {
   })
 
   useEffect(() => {
-    const handleStorageChange = () => {
-      const updatedUser = localStorage.getItem('user')
-      console.log('Storage changed, new user:', updatedUser)
-      setUser(updatedUser ? JSON.parse(updatedUser) : null)
-    }
+    const handleStorageChange = () => {
+      const updatedUser = localStorage.getItem('user')
+      console.log('Storage changed, new user:', updatedUser)
+      setUser(updatedUser ? JSON.parse(updatedUser) : null)
+    }
 
-    // Adăugăm ambele evenimente pentru a prinde toate schimbările
-    window.addEventListener('storage', handleStorageChange)
-    document.addEventListener('storage', handleStorageChange)
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      document.removeEventListener('storage', handleStorageChange)
-    }
-  }, [])
+    // Adăugăm ambele evenimente pentru a prinde toate schimbările
+    window.addEventListener('storage', handleStorageChange) // 1. Acesta e corect
+    document.addEventListener('storage', handleStorageChange) // 2. Acesta este incorect
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      document.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -44,10 +45,13 @@ function App() {
           <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />} />
           <Route path="/reset-password/:token" element={!user ? <ResetPassword /> : <Navigate to="/dashboard" />} />
           <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
+          <Route 
+  path="/dashboard/programari" 
+  element={user ? <Programari /> : <Navigate to="/login" />} 
+/>
         </Routes>
       </BrowserRouter>
     </Box>
   )
 }
-
 export default App
