@@ -70,12 +70,14 @@ CREATE TABLE programari (
     pacient_id INT NOT NULL,
     doctor_id INT NOT NULL,
     data_ora DATETIME NOT NULL,
+    status ENUM('programata', 'completata', 'anulata') DEFAULT 'programata',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pacient_id) REFERENCES pacienti(id) ON DELETE CASCADE,
     FOREIGN KEY (doctor_id) REFERENCES doctori(id) ON DELETE CASCADE,
     INDEX idx_pacient_id (pacient_id),
     INDEX idx_doctor_id (doctor_id),
-    INDEX idx_data_ora (data_ora)
+    INDEX idx_data_ora (data_ora),
+    INDEX idx_status (status)
 );
 	
 -- Indexuri pentru performanță

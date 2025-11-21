@@ -22,13 +22,17 @@ import {
   TextField,
   MenuItem,
   Snackbar,
-  Alert
+  Alert,
+  Tooltip
 } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import AppLayout from "../layout/AppLayout";
 
 const API_URL = "/medicamente";
@@ -431,33 +435,59 @@ const handleConfirmRenunta = async () => {
                       )}
                       <TableCell align="right">
                         {isDoctor ? (
-                          <>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              startIcon={<EditIcon />}
-                              onClick={() => {
-                                console.log('CLICK EDITEAZA DETECTED!', m.id);
-                                handleEdit(m);
-                              }}
-                              sx={{ mr: 1 }}
-                            >
-                              Editează
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="error"
-                              startIcon={<DeleteIcon />}
-                              onClick={() => {
-                                console.log('CLICK STERGE DETECTED!', m.id);
-                                handleDelete(m);
-                              }}
-                            >
-                              Șterge
-                            </Button>
-                          </>
+                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                            <Tooltip title="Editează">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => {
+                                  console.log('CLICK EDITEAZA DETECTED!', m.id);
+                                  handleEdit(m);
+                                }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Șterge">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => {
+                                  console.log('CLICK STERGE DETECTED!', m.id);
+                                  handleDelete(m);
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title={m.complet ? 'Redeschide pentru aplicări' : 'Marchează ca complet'}>
+                              <IconButton
+                                size="small"
+                                color={m.complet ? "warning" : "success"}
+                                onClick={async () => {
+                                  console.log('CLICK COMPLETEAZA MEDICAMENT!', m.id);
+                                  try {
+                                    await api.patch(`${API_URL}/${m.id}/completeaza`);
+                                    setSnackbar({
+                                      open: true,
+                                      message: m.complet ? 'Medicament redeschis pentru aplicări!' : 'Medicament marcat ca complet!',
+                                      severity: 'success'
+                                    });
+                                    await reload();
+                                  } catch (err) {
+                                    console.error(err);
+                                    setSnackbar({
+                                      open: true,
+                                      message: err.response?.data?.error || 'Eroare la actualizare',
+                                      severity: 'error'
+                                    });
+                                  }
+                                }}
+                              >
+                                {m.complet ? <LockOpenIcon fontSize="small" /> : <CheckCircleIcon fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         ) : (
                           <Button
                             variant={
@@ -472,6 +502,8 @@ const handleConfirmRenunta = async () => {
                                 const aplicare = m.aplicanti?.find(
                                   (a) => a.pacient_id === user.id
                                 );
+                                // Dacă medicamentul e complet și nu există aplicare, disable
+                                if (!aplicare && m.complet) return true;
                                 if (!aplicare) return false;
                                 return aplicare.status !== "pending";
                               })()
@@ -482,6 +514,11 @@ const handleConfirmRenunta = async () => {
                               );
 
                               if (!aplicare) {
+                                if (m.complet) {
+                                  setDialogMessage("Acest medicament nu mai acceptă aplicări noi.");
+                                  setDialogOpen(true);
+                                  return;
+                                }
                                 openFormular(m);
                                 return;
                               }
@@ -499,7 +536,7 @@ const handleConfirmRenunta = async () => {
                           >
                             {m.aplicanti?.find((a) => a.pacient_id === user.id)
                               ? "Renunță"
-                              : "Aplică"}
+                              : m.complet ? "Complet" : "Aplică"}
                           </Button>
                         )}
                       </TableCell>
@@ -532,37 +569,41 @@ const handleConfirmRenunta = async () => {
                                         <StatusChip status={a.status} />
                                       </TableCell>
                                       <TableCell align="right">
-                                        <Button
-                                          size="small"
-                                          sx={{ mr: 1 }}
-                                          variant="outlined"
-                                          color="success"
-                                          onClick={() => {
-                                            console.log('CLICK ACCEPTA DETECTED!', a.id, 'medicament:', m.id);
-                                            handleAcceptWithProgramare(a.id, m.id);
-                                          }}
-                                        >
-                                          Acceptă
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          variant="outlined"
-                                          color="error"
-                                          onClick={() => {
-                                            console.log('CLICK RESPINGE DETECTED!', a.id);
-                                            updateStatus(a.id, "respins");
-                                          }}
-                                        >
-                                          Respinge
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          variant="outlined"
-                                          color="info"
-                                          onClick={() => handleViewForm(a)}
-                                        >
-                                          Vezi
-                                        </Button>
+                                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                                          <Tooltip title="Acceptă">
+                                            <IconButton
+                                              size="small"
+                                              color="success"
+                                              onClick={() => {
+                                                console.log('CLICK ACCEPTA DETECTED!', a.id, 'medicament:', m.id);
+                                                handleAcceptWithProgramare(a.id, m.id);
+                                              }}
+                                            >
+                                              <CheckCircleIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
+                                          <Tooltip title="Respinge">
+                                            <IconButton
+                                              size="small"
+                                              color="error"
+                                              onClick={() => {
+                                                console.log('CLICK RESPINGE DETECTED!', a.id);
+                                                updateStatus(a.id, "respins");
+                                              }}
+                                            >
+                                              <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
+                                          <Tooltip title="Vezi formular">
+                                            <IconButton
+                                              size="small"
+                                              color="info"
+                                              onClick={() => handleViewForm(a)}
+                                            >
+                                              <VisibilityIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
+                                        </Box>
                                       </TableCell>
                                     </TableRow>
                                   ))}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Box } from '@mui/material'
-import Patients from './components/doctor/Patients'
+import Pacienti from './components/doctor/Pacienti'
 import Medicamente from './components/shared/Medicamente'
 import Login from './components/auth/Login'
 import Register from './components/auth/Register'
@@ -40,7 +40,7 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-          <Route path="/dashboard/pacienti" element={user && user.role === 'doctor' ? <Patients /> : <Navigate to={user ? '/dashboard' : '/login'} />} />
+          <Route path="/dashboard/pacienti" element={user && user.role === 'doctor' ? <Pacienti /> : <Navigate to={user ? '/dashboard' : '/login'} />} />
           <Route path="/dashboard/medicamente" element={user ? <Medicamente /> : <Navigate to="/login" />} />
           <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />} />
           <Route path="/reset-password/:token" element={!user ? <ResetPassword /> : <Navigate to="/dashboard" />} />

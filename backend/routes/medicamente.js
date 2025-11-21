@@ -40,14 +40,14 @@ router.get("/", authMiddleware, async (req, res) => {
 
     // Lista medicamente (fara aplicanti)
     const [medicamente] = await db.promise().query(
-      `SELECT id, denumire, descriere FROM medicamente ORDER BY id DESC LIMIT ? OFFSET ?`,
+      `SELECT id, denumire, descriere, complet FROM medicamente ORDER BY id DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
 
     // Daca se cere un medicament specific, returnam doar acel medicament cu aplicantii
     if (medicamentId) {
       const [medicamentSpecific] = await db.promise().query(
-        `SELECT id, denumire, descriere FROM medicamente WHERE id = ?`,
+        `SELECT id, denumire, descriere, complet FROM medicamente WHERE id = ?`,
         [medicamentId]
       );
 
@@ -95,6 +95,7 @@ router.get("/", authMiddleware, async (req, res) => {
           id: m.id,
           denumire: m.denumire,
           descriere: m.descriere,
+          complet: m.complet,
           aplicanti: aplicantiRows,
           aplicantiTotal: totalAplicanti,
           aplicantiPage: aplicantiPage,
@@ -105,8 +106,14 @@ router.get("/", authMiddleware, async (req, res) => {
 
     // Pentru fiecare medicament, luam count-ul aplicantilor 
     // Si pentru pacienti, returnam aplicarea lor daca exista
+    // Filtrăm medicamentele completate pentru pacienți
+    let medicamenteFiltered = medicamente;
+    if (req.user.role === 'pacient') {
+      medicamenteFiltered = medicamente.filter(m => !m.complet);
+    }
+    
     const medicamenteWithAplicanti = await Promise.all(
-      medicamente.map(async (m) => {
+      medicamenteFiltered.map(async (m) => {
         // Count total aplicanti pentru acest medicament
         const [[{ totalAplicanti }]] = await db.promise().query(
           `SELECT COUNT(*) AS totalAplicanti FROM aplicari_medicamente WHERE medicament_id = ?`,
@@ -147,6 +154,7 @@ router.get("/", authMiddleware, async (req, res) => {
           id: m.id,
           denumire: m.denumire,
           descriere: m.descriere,
+          complet: m.complet,
           aplicanti: aplicantiArray,
           aplicantiTotal: totalAplicanti,
           aplicantiPage: 1,
@@ -493,4 +501,39 @@ router.get("/aplicari", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Eroare server" });
   }
 });
+
+// Marcare medicament ca complet (nu mai accepta aplicanti)
+router.patch("/:id/completeaza", authMiddleware, async (req, res) => {
+  if (req.user.role !== "doctor") {
+    return res.status(403).json({ error: "Doar doctorii pot completa medicamente" });
+  }
+
+  const medicamentId = req.params.id;
+
+  try {
+    // Verifică că medicamentul aparține doctorului
+    const [medicament] = await db.promise().query(
+      "SELECT * FROM medicamente WHERE id = ? AND doctor_id = ?",
+      [medicamentId, req.user.id]
+    );
+
+    if (medicament.length === 0) {
+      return res.status(404).json({ error: "Medicament inexistent sau nu ai permisiunea" });
+    }
+
+    // Toggle complet status
+    const complet = medicament[0].complet ? 0 : 1;
+
+    await db.promise().query(
+      "UPDATE medicamente SET complet = ? WHERE id = ?",
+      [complet, medicamentId]
+    );
+
+    res.json({ message: complet ? "Medicament marcat ca complet" : "Medicament redeschis pentru aplicări" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare server" });
+  }
+});
+
 export default router;
