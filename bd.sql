@@ -1,14 +1,18 @@
-CREATE DATABASE licenta;
 USE licenta;
 
+-- Tabel pentru pacienți
 CREATE TABLE pacienti (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  nume VARCHAR(100),
-  email VARCHAR(100),
-  parola VARCHAR(255)
+  nume VARCHAR(100) NOT NULL,
+  prenume VARCHAR(100) NOT NULL,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  parola VARCHAR(255) NOT NULL,
+  telefon VARCHAR(20) NOT NULL,
+  reset_token VARCHAR(255) NULL,
+  reset_token_expiry DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-<<<<<<< HEAD
-=======
 
 -- Tabel pentru doctori (cu aceleași atribute ca pacienții)
 CREATE TABLE doctori (
@@ -81,4 +85,3 @@ CREATE INDEX idx_pacienti_email ON pacienti(email);
 CREATE INDEX idx_pacienti_telefon ON pacienti(telefon);
 CREATE INDEX idx_doctori_email ON doctori(email);
 CREATE INDEX idx_doctori_telefon ON doctori(telefon);
->>>>>>> 4a7065f (Pacienti+filtrari la programari)
