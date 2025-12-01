@@ -60,7 +60,7 @@ router.get("/", verifyToken, async (req, res) => {
         (SELECT COUNT(*) FROM aplicari_medicamente am 
          JOIN medicamente m ON am.medicament_id = m.id 
          WHERE am.pacient_id = p.id AND m.doctor_id = ?) AS total_aplicari,
-        (SELECT MAX(data_ora) FROM programari WHERE pacient_id = p.id AND doctor_id = ?) AS ultima_programare
+        (SELECT MAX(data_programare) FROM programari WHERE pacient_id = p.id AND doctor_id = ?) AS ultima_programare
       FROM pacienti p
       WHERE p.id IN (
         SELECT DISTINCT pacient_id FROM programari WHERE doctor_id = ?

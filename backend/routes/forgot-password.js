@@ -12,12 +12,30 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
 
-    const [users] = await db.promise().query(
-      'SELECT id FROM pacienti WHERE email = ?', 
+    // Caută în ambele tabele
+    let user = null;
+    let tableName = null;
+
+    const [pacienti] = await db.promise().query(
+      'SELECT id, email FROM pacienti WHERE email = ?', 
       [email]
     );
 
-    if (!users.length) {
+    if (pacienti.length > 0) {
+      user = pacienti[0];
+      tableName = 'pacienti';
+    } else {
+      const [doctori] = await db.promise().query(
+        'SELECT id, email FROM doctori WHERE email = ?', 
+        [email]
+      );
+      if (doctori.length > 0) {
+        user = doctori[0];
+        tableName = 'doctori';
+      }
+    }
+
+    if (!user) {
       return res.status(200).json({ 
         message: 'Dacă email-ul există, veți primi un link de resetare.' 
       });
@@ -27,7 +45,7 @@ router.post('/forgot-password', async (req, res) => {
     const expires = new Date(Date.now() + 3600000); // 1 hour
 
     await db.promise().query(
-      'UPDATE pacienti SET reset_token = ?, reset_token_expiry = ? WHERE email = ?',
+      `UPDATE ${tableName} SET reset_token = ?, reset_token_expiry = ? WHERE email = ?`,
       [token, expires, email]
     );
 

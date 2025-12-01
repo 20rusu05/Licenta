@@ -16,7 +16,7 @@ export default function ForgotPassword() {
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/forgot-password', { email });
+      const res = await api.post('/forgot-password', { email });
       setMessage(res.data.message || 'Verifica-ti emailul pentru instructiuni.');
     } catch (err) {
       setError(err.response?.data?.error || 'A aparut o eroare.');

@@ -6,17 +6,17 @@ const router = express.Router();
 
 // Creează programare
 router.post("/", verifyToken, async (req, res) => {
-  const { pacient_id, data_ora } = req.body;
+  const { pacient_id, data_programare } = req.body;
   const doctor_id = req.user.id;
 
-  if (!pacient_id || !data_ora) return res.status(400).json({ error: "Date incomplete" });
+  if (!pacient_id || !data_programare) return res.status(400).json({ error: "Date incomplete" });
 
   try {
     // Convertim data din ISO format la format MySQL (YYYY-MM-DD HH:MM:SS)
-    const mysqlDateTime = new Date(data_ora).toISOString().slice(0, 19).replace('T', ' ');
+    const mysqlDateTime = new Date(data_programare).toISOString().slice(0, 19).replace('T', ' ');
     
     await db.promise().query(
-      "INSERT INTO programari (pacient_id, doctor_id, data_ora) VALUES (?, ?, ?)",
+      "INSERT INTO programari (pacient_id, doctor_id, data_programare) VALUES (?, ?, ?)",
       [pacient_id, doctor_id, mysqlDateTime]
     );
     res.json({ message: "Programare creată cu succes" });
@@ -46,8 +46,8 @@ router.get("/", verifyToken, async (req, res) => {
     countsQuery = `
       SELECT 
         COUNT(*) AS toate,
-        COALESCE(SUM(CASE WHEN data_ora IS NOT NULL AND data_ora > NOW() AND status != 'completata' THEN 1 ELSE 0 END), 0) AS viitoare,
-        COALESCE(SUM(CASE WHEN data_ora IS NOT NULL AND data_ora <= NOW() AND status != 'completata' THEN 1 ELSE 0 END), 0) AS trecute,
+        COALESCE(SUM(CASE WHEN data_programare IS NOT NULL AND data_programare > NOW() AND status != 'completata' THEN 1 ELSE 0 END), 0) AS viitoare,
+        COALESCE(SUM(CASE WHEN data_programare IS NOT NULL AND data_programare <= NOW() AND status != 'completata' THEN 1 ELSE 0 END), 0) AS trecute,
         COALESCE(SUM(CASE WHEN status = 'completata' THEN 1 ELSE 0 END), 0) AS completate
       FROM programari
       WHERE ${userIdCol} = ?
@@ -59,19 +59,19 @@ router.get("/", verifyToken, async (req, res) => {
       
       // Adaugă filtru pentru data și status
       if (filter === 'viitoare') {
-        whereClause += " AND p.data_ora > NOW() AND p.status != 'completata'";
+        whereClause += " AND p.data_programare > NOW() AND p.status != 'completata'";
       } else if (filter === 'trecute') {
-        whereClause += " AND p.data_ora <= NOW() AND p.status != 'completata'";
+        whereClause += " AND p.data_programare <= NOW() AND p.status != 'completata'";
       } else if (filter === 'completate') {
         whereClause += " AND p.status = 'completata'";
       }
 
       query = `
-        SELECT p.id, p.data_ora, p.status, p.pacient_id, u.nume AS pacient_nume, u.email AS pacient_email
+        SELECT p.id, p.data_programare, p.status, p.pacient_id, u.nume AS pacient_nume, u.email AS pacient_email
         FROM programari p
         JOIN pacienti u ON p.pacient_id = u.id
         WHERE ${whereClause}
-        ORDER BY p.data_ora ASC
+        ORDER BY p.data_programare ASC
         LIMIT ? OFFSET ?
       `;
 
@@ -88,19 +88,19 @@ router.get("/", verifyToken, async (req, res) => {
       
       // Adaugă filtru pentru data și status
       if (filter === 'viitoare') {
-        whereClause += " AND p.data_ora > NOW() AND p.status != 'completata'";
+        whereClause += " AND p.data_programare > NOW() AND p.status != 'completata'";
       } else if (filter === 'trecute') {
-        whereClause += " AND p.data_ora <= NOW() AND p.status != 'completata'";
+        whereClause += " AND p.data_programare <= NOW() AND p.status != 'completata'";
       } else if (filter === 'completate') {
         whereClause += " AND p.status = 'completata'";
       }
 
       query = `
-        SELECT p.id, p.data_ora, p.status, p.doctor_id, d.nume AS medic_nume, d.email AS medic_email
+        SELECT p.id, p.data_programare, p.status, p.doctor_id, d.nume AS medic_nume, d.email AS medic_email
         FROM programari p
         JOIN doctori d ON p.doctor_id = d.id
         WHERE ${whereClause}
-        ORDER BY p.data_ora ASC
+        ORDER BY p.data_programare ASC
         LIMIT ? OFFSET ?
       `;
 
@@ -146,11 +146,11 @@ router.get("/", verifyToken, async (req, res) => {
 // Actualizează data programării (reprogramare)
 router.put("/:id", verifyToken, async (req, res) => {
   const programareId = req.params.id;
-  const { data_ora, resetStatus } = req.body;
+  const { data_programare, resetStatus } = req.body;
   const userId = req.user.id;
   const role = req.user.role;
 
-  if (!data_ora) return res.status(400).json({ error: "Data programării este obligatorie" });
+  if (!data_programare) return res.status(400).json({ error: "Data programării este obligatorie" });
 
   if (role !== "doctor") {
     return res.status(403).json({ error: "Doar doctorii pot modifica programările" });
@@ -168,18 +168,18 @@ router.put("/:id", verifyToken, async (req, res) => {
     }
 
     // Convertim data din ISO format la format MySQL
-    const mysqlDateTime = new Date(data_ora).toISOString().slice(0, 19).replace('T', ' ');
+    const mysqlDateTime = new Date(data_programare).toISOString().slice(0, 19).replace('T', ' ');
 
     // Actualizează data programării și opțional statusul
     if (resetStatus) {
       // Dacă programarea era completată și o reprogramăm, o resetăm la 'programata'
       await db.promise().query(
-        "UPDATE programari SET data_ora = ?, status = 'programata' WHERE id = ?",
+        "UPDATE programari SET data_programare = ?, status = 'programata' WHERE id = ?",
         [mysqlDateTime, programareId]
       );
     } else {
       await db.promise().query(
-        "UPDATE programari SET data_ora = ? WHERE id = ?",
+        "UPDATE programari SET data_programare = ? WHERE id = ?",
         [mysqlDateTime, programareId]
       );
     }

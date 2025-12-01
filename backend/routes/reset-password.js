@@ -8,13 +8,30 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    // Verifică dacă token-ul există și nu a expirat
-    const [users] = await db.promise().query(
+    // Caută în ambele tabele
+    let user = null;
+    let tableName = null;
+
+    const [pacienti] = await db.promise().query(
       'SELECT id FROM pacienti WHERE reset_token = ? AND reset_token_expiry > NOW()',
       [token]
     );
 
-    if (!users.length) {
+    if (pacienti.length > 0) {
+      user = pacienti[0];
+      tableName = 'pacienti';
+    } else {
+      const [doctori] = await db.promise().query(
+        'SELECT id FROM doctori WHERE reset_token = ? AND reset_token_expiry > NOW()',
+        [token]
+      );
+      if (doctori.length > 0) {
+        user = doctori[0];
+        tableName = 'doctori';
+      }
+    }
+
+    if (!user) {
       return res.status(400).json({ 
         error: 'Link-ul de resetare este invalid sau a expirat.' 
       });
@@ -25,7 +42,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Actualizează parola și șterge token-ul
     await db.promise().query(
-      'UPDATE pacienti SET parola = ?, reset_token = NULL, reset_token_expiry = NULL WHERE reset_token = ?',
+      `UPDATE ${tableName} SET parola = ?, reset_token = NULL, reset_token_expiry = NULL WHERE reset_token = ?`,
       [hashedPassword, token]
     );
 

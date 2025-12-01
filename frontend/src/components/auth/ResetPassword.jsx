@@ -22,7 +22,7 @@ export default function ResetPassword() {
     setError('');
     setMessage('');
     try {
-      const res = await api.post('/auth/reset-password', { token, newPassword: password });
+      const res = await api.post('/reset-password', { token, newPassword: password });
       setMessage(res.data.message || 'Parola a fost resetata cu succes.');
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {

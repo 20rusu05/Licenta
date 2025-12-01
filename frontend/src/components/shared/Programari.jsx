@@ -82,8 +82,8 @@ export default function Programari() {
     setCalendarOpen(true);
     // Daca programarea are deja o data, o setam in calendar pentru reprogramare
     // Convertim la format datetime-local (YYYY-MM-DDTHH:mm)
-    if (programare.data_ora) {
-      const date = new Date(programare.data_ora);
+    if (programare.data_programare) {
+      const date = new Date(programare.data_programare);
       const formattedDate = date.toISOString().slice(0, 16);
       setSelectedDate(formattedDate);
     } else {
@@ -102,14 +102,14 @@ export default function Programari() {
       // Altfel, folosim POST pentru programare nouă
       if (selectedProgramare.id) {
         await api.put(`${API_URL}/${selectedProgramare.id}`, {
-          data_ora: isoDate,
+          data_programare: isoDate,
           // Dacă programarea era completată, o resetăm automat la programată
           resetStatus: selectedProgramare.status === 'completata'
         });
       } else {
         await api.post(API_URL, {
           pacient_id: selectedProgramare.pacient_id || selectedProgramare.id,
-          data_ora: isoDate,
+          data_programare: isoDate,
         });
       }
 
@@ -279,10 +279,10 @@ export default function Programari() {
                   <TableCell sx={{ fontWeight: 500 }}>{p.pacient_nume}</TableCell>
                   <TableCell sx={{ color: 'text.secondary' }}>{p.pacient_email}</TableCell>
                   <TableCell>
-                    {p.data_ora ? (
+                    {p.data_programare ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <EventIcon fontSize="small" color="action" />
-                        {new Date(p.data_ora).toLocaleString('ro-RO', {
+                        {new Date(p.data_programare).toLocaleString('ro-RO', {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
@@ -294,10 +294,10 @@ export default function Programari() {
                       <Typography variant="body2" color="text.secondary">Neprogramat</Typography>
                     )}
                   </TableCell>
-                  <TableCell>{getStatusChip(p.data_ora, p.status)}</TableCell>
+                  <TableCell>{getStatusChip(p.data_programare, p.status)}</TableCell>
                   <TableCell align="right">
-                    {p.data_ora && (
-                      <Tooltip title={p.data_ora ? "Reprogramează" : "Programează"}>
+                    {p.data_programare && (
+                      <Tooltip title={p.data_programare ? "Reprogramează" : "Programează"}>
                         <IconButton
                           size="small"
                           color="primary"
@@ -307,7 +307,7 @@ export default function Programari() {
                         </IconButton>
                       </Tooltip>
                     )}
-                    {p.data_ora && p.status !== 'completata' && (
+                    {p.data_programare && p.status !== 'completata' && (
                       <Tooltip title="Marchează ca completată">
                         <IconButton
                           size="small"
@@ -318,7 +318,7 @@ export default function Programari() {
                         </IconButton>
                       </Tooltip>
                     )}
-                    {p.data_ora && p.status !== 'completata' && (
+                    {p.data_programare && p.status !== 'completata' && (
                       <Tooltip title="Anulează programarea">
                         <IconButton
                           size="small"
@@ -336,10 +336,10 @@ export default function Programari() {
                   <TableCell sx={{ fontWeight: 500 }}>{p.medic_nume}</TableCell>
                   <TableCell sx={{ color: 'text.secondary' }}>{p.medic_email}</TableCell>
                   <TableCell>
-                    {p.data_ora ? (
+                    {p.data_programare ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <EventIcon fontSize="small" color="action" />
-                        {new Date(p.data_ora).toLocaleString('ro-RO', {
+                        {new Date(p.data_programare).toLocaleString('ro-RO', {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
@@ -351,7 +351,7 @@ export default function Programari() {
                       <Typography variant="body2" color="text.secondary">În așteptare</Typography>
                     )}
                   </TableCell>
-                  <TableCell>{getStatusChip(p.data_ora, p.status)}</TableCell>
+                  <TableCell>{getStatusChip(p.data_programare, p.status)}</TableCell>
                 </>
               )}
             </TableRow>
@@ -403,7 +403,7 @@ export default function Programari() {
         {user.role === "doctor" && (
           <Dialog open={calendarOpen} onClose={() => setCalendarOpen(false)} maxWidth="sm" fullWidth>
             <DialogTitle>
-              {selectedProgramare?.data_ora ? 'Reprogramează consultație' : 'Programează consultație'}
+              {selectedProgramare?.data_programare ? 'Reprogramează consultație' : 'Programează consultație'}
             </DialogTitle>
             <DialogContent sx={{ pt: 3 }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -431,7 +431,7 @@ export default function Programari() {
                 variant="contained"
                 disabled={!selectedDate}
               >
-                {selectedProgramare?.data_ora ? 'Reprogramează' : 'Programează'}
+                {selectedProgramare?.data_programare ? 'Reprogramează' : 'Programează'}
               </Button>
             </DialogActions>
           </Dialog>
@@ -444,9 +444,9 @@ export default function Programari() {
             <Typography>
               Sigur vrei să anulezi programarea cu <strong>{programareToDelete?.pacient_nume}</strong>?
             </Typography>
-            {programareToDelete?.data_ora && (
+            {programareToDelete?.data_programare && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Data: {new Date(programareToDelete.data_ora).toLocaleString('ro-RO')}
+                Data: {new Date(programareToDelete.data_programare).toLocaleString('ro-RO')}
               </Typography>
             )}
           </DialogContent>

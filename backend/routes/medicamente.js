@@ -205,7 +205,7 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
 
     // Validare: nu pot exista 2 programari la aceeasi ora pentru acelasi doctor
     const [existing] = await db.promise().query(
-      "SELECT id FROM programari WHERE doctor_id = ? AND data_ora = ?",
+      "SELECT id FROM programari WHERE doctor_id = ? AND data_programare = ?",
       [req.user.id, dataProgramare]
     );
 
@@ -213,9 +213,9 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Exista deja o programare la aceasta ora" });
     }
 
-    // Tabelul programari are: doctor_id, pacient_id, data_ora
+    // Tabelul programari are: doctor_id, pacient_id, data_programare
     await db.promise().query(
-      "INSERT INTO programari (doctor_id, pacient_id, data_ora) VALUES (?, ?, ?)",
+      "INSERT INTO programari (doctor_id, pacient_id, data_programare) VALUES (?, ?, ?)",
       [req.user.id, pacient_id, dataProgramare]
     );
 
