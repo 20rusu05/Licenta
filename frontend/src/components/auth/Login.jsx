@@ -58,7 +58,18 @@ export default function Login() {
     }}>
       <Container component="main" maxWidth="xs">
         <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <Typography component="h1" variant="h4" sx={{ mb: 4, color: 'primary.main', fontWeight: 600 }}>
+          <Typography 
+            component="h1" 
+            variant="h4" 
+            sx={{ 
+              mb: 4, 
+              color: 'primary.main', 
+              fontWeight: 600,
+              cursor: 'pointer',
+              '&:hover': { opacity: 0.8 }
+            }}
+            onClick={() => navigate('/')}
+          >
             NewMed
           </Typography>
 

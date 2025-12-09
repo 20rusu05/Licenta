@@ -78,7 +78,10 @@ export default function Register() {
             mb: 4,
             color: 'primary.main',
             fontWeight: 600,
+            cursor: 'pointer',
+            '&:hover': { opacity: 0.8 }
           }}
+          onClick={() => navigate('/')}
         >
           NewMed
         </Typography>
