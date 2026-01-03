@@ -65,7 +65,7 @@ router.post("/login", async (req, res) => {
 
     const [doctori] = await db
       .promise()
-      .query("SELECT id, nume, prenume, email, parola FROM doctori WHERE email = ?", [email]);
+      .query("SELECT id, nume, prenume, email, telefon, parola FROM doctori WHERE email = ?", [email]);
 
     if (doctori.length > 0) {
       user = doctori[0];
@@ -73,7 +73,7 @@ router.post("/login", async (req, res) => {
     } else {
       const [pacienti] = await db
         .promise()
-        .query("SELECT id, nume, prenume, email, parola FROM pacienti WHERE email = ?", [email]);
+        .query("SELECT id, nume, prenume, email, telefon, parola FROM pacienti WHERE email = ?", [email]);
       if (pacienti.length > 0) {
         user = pacienti[0];
         role = "pacient";

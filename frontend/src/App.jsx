@@ -10,6 +10,7 @@ import ForgotPassword from './components/auth/ForgotPassword'
 import ResetPassword from './components/auth/ResetPassword';
 import Programari from './components/shared/Programari';
 import LandingPage from './components/LandingPage';
+import Profil from './components/shared/Profil';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -50,6 +51,7 @@ function App() {
   path="/dashboard/programari" 
   element={user ? <Programari /> : <Navigate to="/login" />} 
 />
+          <Route path="/dashboard/profil" element={user ? <Profil /> : <Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>
     </Box>

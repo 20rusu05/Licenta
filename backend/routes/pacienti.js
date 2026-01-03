@@ -89,6 +89,46 @@ router.get("/", verifyToken, async (req, res) => {
   }
 });
 
+// Actualizează datele unui utilizator (pacient sau doctor)
+router.put("/:id", verifyToken, async (req, res) => {
+  const profileId = req.params.id;
+  const userId = req.user.id;
+  const role = req.user.role;
+  const { nume, prenume, telefon } = req.body;
+
+  // Verificăm că utilizatorul își actualizează propriul profil
+  if (parseInt(userId) !== parseInt(profileId)) {
+    return res.status(403).json({ error: "Nu aveți permisiunea de a actualiza acest profil" });
+  }
+
+  try {
+    // Validări
+    if (!nume || !prenume) {
+      return res.status(400).json({ error: "Numele și prenumele sunt obligatorii" });
+    }
+
+    if (telefon && !/^(07\d{8}|02\d{8}|03\d{8})$/.test(telefon)) {
+      return res.status(400).json({ error: "Numărul de telefon nu este valid" });
+    }
+
+    // Determinăm tabela în funcție de rol
+    const table = role === "doctor" ? "doctori" : "pacienti";
+
+    // Actualizare
+    await db.promise().query(
+      `UPDATE ${table} 
+       SET nume = ?, prenume = ?, telefon = ?
+       WHERE id = ?`,
+      [nume, prenume, telefon, profileId]
+    );
+
+    res.json({ message: "Profil actualizat cu succes" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Eroare la actualizarea profilului" });
+  }
+});
+
 export default router;
 
 
