@@ -35,9 +35,15 @@ export default function AppLayout({ children }) {
           <Typography variant="subtitle1" sx={{ ml: 1, mr: 1 }}>
             {user?.nume}
           </Typography>
-          <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, mr: 1 }}>
-            {user?.nume?.[0]?.toUpperCase()}
-          </Avatar>
+          <IconButton 
+            onClick={() => navigate('/dashboard/profil')} 
+            sx={{ mr: 1 }}
+            aria-label="profil"
+          >
+            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+              {user?.nume?.[0]?.toUpperCase()}
+            </Avatar>
+          </IconButton>
           <IconButton color="primary" onClick={handleLogout} aria-label="logout">
             <LogoutIcon />
           </IconButton>

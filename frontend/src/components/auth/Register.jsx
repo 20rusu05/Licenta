@@ -65,7 +65,7 @@ export default function Register() {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          pt: 8,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -78,7 +78,10 @@ export default function Register() {
             mb: 4,
             color: 'primary.main',
             fontWeight: 600,
+            cursor: 'pointer',
+            '&:hover': { opacity: 0.8 }
           }}
+          onClick={() => navigate('/')}
         >
           NewMed
         </Typography>

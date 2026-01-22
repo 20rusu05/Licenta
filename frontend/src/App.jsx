@@ -9,6 +9,8 @@ import Dashboard from './components/Dashboard'
 import ForgotPassword from './components/auth/ForgotPassword'
 import ResetPassword from './components/auth/ResetPassword';
 import Programari from './components/shared/Programari';
+import LandingPage from './components/LandingPage';
+import Profil from './components/shared/Profil';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -37,6 +39,7 @@ function App() {
     <Box sx={{ minHeight: '100vh' }}>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
@@ -44,11 +47,11 @@ function App() {
           <Route path="/dashboard/medicamente" element={user ? <Medicamente /> : <Navigate to="/login" />} />
           <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />} />
           <Route path="/reset-password/:token" element={!user ? <ResetPassword /> : <Navigate to="/dashboard" />} />
-          <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
           <Route 
   path="/dashboard/programari" 
   element={user ? <Programari /> : <Navigate to="/login" />} 
 />
+          <Route path="/dashboard/profil" element={user ? <Profil /> : <Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>
     </Box>

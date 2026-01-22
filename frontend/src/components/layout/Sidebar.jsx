@@ -4,6 +4,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const drawerWidth = 240;
@@ -18,10 +19,10 @@ export default function Sidebar() {
       { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
       { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
       { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
-      { label: 'Analize', icon: <HealthAndSafetyIcon />, path: '/dashboard/analize' },
     ];
     if (user?.role === 'doctor') {
       base.splice(1, 0, { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });
+      base.push({ label: 'Grafice', icon: <BarChartIcon />, path: '/dashboard/grafice' });
     }
     return base;
   }, [user?.role]);
