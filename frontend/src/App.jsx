@@ -12,6 +12,7 @@ import Programari from './components/shared/Programari';
 import LandingPage from './components/LandingPage';
 import Profil from './components/shared/Profil';
 import TermsAndConditions from './components/auth/TermsAndConditions';
+import AdminPanel from './components/admin/AdminPanel';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -45,6 +46,7 @@ function App() {
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
           <Route path="/terms" element={<TermsAndConditions />} />
           <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
+          <Route path="/dashboard/admin" element={user && user.role === 'admin' ? <AdminPanel /> : <Navigate to={user ? '/dashboard' : '/login'} />} />
           <Route path="/dashboard/pacienti" element={user && user.role === 'doctor' ? <Pacienti /> : <Navigate to={user ? '/dashboard' : '/login'} />} />
           <Route path="/dashboard/medicamente" element={user ? <Medicamente /> : <Navigate to="/login" />} />
           <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />} />

@@ -171,6 +171,7 @@ export default function Register() {
             value={formData.email}
             onChange={handleChange}
             sx={{ mb: 2 }}
+            helperText="Folosește un email @newmed.ro pentru cont de doctor"
           />
           <TextField
             margin="normal"

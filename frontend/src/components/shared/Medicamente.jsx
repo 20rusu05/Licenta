@@ -230,11 +230,16 @@ useEffect(() => {
 };
 
 
-  const updateStatus = async (id, status) => {
-    console.log('updateStatus called:', id, status);
+  const updateStatus = async (id, status, medicamentId) => {
+    console.log('updateStatus called:', id, status, 'medicamentId:', medicamentId);
     try {
       await api.post(`${API_URL}/aplicari/${id}/status`, { status });
-      await reload();
+      // Reîncarcă medicamentul specific pentru a actualiza lista de aplicanți
+      if (medicamentId) {
+        await reload(medicamentId);
+      } else {
+        await reload();
+      }
     } catch (err) {
       console.error("Eroare la actualizare status:", err);
     }
@@ -244,6 +249,8 @@ useEffect(() => {
   console.log('handleAcceptWithProgramare called:', id, 'medicamentId:', medicamentId);
   try {
     await api.post(`${API_URL}/aplicari/${id}/status`, { status: "acceptat" });
+    // Reîncarcă medicamentul pentru a actualiza lista de aplicanți
+    await reload(medicamentId);
     setAplicareSelectata(id);
     setMedicamentCurent(medicamentId);
     setOpenProgramareDialog(true);
@@ -405,6 +412,7 @@ const handleConfirmRenunta = async () => {
                   {isDoctor && <TableCell />}
                   <TableCell>Denumire</TableCell>
                   <TableCell>Descriere</TableCell>
+                  {!isDoctor && <TableCell>Doctor</TableCell>}
                   {!isDoctor && <TableCell>Stare</TableCell>}
                   <TableCell align="right">{isDoctor ? "Acțiuni" : "Opțiune"}</TableCell>
                 </TableRow>
@@ -422,6 +430,11 @@ const handleConfirmRenunta = async () => {
                       )}
                       <TableCell>{m.denumire}</TableCell>
                       <TableCell>{m.descriere}</TableCell>
+                      {!isDoctor && (
+                        <TableCell>
+                          Dr. {m.doctor_nume} {m.doctor_prenume}
+                        </TableCell>
+                      )}
                       {!isDoctor && (
                         <TableCell>
                           {m.aplicanti?.find((a) => a.pacient_id === user.id) ? (
@@ -587,8 +600,8 @@ const handleConfirmRenunta = async () => {
                                               size="small"
                                               color="error"
                                               onClick={() => {
-                                                console.log('CLICK RESPINGE DETECTED!', a.id);
-                                                updateStatus(a.id, "respins");
+                                                console.log('CLICK RESPINGE DETECTED!', a.id, 'medicament:', m.id);
+                                                updateStatus(a.id, "respins", m.id);
                                               }}
                                             >
                                               <DeleteIcon fontSize="small" />

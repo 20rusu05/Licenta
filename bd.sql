@@ -1,5 +1,19 @@
 USE licenta;
 
+-- Tabel pentru admini
+CREATE TABLE admini (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nume VARCHAR(100) NOT NULL,
+  prenume VARCHAR(100) NOT NULL,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  parola VARCHAR(255) NOT NULL,
+  telefon VARCHAR(20) NOT NULL,
+  reset_token VARCHAR(255) NULL,
+  reset_token_expiry DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Tabel pentru pacienți
 CREATE TABLE pacienti (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -84,7 +98,13 @@ CREATE TABLE programari (
 );
 	
 -- Indexuri pentru performanță
+CREATE INDEX idx_admini_email ON admini(email);
 CREATE INDEX idx_pacienti_email ON pacienti(email);
 CREATE INDEX idx_pacienti_telefon ON pacienti(telefon);
 CREATE INDEX idx_doctori_email ON doctori(email);
 CREATE INDEX idx_doctori_telefon ON doctori(telefon);
+
+-- Inserare cont admin (parola: newmed.ro)
+-- Hash bcrypt generat pentru parola 'newmed.ro'
+INSERT INTO admini (nume, prenume, email, parola, telefon) 
+VALUES ('Admin', 'NewMed', 'admin1@newmed.ro', '$2b$10$YvQf5KZxY8PmWqxjLHqvE.GN5kR9YJ9yJxD7xKjEYNRvMQSxKJ9nG', '0700000000');

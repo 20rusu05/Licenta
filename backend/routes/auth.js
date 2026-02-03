@@ -11,7 +11,8 @@ router.post("/register", async (req, res) => {
   if (!nume || !prenume || !email || !parola || !telefon)
     return res.status(400).json({ error: "Campuri lipsa" });
 
-  const isDoctor = /^[^.@]+\.[^.@]+@newmed\.ro$/i.test(email);
+  // Orice email care se termină cu @newmed.ro este doctor
+  const isDoctor = email.toLowerCase().endsWith('@newmed.ro');
   const tableName = isDoctor ? "doctori" : "pacienti";
 
   try {
@@ -63,20 +64,30 @@ router.post("/login", async (req, res) => {
     let user = null;
     let role = null;
 
-    const [doctori] = await db
+    // Check admini first
+    const [admini] = await db
       .promise()
-      .query("SELECT id, nume, prenume, email, telefon, parola FROM doctori WHERE email = ?", [email]);
+      .query("SELECT id, nume, prenume, email, telefon, parola FROM admini WHERE email = ?", [email]);
 
-    if (doctori.length > 0) {
-      user = doctori[0];
-      role = "doctor";
+    if (admini.length > 0) {
+      user = admini[0];
+      role = "admin";
     } else {
-      const [pacienti] = await db
+      const [doctori] = await db
         .promise()
-        .query("SELECT id, nume, prenume, email, telefon, parola FROM pacienti WHERE email = ?", [email]);
-      if (pacienti.length > 0) {
-        user = pacienti[0];
-        role = "pacient";
+        .query("SELECT id, nume, prenume, email, telefon, parola FROM doctori WHERE email = ?", [email]);
+
+      if (doctori.length > 0) {
+        user = doctori[0];
+        role = "doctor";
+      } else {
+        const [pacienti] = await db
+          .promise()
+          .query("SELECT id, nume, prenume, email, telefon, parola FROM pacienti WHERE email = ?", [email]);
+        if (pacienti.length > 0) {
+          user = pacienti[0];
+          role = "pacient";
+        }
       }
     }
 

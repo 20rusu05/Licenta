@@ -17,6 +17,13 @@ import { api } from '../services/api';
 
 export default function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user'));
+  
+  // Redirect admin to admin panel
+  if (user?.role === 'admin') {
+    window.location.href = '/dashboard/admin';
+    return null;
+  }
+  
   const userEmail = (user?.email || '').toLowerCase();
   const isDoctor = userEmail.endsWith('@newmed.ro');
   const displayName = isDoctor ? user?.nume?.split(' ')[1] || user?.nume : user?.prenume;

@@ -8,6 +8,7 @@ import pacientiRouter from "./routes/pacienti.js";
 import dashboardRouter from "./routes/dashboard.js";
 import forgotPasswordRouter from "./routes/forgot-password.js";
 import resetPasswordRouter from "./routes/reset-password.js";
+import adminRouter from "./routes/admin.js";
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use("/api/medicamente", medicamenteRouter);
 app.use("/api/programari", programariRouter);
 app.use("/api/pacienti", pacientiRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/admin", adminRouter);
 app.use("/api", forgotPasswordRouter);
 app.use("/api", resetPasswordRouter);
 

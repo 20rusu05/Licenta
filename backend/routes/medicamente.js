@@ -33,26 +33,56 @@ router.get("/", authMiddleware, async (req, res) => {
   const aplicantiOffset = (aplicantiPage - 1) * aplicantiLimit;
 
   try {
+    // Construim query-urile în funcție de rol
+    let countQuery, selectQuery, queryParams = [];
+    
+    if (req.user.role === 'pacient') {
+      // Pacienții văd toate medicamentele cu numele doctorului
+      countQuery = "SELECT COUNT(*) AS total FROM medicamente";
+      selectQuery = `SELECT m.id, m.denumire, m.descriere, m.complet, d.nume AS doctor_nume, d.prenume AS doctor_prenume 
+                     FROM medicamente m 
+                     JOIN doctori d ON m.doctor_id = d.id 
+                     ORDER BY m.id DESC LIMIT ? OFFSET ?`;
+    } else {
+      // Doctorii văd doar medicamentele lor
+      countQuery = "SELECT COUNT(*) AS total FROM medicamente WHERE doctor_id = ?";
+      selectQuery = `SELECT m.id, m.denumire, m.descriere, m.complet 
+                     FROM medicamente m 
+                     WHERE m.doctor_id = ? 
+                     ORDER BY m.id DESC LIMIT ? OFFSET ?`;
+      queryParams = [req.user.id];
+    }
+    
     // Total medicamente (count)
     const [[{ total }]] = await db.promise().query(
-      "SELECT COUNT(*) AS total FROM medicamente"
+      countQuery,
+      req.user.role === 'doctor' ? [req.user.id] : []
     );
 
     // Lista medicamente (fara aplicanti)
     const [medicamente] = await db.promise().query(
-      `SELECT id, denumire, descriere, complet FROM medicamente ORDER BY id DESC LIMIT ? OFFSET ?`,
-      [limit, offset]
+      selectQuery,
+      req.user.role === 'doctor' ? [...queryParams, limit, offset] : [limit, offset]
     );
 
     // Daca se cere un medicament specific, returnam doar acel medicament cu aplicantii
     if (medicamentId) {
+      let medicamentQuery = `SELECT id, denumire, descriere, complet, doctor_id FROM medicamente WHERE id = ?`;
+      let medicamentParams = [medicamentId];
+      
+      // Doctorii pot vedea doar medicamentele lor
+      if (req.user.role === 'doctor') {
+        medicamentQuery += ` AND doctor_id = ?`;
+        medicamentParams.push(req.user.id);
+      }
+      
       const [medicamentSpecific] = await db.promise().query(
-        `SELECT id, denumire, descriere, complet FROM medicamente WHERE id = ?`,
-        [medicamentId]
+        medicamentQuery,
+        medicamentParams
       );
 
       if (medicamentSpecific.length === 0) {
-        return res.status(404).json({ error: "Medicament inexistent" });
+        return res.status(404).json({ error: "Medicament inexistent sau nu ai acces la el" });
       }
 
       const m = medicamentSpecific[0];
@@ -150,7 +180,8 @@ router.get("/", authMiddleware, async (req, res) => {
           aplicantiArray = aplicarePacient;
         }
 
-        return {
+        // Construim obiectul de răspuns
+        const medicamentResult = {
           id: m.id,
           denumire: m.denumire,
           descriere: m.descriere,
@@ -160,6 +191,14 @@ router.get("/", authMiddleware, async (req, res) => {
           aplicantiPage: 1,
           aplicantiLimit: aplicantiLimit,
         };
+        
+        // Adăugăm numele doctorului pentru pacienți
+        if (req.user.role === 'pacient') {
+          medicamentResult.doctor_nume = m.doctor_nume;
+          medicamentResult.doctor_prenume = m.doctor_prenume;
+        }
+        
+        return medicamentResult;
       })
     );
 
