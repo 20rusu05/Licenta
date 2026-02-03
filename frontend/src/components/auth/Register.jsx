@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextField, Button, Box, Typography, Container, Alert, Paper, Link } from '@mui/material';
+import { TextField, Button, Box, Typography, Container, Alert, Paper, Link, Checkbox, FormControlLabel } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 
@@ -14,6 +14,7 @@ export default function Register() {
     parola: '',
     telefon: ''
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
@@ -32,6 +33,12 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!acceptedTerms) {
+      setError("Trebuie să acceptați termenii și condițiile pentru a crea un cont.");
+      return;
+    }
+    
     if (!emailRegex.test(formData.email)) {
       setError("Adresa de email nu este validă. (ceva@ceva.ceva)");
       return;
@@ -196,6 +203,40 @@ export default function Register() {
             onChange={handleChange}
             sx={{ mb: 3 }}
           />
+          
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Typography variant="body2">
+                Accept{' '}
+                <Link
+                  component="button"
+                  type="button"
+                  variant="body2"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/terms');
+                  }}
+                  sx={{
+                    textDecoration: 'none',
+                    '&:hover': {
+                      textDecoration: 'underline',
+                    },
+                  }}
+                >
+                  termenii și condițiile
+                </Link>
+              </Typography>
+            }
+            sx={{ mb: 2 }}
+          />
+          
           <Button
             type="submit"
             fullWidth
