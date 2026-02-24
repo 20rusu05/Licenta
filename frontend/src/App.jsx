@@ -13,6 +13,7 @@ import LandingPage from './components/LandingPage';
 import Profil from './components/shared/Profil';
 import TermsAndConditions from './components/auth/TermsAndConditions';
 import AdminPanel from './components/admin/AdminPanel';
+import SenzoriLive from './components/sensors/SenzoriLive';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -56,6 +57,7 @@ function App() {
   element={user ? <Programari /> : <Navigate to="/login" />} 
 />
           <Route path="/dashboard/profil" element={user ? <Profil /> : <Navigate to="/login" />} />
+          <Route path="/dashboard/senzori" element={user ? <SenzoriLive /> : <Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>
     </Box>

@@ -97,6 +97,38 @@ CREATE TABLE programari (
     INDEX idx_status (status)
 );
 	
+-- Tabel pentru datele senzorilor Raspberry Pi
+CREATE TABLE sensor_readings (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sensor_type ENUM('ecg', 'pulsoximetru', 'temperatura') NOT NULL,
+  pacient_id INT NULL,
+  value_1 FLOAT NOT NULL COMMENT 'ECG: voltage, Pulsoximetru: heart_rate, Temperatura: temp_celsius',
+  value_2 FLOAT NULL COMMENT 'Pulsoximetru: spo2',
+  device_id VARCHAR(50) DEFAULT 'rpi5-01',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (pacient_id) REFERENCES pacienti(id) ON DELETE SET NULL,
+  INDEX idx_sensor_type (sensor_type),
+  INDEX idx_pacient_id (pacient_id),
+  INDEX idx_created_at (created_at),
+  INDEX idx_sensor_device (device_id, sensor_type, created_at)
+);
+
+-- Tabel sesiuni de monitorizare
+CREATE TABLE monitoring_sessions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  pacient_id INT NOT NULL,
+  doctor_id INT NULL,
+  sensor_type ENUM('ecg', 'pulsoximetru', 'temperatura') NOT NULL,
+  status ENUM('activa', 'finalizata') DEFAULT 'activa',
+  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ended_at TIMESTAMP NULL,
+  notes TEXT NULL,
+  FOREIGN KEY (pacient_id) REFERENCES pacienti(id) ON DELETE CASCADE,
+  FOREIGN KEY (doctor_id) REFERENCES doctori(id) ON DELETE SET NULL,
+  INDEX idx_pacient_session (pacient_id, status),
+  INDEX idx_doctor_session (doctor_id, status)
+);
+
 -- Indexuri pentru performanță
 CREATE INDEX idx_admini_email ON admini(email);
 CREATE INDEX idx_pacienti_email ON pacienti(email);

@@ -6,6 +6,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import SensorsIcon from '@mui/icons-material/Sensors';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const drawerWidth = 240;
@@ -29,6 +30,8 @@ export default function Sidebar() {
       { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
       { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
     ];
+    // Senzori - disponibil pentru toți utilizatorii autentificați
+    base.push({ label: 'Senzori Live', icon: <SensorsIcon />, path: '/dashboard/senzori' });
     if (user?.role === 'doctor') {
       base.splice(1, 0, { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });
       base.push({ label: 'Grafice', icon: <BarChartIcon />, path: '/dashboard/grafice' });
