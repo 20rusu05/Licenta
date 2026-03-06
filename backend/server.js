@@ -22,7 +22,7 @@ const httpServer = createServer(app);
 // Socket.IO setup cu CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:5173"],
+    origin: (origin, callback) => callback(null, true),
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -33,7 +33,7 @@ const connectedSensors = {};
 app.set("io", io);
 app.set("connectedSensors", connectedSensors);
 
-app.use(cors({ origin: ["http://localhost:3000", "http://localhost:5173"], credentials: true }));
+app.use(cors({ origin: (origin, callback) => callback(null, true), credentials: true }));
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
@@ -171,7 +171,7 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Socket.IO activ - așteptare senzori...`);
 });

@@ -18,7 +18,7 @@ import { io } from 'socket.io-client';
 import AppLayout from '../layout/AppLayout';
 import { api } from '../../services/api';
 
-const SOCKET_URL = 'http://localhost:3001';
+const SOCKET_URL = `http://${window.location.hostname}:3001`;
 const MAX_ECG_POINTS = 300;
 const MAX_VITAL_POINTS = 60;
 
