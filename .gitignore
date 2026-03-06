@@ -1,1 +1,12 @@
 node_modules
+
+# Env files
+.env
+*.env
+
+# System files
+.DS_Store
+Thumbsrusu@pi5.db
+
+# Logs
+*.log
