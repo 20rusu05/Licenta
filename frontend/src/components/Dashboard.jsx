@@ -18,7 +18,6 @@ import { api } from '../services/api';
 export default function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user'));
   
-  // Redirect admin to admin panel
   if (user?.role === 'admin') {
     window.location.href = '/dashboard/admin';
     return null;
@@ -71,9 +70,7 @@ export default function Dashboard() {
         </Box>
 
         {isDoctor ? (
-          // DASHBOARD DOCTOR
           <Grid container spacing={3}>
-            {/* Statistici */}
             <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PeopleIcon sx={{ fontSize: 28 }} />}
@@ -111,17 +108,14 @@ export default function Dashboard() {
               />
             </Grid>
 
-            {/* Programări de azi */}
             <Grid item xs={12} md={6}>
               <UpcomingAppointments appointments={dashboardData?.programariDeAzi || []} />
             </Grid>
 
-            {/* Activitate recentă */}
             <Grid item xs={12} md={6}>
               <RecentActivity activities={dashboardData?.activitateRecenta || []} />
             </Grid>
 
-            {/* Grafic programări */}
             <Grid item xs={12}>
               <AppointmentsChart 
                 data={dashboardData?.programariSaptamanala || []} 
@@ -130,9 +124,7 @@ export default function Dashboard() {
             </Grid>
           </Grid>
         ) : (
-          // DASHBOARD PACIENT
           <Grid container spacing={3}>
-            {/* Statistici pacient - 4 carduri egale */}
             <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<CalendarMonthIcon sx={{ fontSize: 28 }} />}
@@ -170,22 +162,18 @@ export default function Dashboard() {
               />
             </Grid>
 
-            {/* Următoarea programare - card mare */}
             <Grid item xs={12} md={8}>
               <NextAppointmentCard appointment={dashboardData?.urmatoareaProgramare} />
             </Grid>
 
-            {/* Acțiuni rapide */}
             <Grid item xs={12} md={4}>
               <QuickActions />
             </Grid>
 
-            {/* Medicamentele mele */}
             <Grid item xs={12} md={6}>
               <MyMedications medications={dashboardData?.medicamentele || []} />
             </Grid>
 
-            {/* Istoric programări */}
             <Grid item xs={12} md={6}>
               <AppointmentHistory appointments={dashboardData?.istoricProgramari || []} />
             </Grid>

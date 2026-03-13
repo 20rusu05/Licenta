@@ -3,9 +3,7 @@ import { db } from "../db.js";
 
 const router = express.Router();
 
-// GET /api/sensors/status - Status senzori conectați
 router.get("/status", (req, res) => {
-  // Returnează senzorii activi (din memoria socket-urilor)
   const io = req.app.get("io");
   const connectedSensors = req.app.get("connectedSensors") || {};
 
@@ -20,7 +18,6 @@ router.get("/status", (req, res) => {
   res.json({ sensors: status, count: status.length });
 });
 
-// GET /api/sensors/latest/:sensorType - Ultimele citiri pentru un tip de senzor
 router.get("/latest/:sensorType", (req, res) => {
   const { sensorType } = req.params;
   const limit = parseInt(req.query.limit) || 100;
@@ -48,7 +45,6 @@ router.get("/latest/:sensorType", (req, res) => {
   });
 });
 
-// GET /api/sensors/history/:sensorType - Istoric citiri cu filtrare
 router.get("/history/:sensorType", (req, res) => {
   const { sensorType } = req.params;
   const { pacient_id, from, to, limit = 500 } = req.query;

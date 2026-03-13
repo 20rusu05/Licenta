@@ -12,7 +12,6 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
 
-    // Caută în ambele tabele
     let user = null;
     let tableName = null;
 

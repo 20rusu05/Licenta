@@ -86,21 +86,15 @@ export default function Medicamente() {
   const [dialogMessage, setDialogMessage] = useState("");
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  // Paginare aplicanti
   const [aplicantiPages, setAplicantiPages] = useState({});
 
   const user = JSON.parse(localStorage.getItem("user"));
   const isDoctor = user?.role === "doctor";
-  console.log('Medicamente component loaded. User:', user, 'isDoctor:', isDoctor);
   // `api` will attach Authorization header automatically via interceptor
   const token = localStorage.getItem("token");
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  console.log('Token present:', !!token);
 
 const reload = async (specificMedicamentId = null, customAplicantiPage = null) => {
-  console.log('reload() called, page:', page, 'specificMedicamentId:', specificMedicamentId, 'customAplicantiPage:', customAplicantiPage);
-  
-  // Daca se reincarca un medicament specific, nu afisam loading global
   if (!specificMedicamentId) {
     setLoading(true);
   }
@@ -108,16 +102,12 @@ const reload = async (specificMedicamentId = null, customAplicantiPage = null) =
   try {
     let url = `${API_URL}?page=${page}&limit=${limit}`;
     
-    // Daca e specificat un medicament, adauga paginarea pentru aplicantii lui
     if (specificMedicamentId) {
       const aplicantiPage = customAplicantiPage || aplicantiPages[specificMedicamentId] || 1;
       url += `&medicamentId=${specificMedicamentId}&aplicantiPage=${aplicantiPage}&aplicantiLimit=5`;
     }
     
     const res = await api.get(url);
-    console.log('Medicamente loaded:', res.data);
-    
-    // Daca am relodat un medicament specific, updatez doar acel medicament
     if (specificMedicamentId && res.data.medicament) {
       setMedicamente(prevMeds => 
         prevMeds.map(m => 
@@ -138,7 +128,6 @@ const reload = async (specificMedicamentId = null, customAplicantiPage = null) =
 };
 
 useEffect(() => { 
-  console.log('useEffect triggered, calling reload()');
   reload(); 
 }, [page]);
 
@@ -146,20 +135,16 @@ useEffect(() => {
     const isOpening = !openRows[id];
     setOpenRows(prev => ({ ...prev, [id]: isOpening }));
     
-    // Daca deschidem randul, incarcam aplicantii
     if (isOpening) {
-      // Initializeaza pagina aplicanti pentru acest medicament daca nu exista
       if (!aplicantiPages[id]) {
         setAplicantiPages(prev => ({ ...prev, [id]: 1 }));
       }
-      // Reincarca datele pentru acest medicament specific cu aplicantii paginati
       await reload(id);
     }
   };
 
   const changeAplicantiPage = async (medicamentId, newPage) => {
     setAplicantiPages(prev => ({ ...prev, [medicamentId]: newPage }));
-    // Trimite direct pagina noua la reload
     await reload(medicamentId, newPage);
   };
 
@@ -191,7 +176,6 @@ useEffect(() => {
     probleme_inima,
   } = formData;
 
-  // validare pentru toate campurile obligatorii (observatii e exclus)
   if (
     !fumeaza ||
     !activitate_fizica ||
@@ -234,7 +218,6 @@ useEffect(() => {
     console.log('updateStatus called:', id, status, 'medicamentId:', medicamentId);
     try {
       await api.post(`${API_URL}/aplicari/${id}/status`, { status });
-      // Reîncarcă medicamentul specific pentru a actualiza lista de aplicanți
       if (medicamentId) {
         await reload(medicamentId);
       } else {
@@ -249,7 +232,6 @@ useEffect(() => {
   console.log('handleAcceptWithProgramare called:', id, 'medicamentId:', medicamentId);
   try {
     await api.post(`${API_URL}/aplicari/${id}/status`, { status: "acceptat" });
-    // Reîncarcă medicamentul pentru a actualiza lista de aplicanți
     await reload(medicamentId);
     setAplicareSelectata(id);
     setMedicamentCurent(medicamentId);
@@ -262,7 +244,6 @@ useEffect(() => {
   const creeazaProgramare = async () => {
   console.log('creeazaProgramare called:', aplicareSelectata, dataProgramare, 'medicamentCurent:', medicamentCurent);
   try {
-      // backend expects POST /api/medicamente/aplicari/:id/programare with { dataProgramare }
       if (!aplicareSelectata) throw new Error('Aplicare selectata invalida');
       await api.post(
         `${API_URL}/aplicari/${aplicareSelectata}/programare`,
@@ -277,7 +258,6 @@ useEffect(() => {
       message: 'Programare creată cu succes!',
       severity: 'success'
     });
-    // Reincarca medicamentul specific pentru a actualiza lista de aplicanti
     if (medicamentCurent) {
       await reload(medicamentCurent);
     } else {
@@ -326,19 +306,14 @@ useEffect(() => {
   };
 
 const handleRenunta = async (id) => {
-  // Pop-up de confirmare
   const confirmRenuntare = window.confirm("Ești sigur că vrei să renunți la această aplicare?");
-  if (!confirmRenuntare) return; // dacă utilizatorul apasă "Anulează", nu se face nimic
+  if (!confirmRenuntare) return;
 
   try {
-    // Șterge aplicația
     await api.delete(`${API_URL}/aplicare/${id}`);
-
-    // Reîncarcă lista de medicamente/aplicări
     await reload();
   } catch (err) {
     console.error("Eroare renuntare:", err);
-    // Afișează mesaj doar în caz de eroare
     setDialogMessage(err.response?.data?.error || "Eroare server");
     setDialogOpen(true);
   }
@@ -381,7 +356,6 @@ const handleConfirmRenunta = async () => {
  return (
   <AppLayout>
     <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
-      {/* Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
           Medicamente disponibile
@@ -400,7 +374,6 @@ const handleConfirmRenunta = async () => {
         )}
       </Box>
 
-      {/* Lista medicamente cu loading */}
       {loading ? (
         <LinearProgress />
       ) : (
@@ -627,7 +600,6 @@ const handleConfirmRenunta = async () => {
                                   )}
                                 </TableBody>
                               </Table>
-                              {/* Paginare aplicanti */}
                               {m.aplicantiTotal > 5 && (
                                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 2, gap: 2 }}>
                                   <Button
@@ -662,7 +634,6 @@ const handleConfirmRenunta = async () => {
             </Table>
           </Paper>
 
-          {/* Paginare */}
           <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2 }}>
             <Button
               variant="outlined"
@@ -685,8 +656,6 @@ const handleConfirmRenunta = async () => {
         </>
       )}
 
-      {/* Formulare și dialoguri */}
-      {/** Formular pacient */}
       <Dialog open={formularOpen} onClose={() => setFormularOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Formular pacient</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -786,7 +755,6 @@ const handleConfirmRenunta = async () => {
         </DialogActions>
       </Dialog>
 
-      {/** Vizualizare formular */}
       <Dialog open={viewFormOpen} onClose={() => setViewFormOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Formular pacient - {viewFormData.pacient_nume}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -805,7 +773,6 @@ const handleConfirmRenunta = async () => {
         </DialogActions>
       </Dialog>
 
-      {/** Dialog simplu */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
         <DialogContent>
           <Typography>{dialogMessage}</Typography>
@@ -815,7 +782,6 @@ const handleConfirmRenunta = async () => {
         </DialogActions>
       </Dialog>
 
-      {/** Dialog confirmare renunțare */}
       <Dialog open={confirmRenuntaOpen} onClose={() => setConfirmRenuntaOpen(false)}>
         <DialogTitle>Confirmare renunțare</DialogTitle>
         <DialogContent>
@@ -828,8 +794,7 @@ const handleConfirmRenunta = async () => {
           </Button>
         </DialogActions>
       </Dialog>
-      {/** Dialog programare */}
-<Dialog open={openProgramareDialog} onClose={() => setOpenProgramareDialog(false)}>
+      <Dialog open={openProgramareDialog} onClose={() => setOpenProgramareDialog(false)}>
   <DialogTitle>Selecteaza data programarii</DialogTitle>
   <DialogContent>
     <TextField
@@ -848,7 +813,6 @@ const handleConfirmRenunta = async () => {
   </DialogActions>
 </Dialog>
 
-      {/** Dialog adaugare medicament */}
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Adaugă medicament</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -876,7 +840,6 @@ const handleConfirmRenunta = async () => {
         </DialogActions>
       </Dialog>
 
-      {/** Dialog editare medicament */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Editează medicament</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -916,7 +879,6 @@ const handleConfirmRenunta = async () => {
         </DialogActions>
       </Dialog>
 
-      {/** Dialog confirmare stergere */}
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>Confirmare ștergere</DialogTitle>
         <DialogContent>
@@ -932,7 +894,6 @@ const handleConfirmRenunta = async () => {
         </DialogActions>
       </Dialog>
 
-      {/** Snackbar pentru notificări */}
       <Snackbar 
         open={snackbar.open} 
         autoHideDuration={4000} 

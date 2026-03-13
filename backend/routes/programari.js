@@ -12,7 +12,6 @@ router.post("/", verifyToken, async (req, res) => {
   if (!pacient_id || !data_programare) return res.status(400).json({ error: "Date incomplete" });
 
   try {
-    // Convertim data din ISO format la format MySQL (YYYY-MM-DD HH:MM:SS)
     const mysqlDateTime = new Date(data_programare).toISOString().slice(0, 19).replace('T', ' ');
     
     await db.promise().query(
@@ -34,15 +33,13 @@ router.get("/", verifyToken, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
-  const filter = req.query.filter || 'toate'; // toate, viitoare, trecute, completate
+  const filter = req.query.filter || 'toate';
 
   try {
     let query, countQuery, countsQuery, params, userIdCol;
 
-    // Determinăm coloana pentru user
     userIdCol = role === "doctor" ? "doctor_id" : "pacient_id";
 
-    // Query pentru contoare (toate, viitoare, trecute, completate)
     countsQuery = `
       SELECT 
         COUNT(*) AS toate,
@@ -54,7 +51,6 @@ router.get("/", verifyToken, async (req, res) => {
     `;
 
     if (role === "doctor") {
-      // Query de bază pentru doctor
       let whereClause = "p.doctor_id = ?";
       
       // Adaugă filtru pentru data și status
@@ -83,10 +79,8 @@ router.get("/", verifyToken, async (req, res) => {
 
       params = [userId, limit, offset];
     } else {
-      // Query de bază pentru pacient
       let whereClause = "p.pacient_id = ?";
       
-      // Adaugă filtru pentru data și status
       if (filter === 'viitoare') {
         whereClause += " AND p.data_programare > NOW() AND p.status != 'completata'";
       } else if (filter === 'trecute') {
@@ -113,14 +107,10 @@ router.get("/", verifyToken, async (req, res) => {
       params = [userId, limit, offset];
     }
 
-    // Obține contoarele pentru toate filtrele
     const [[countsRow]] = await db.promise().query(countsQuery, [userId]);
-    
-    // Obține total pentru filtrul curent
     const [[countRow]] = await db.promise().query(countQuery, [userId]);
     const total = countRow.total;
 
-    // Obține datele
     const [rows] = await db.promise().query(query, params);
 
     res.json({
@@ -157,7 +147,6 @@ router.put("/:id", verifyToken, async (req, res) => {
   }
 
   try {
-    // Verifică că programarea aparține doctorului
     const [programare] = await db.promise().query(
       "SELECT * FROM programari WHERE id = ? AND doctor_id = ?",
       [programareId, userId]
@@ -167,10 +156,8 @@ router.put("/:id", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "Programare inexistentă sau nu ai permisiunea" });
     }
 
-    // Convertim data din ISO format la format MySQL
     const mysqlDateTime = new Date(data_programare).toISOString().slice(0, 19).replace('T', ' ');
 
-    // Actualizează data programării și opțional statusul
     if (resetStatus) {
       // Dacă programarea era completată și o reprogramăm, o resetăm la 'programata'
       await db.promise().query(
@@ -191,7 +178,6 @@ router.put("/:id", verifyToken, async (req, res) => {
   }
 });
 
-// Marchează programarea ca completată sau resetează la programată (toggle)
 router.patch("/:id/completeaza", verifyToken, async (req, res) => {
   const programareId = req.params.id;
   const userId = req.user.id;
@@ -202,7 +188,6 @@ router.patch("/:id/completeaza", verifyToken, async (req, res) => {
   }
 
   try {
-    // Verifică că programarea aparține doctorului
     const [programare] = await db.promise().query(
       "SELECT * FROM programari WHERE id = ? AND doctor_id = ?",
       [programareId, userId]
@@ -212,7 +197,7 @@ router.patch("/:id/completeaza", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "Programare inexistentă sau nu ai permisiunea" });
     }
 
-    // Toggle statusul - dacă e completată, o setăm la programată, altfel la completată
+
     const newStatus = programare[0].status === 'completata' ? 'programata' : 'completata';
 
     await db.promise().query(
@@ -227,14 +212,12 @@ router.patch("/:id/completeaza", verifyToken, async (req, res) => {
   }
 });
 
-// Șterge o programare
 router.delete("/:id", verifyToken, async (req, res) => {
   const programareId = req.params.id;
   const userId = req.user.id;
   const role = req.user.role;
 
   try {
-    // Verifică că programarea aparține utilizatorului
     const [programare] = await db.promise().query(
       "SELECT * FROM programari WHERE id = ?",
       [programareId]
@@ -244,7 +227,6 @@ router.delete("/:id", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "Programare inexistentă" });
     }
 
-    // Doar doctorul poate anula programarea
     if (role === "doctor" && programare[0].doctor_id !== userId) {
       return res.status(403).json({ error: "Nu ai permisiunea să anulezi această programare" });
     }
@@ -253,7 +235,6 @@ router.delete("/:id", verifyToken, async (req, res) => {
       return res.status(403).json({ error: "Nu ai permisiunea să anulezi această programare" });
     }
 
-    // Șterge programarea
     await db.promise().query("DELETE FROM programari WHERE id = ?", [programareId]);
 
     res.json({ message: "Programare anulată cu succes" });

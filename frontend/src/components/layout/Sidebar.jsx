@@ -17,20 +17,17 @@ export default function Sidebar() {
   const user = JSON.parse(localStorage.getItem('user'));
 
   const items = useMemo(() => {
-    // Admin has only admin panel
     if (user?.role === 'admin') {
       return [
         { label: 'Panou Administrare', icon: <AdminPanelSettingsIcon />, path: '/dashboard/admin' },
       ];
     }
 
-    // Doctor and patient items
     const base = [
       { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
       { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
       { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
     ];
-    // Senzori - disponibil pentru toți utilizatorii autentificați
     base.push({ label: 'Senzori Live', icon: <SensorsIcon />, path: '/dashboard/senzori' });
     if (user?.role === 'doctor') {
       base.splice(1, 0, { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });

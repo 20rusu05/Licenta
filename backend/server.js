@@ -19,7 +19,6 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// Socket.IO setup cu CORS
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => callback(null, true),
@@ -28,7 +27,6 @@ const io = new Server(httpServer, {
   },
 });
 
-// Stocăm referința io și senzori conectați pe app
 const connectedSensors = {};
 app.set("io", io);
 app.set("connectedSensors", connectedSensors);
@@ -46,12 +44,9 @@ app.use("/api/sensors", sensorsRouter);
 app.use("/api", forgotPasswordRouter);
 app.use("/api", resetPasswordRouter);
 
-// ============ SOCKET.IO - Gestionare conexiuni ============
-
 io.on("connection", (socket) => {
   console.log(`[Socket.IO] Client conectat: ${socket.id}`);
 
-  // Înregistrare senzor Raspberry Pi
   socket.on("register_sensor", (data) => {
     const { sensor_type, device_id } = data;
     connectedSensors[socket.id] = {
@@ -62,7 +57,6 @@ io.on("connection", (socket) => {
     };
     console.log(`[Socket.IO] Senzor înregistrat: ${sensor_type} (${device_id})`);
 
-    // Notifică toți clienții frontend despre noul senzor
     io.emit("sensor_connected", {
       sensor_type,
       device_id,
@@ -70,7 +64,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Primire date senzor individual
   socket.on("sensor_data", (data) => {
     const { sensor_type, value_1, value_2, device_id, pacient_id } = data;
 
@@ -79,7 +72,6 @@ io.on("connection", (socket) => {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }
 
-    // Salvează în baza de date
     const query = `
       INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
       VALUES (?, ?, ?, ?, ?)
@@ -88,7 +80,6 @@ io.on("connection", (socket) => {
       if (err) console.error("[DB] Eroare salvare citire:", err.message);
     });
 
-    // Broadcast live către frontend (room-based)
     io.to(`sensor_${sensor_type}`).emit("sensor_update", {
       sensor_type,
       value_1,
@@ -110,7 +101,6 @@ io.on("connection", (socket) => {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }
 
-    // Salvează batch în baza de date
     const values = readings.map((r) => [
       sensor_type,
       pacient_id || null,
@@ -127,7 +117,6 @@ io.on("connection", (socket) => {
       if (err) console.error("[DB] Eroare salvare batch:", err.message);
     });
 
-    // Broadcast batch live
     io.to(`sensor_${sensor_type}`).emit("sensor_batch_update", {
       sensor_type,
       readings: readings.map((r) => ({
@@ -140,25 +129,21 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Client frontend se abonează la un tip de senzor
   socket.on("subscribe_sensor", (sensorType) => {
     socket.join(`sensor_${sensorType}`);
     console.log(`[Socket.IO] Client ${socket.id} abonat la ${sensorType}`);
   });
 
-  // Client frontend se dezabonează
   socket.on("unsubscribe_sensor", (sensorType) => {
     socket.leave(`sensor_${sensorType}`);
     console.log(`[Socket.IO] Client ${socket.id} dezabonat de la ${sensorType}`);
   });
 
-  // Deconectare
   socket.on("disconnect", () => {
     if (connectedSensors[socket.id]) {
       const sensor = connectedSensors[socket.id];
       console.log(`[Socket.IO] Senzor deconectat: ${sensor.sensor_type} (${sensor.device_id})`);
 
-      // Notifică frontend
       io.emit("sensor_disconnected", {
         sensor_type: sensor.sensor_type,
         device_id: sensor.device_id,

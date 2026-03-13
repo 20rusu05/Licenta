@@ -4,7 +4,6 @@ import { verifyToken } from "./middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Middleware pentru verificare admin
 const isAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: "Acces interzis. Doar adminii pot accesa aceasta resursa." });
@@ -12,7 +11,6 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-// Get all users (doctors and patients)
 router.get("/users", verifyToken, isAdmin, async (req, res) => {
   try {
     const [doctori] = await db
@@ -35,7 +33,6 @@ router.get("/users", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// Get user statistics
 router.get("/statistics", verifyToken, isAdmin, async (req, res) => {
   try {
     const [doctoriCount] = await db
@@ -71,7 +68,6 @@ router.delete("/users/doctor/:id", verifyToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Verifică dacă doctorul există
     const [doctor] = await db
       .promise()
       .query("SELECT id, nume, prenume, email FROM doctori WHERE id = ?", [id]);
@@ -80,7 +76,6 @@ router.delete("/users/doctor/:id", verifyToken, isAdmin, async (req, res) => {
       return res.status(404).json({ error: "Doctorul nu a fost găsit" });
     }
 
-    // Șterge doctorul (cascade va șterge automat: medicamente, aplicari_medicamente, programari)
     await db
       .promise()
       .query("DELETE FROM doctori WHERE id = ?", [id]);
@@ -100,7 +95,6 @@ router.delete("/users/pacient/:id", verifyToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Verifică dacă pacientul există
     const [pacient] = await db
       .promise()
       .query("SELECT id, nume, prenume, email FROM pacienti WHERE id = ?", [id]);
@@ -109,7 +103,6 @@ router.delete("/users/pacient/:id", verifyToken, isAdmin, async (req, res) => {
       return res.status(404).json({ error: "Pacientul nu a fost găsit" });
     }
 
-    // Șterge pacientul (cascade va șterge automat: aplicari_medicamente, programari)
     await db
       .promise()
       .query("DELETE FROM pacienti WHERE id = ?", [id]);
@@ -124,7 +117,6 @@ router.delete("/users/pacient/:id", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// Get user details with related data count
 router.get("/users/:role/:id", verifyToken, isAdmin, async (req, res) => {
   const { role, id } = req.params;
 

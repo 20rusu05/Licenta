@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
-// Middleware JWT
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "Token lipsa" });
@@ -18,33 +17,26 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// ------------------------
-// GET medicamente cu aplicanti
-// ------------------------
 router.get("/", authMiddleware, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
   
-  // Parametri pentru paginarea aplicantilor per medicament
   const medicamentId = req.query.medicamentId ? parseInt(req.query.medicamentId) : null;
   const aplicantiPage = parseInt(req.query.aplicantiPage) || 1;
   const aplicantiLimit = parseInt(req.query.aplicantiLimit) || 5;
   const aplicantiOffset = (aplicantiPage - 1) * aplicantiLimit;
 
   try {
-    // Construim query-urile în funcție de rol
     let countQuery, selectQuery, queryParams = [];
     
     if (req.user.role === 'pacient') {
-      // Pacienții văd toate medicamentele cu numele doctorului
       countQuery = "SELECT COUNT(*) AS total FROM medicamente";
       selectQuery = `SELECT m.id, m.denumire, m.descriere, m.complet, d.nume AS doctor_nume, d.prenume AS doctor_prenume 
                      FROM medicamente m 
                      JOIN doctori d ON m.doctor_id = d.id 
                      ORDER BY m.id DESC LIMIT ? OFFSET ?`;
     } else {
-      // Doctorii văd doar medicamentele lor
       countQuery = "SELECT COUNT(*) AS total FROM medicamente WHERE doctor_id = ?";
       selectQuery = `SELECT m.id, m.denumire, m.descriere, m.complet 
                      FROM medicamente m 
@@ -53,24 +45,20 @@ router.get("/", authMiddleware, async (req, res) => {
       queryParams = [req.user.id];
     }
     
-    // Total medicamente (count)
     const [[{ total }]] = await db.promise().query(
       countQuery,
       req.user.role === 'doctor' ? [req.user.id] : []
     );
 
-    // Lista medicamente (fara aplicanti)
     const [medicamente] = await db.promise().query(
       selectQuery,
       req.user.role === 'doctor' ? [...queryParams, limit, offset] : [limit, offset]
     );
 
-    // Daca se cere un medicament specific, returnam doar acel medicament cu aplicantii
     if (medicamentId) {
       let medicamentQuery = `SELECT id, denumire, descriere, complet, doctor_id FROM medicamente WHERE id = ?`;
       let medicamentParams = [medicamentId];
       
-      // Doctorii pot vedea doar medicamentele lor
       if (req.user.role === 'doctor') {
         medicamentQuery += ` AND doctor_id = ?`;
         medicamentParams.push(req.user.id);
@@ -87,13 +75,11 @@ router.get("/", authMiddleware, async (req, res) => {
 
       const m = medicamentSpecific[0];
 
-      // Count total aplicanti pentru acest medicament
       const [[{ totalAplicanti }]] = await db.promise().query(
         `SELECT COUNT(*) AS totalAplicanti FROM aplicari_medicamente WHERE medicament_id = ?`,
         [m.id]
       );
 
-      // Aplicanti paginati
       const [aplicantiRows] = await db.promise().query(
         `
         SELECT 
@@ -134,9 +120,6 @@ router.get("/", authMiddleware, async (req, res) => {
       });
     }
 
-    // Pentru fiecare medicament, luam count-ul aplicantilor 
-    // Si pentru pacienti, returnam aplicarea lor daca exista
-    // Filtrăm medicamentele completate pentru pacienți
     let medicamenteFiltered = medicamente;
     if (req.user.role === 'pacient') {
       medicamenteFiltered = medicamente.filter(m => !m.complet);
@@ -152,7 +135,6 @@ router.get("/", authMiddleware, async (req, res) => {
 
         let aplicantiArray = [];
         
-        // Daca utilizatorul e pacient, returnam doar aplicarea lui (daca exista)
         if (req.user.role === 'pacient') {
           const [aplicarePacient] = await db.promise().query(
             `
@@ -180,7 +162,6 @@ router.get("/", authMiddleware, async (req, res) => {
           aplicantiArray = aplicarePacient;
         }
 
-        // Construim obiectul de răspuns
         const medicamentResult = {
           id: m.id,
           denumire: m.denumire,
@@ -192,7 +173,6 @@ router.get("/", authMiddleware, async (req, res) => {
           aplicantiLimit: aplicantiLimit,
         };
         
-        // Adăugăm numele doctorului pentru pacienți
         if (req.user.role === 'pacient') {
           medicamentResult.doctor_nume = m.doctor_nume;
           medicamentResult.doctor_prenume = m.doctor_prenume;
@@ -224,7 +204,6 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
   if (!dataProgramare)
     return res.status(400).json({ error: "Data programarii este obligatorie" });
 
-  // Validare: data nu poate fi în trecut
   const dataSelectata = new Date(dataProgramare);
   const now = new Date();
   if (dataSelectata < now) {
@@ -232,7 +211,6 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
   }
 
   try {
-    // luam pacientul si medicamentul din aplicare
     const [rows] = await db.promise().query(
       "SELECT pacient_id, medicament_id FROM aplicari_medicamente WHERE id = ?",
       [aplicareId]
@@ -242,7 +220,6 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
 
     const { pacient_id, medicament_id } = rows[0];
 
-    // Validare: nu pot exista 2 programari la aceeasi ora pentru acelasi doctor
     const [existing] = await db.promise().query(
       "SELECT id FROM programari WHERE doctor_id = ? AND data_programare = ?",
       [req.user.id, dataProgramare]
@@ -252,7 +229,6 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Exista deja o programare la aceasta ora" });
     }
 
-    // Tabelul programari are: doctor_id, pacient_id, data_programare
     await db.promise().query(
       "INSERT INTO programari (doctor_id, pacient_id, data_programare) VALUES (?, ?, ?)",
       [req.user.id, pacient_id, dataProgramare]
@@ -265,9 +241,6 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
   }
 });
 
-// ------------------------
-// POST /api/medicamente – adaugare medicament (doctor)
-// ------------------------
 router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "doctor")
     return res.status(403).json({ error: "Doar doctorii pot adauga medicamente" });
@@ -287,9 +260,6 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 });
 
-// ------------------------
-// PUT /api/medicamente/:id – editare medicament (doctor)
-// ------------------------
 router.put("/:id", authMiddleware, async (req, res) => {
   if (req.user.role !== "doctor")
     return res.status(403).json({ error: "Doar doctorii pot edita medicamente" });
@@ -309,9 +279,6 @@ router.put("/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// ------------------------
-// DELETE /api/medicamente/:id – stergere medicament (doctor)
-// ------------------------
 router.delete("/:id", authMiddleware, async (req, res) => {
   if (req.user.role !== "doctor")
     return res.status(403).json({ error: "Doar doctorii pot sterge medicamente" });
@@ -330,7 +297,6 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// Aplicare medicament (pacient)
 router.post("/:id/aplica", authMiddleware, async (req, res) => {
   if (req.user.role !== "pacient")
     return res.status(403).json({ error: "Doar pacienții pot aplica" });
@@ -350,14 +316,12 @@ router.post("/:id/aplica", authMiddleware, async (req, res) => {
     observatii,
   } = req.body;
 
-  // Mapare valori corecte pentru ENUM/BOOLEAN
   const fumeazaValues = ["da", "nu", "fost"];
   const activitateValues = ["sedentar", "usoara", "moderata", "intensa"];
   const fumeazaValue = fumeazaValues.includes(fumeaza) ? fumeaza : null;
   const activitateValue = activitateValues.includes(activitate_fizica) ? activitate_fizica : null;
   const problemeInimaValue = typeof probleme_inima === "boolean" ? probleme_inima : null;
 
-  // Verificam numericitatea pentru greutate si inaltime
   const greutateValue = parseFloat(greutate);
   const inaltimeValue = parseFloat(inaltime);
 
@@ -368,7 +332,6 @@ router.post("/:id/aplica", authMiddleware, async (req, res) => {
   }
 
   try {
-    // Verificăm dacă pacientul a aplicat deja
     const [existing] = await db
       .promise()
       .query(
@@ -380,7 +343,6 @@ router.post("/:id/aplica", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Ai aplicat deja la acest medicament" });
     }
 
-    // Inserăm aplicația
     await db
       .promise()
       .query(
@@ -421,12 +383,10 @@ router.post("/programari", authMiddleware, async (req, res) => {
   const dataSelectata = new Date(data);
   const now = new Date();
 
-  // 1. Verificare sa nu fie in trecut
   if (dataSelectata < now)
     return res.status(400).json({ error: "Nu poti seta o programare in trecut" });
 
   try {
-    // 2. Verifica daca exista deja o programare la aceeasi ora
     const [existing] = await db
       .promise()
       .query(
@@ -437,7 +397,6 @@ router.post("/programari", authMiddleware, async (req, res) => {
     if (existing.length > 0)
       return res.status(400).json({ error: "Exista deja o programare la aceasta ora" });
 
-    // 3. Creeaza programarea
     await db
       .promise()
       .query(
@@ -475,12 +434,10 @@ router.post("/aplicari/:id/status", authMiddleware, async (req, res) => {
   }
 });
 
-// Stergere aplicare medicament (renuntare)
 router.delete("/aplicare/:id", authMiddleware, async (req, res) => {
   const aplicareId = req.params.id;
 
   try {
-    // Verificam daca aplicarea exista si apartine utilizatorului
     const [rows] = await db.promise().query(
       "SELECT * FROM aplicari_medicamente WHERE id = ? AND pacient_id = ?",
       [aplicareId, req.user.id]
@@ -490,12 +447,10 @@ router.delete("/aplicare/:id", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Aplicarea nu exista sau nu iti apartine" });
     }
 
-    // Verificare status
     if (rows[0].status !== "pending") {
       return res.status(400).json({ error: "Nu poti renunta daca aplicarea nu este pending" });
     }
 
-    // Stergere aplicare
     await db.promise().query("DELETE FROM aplicari_medicamente WHERE id = ?", [aplicareId]);
 
     res.json({ message: "Aplicarea a fost stearsa (renuntare efectuata)." });
@@ -509,7 +464,7 @@ router.get("/aplicari", authMiddleware, async (req, res) => {
     return res.status(403).json({ error: "Doar doctorii pot vizualiza aplicările" });
   }
 
-  const { status } = req.query; // Preluam status din query params
+  const { status } = req.query;
 
   let sql = `
     SELECT 
@@ -541,7 +496,6 @@ router.get("/aplicari", authMiddleware, async (req, res) => {
   }
 });
 
-// Marcare medicament ca complet (nu mai accepta aplicanti)
 router.patch("/:id/completeaza", authMiddleware, async (req, res) => {
   if (req.user.role !== "doctor") {
     return res.status(403).json({ error: "Doar doctorii pot completa medicamente" });
@@ -550,7 +504,6 @@ router.patch("/:id/completeaza", authMiddleware, async (req, res) => {
   const medicamentId = req.params.id;
 
   try {
-    // Verifică că medicamentul aparține doctorului
     const [medicament] = await db.promise().query(
       "SELECT * FROM medicamente WHERE id = ? AND doctor_id = ?",
       [medicamentId, req.user.id]
@@ -560,7 +513,6 @@ router.patch("/:id/completeaza", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Medicament inexistent sau nu ai permisiunea" });
     }
 
-    // Toggle complet status
     const complet = medicament[0].complet ? 0 : 1;
 
     await db.promise().query(

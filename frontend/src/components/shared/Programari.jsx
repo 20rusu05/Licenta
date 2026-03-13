@@ -38,7 +38,7 @@ const API_URL = "/programari";
 
 export default function Programari() {
   const storedUser = localStorage.getItem("user");
-  if (!storedUser) return null; // blocăm render-ul dacă nu există user
+  if (!storedUser) return null;
   const user = JSON.parse(storedUser);
 
 
@@ -52,7 +52,7 @@ export default function Programari() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [programareToDelete, setProgramareToDelete] = useState(null);
-  const [filter, setFilter] = useState('toate'); // toate, viitoare, trecute, completate
+  const [filter, setFilter] = useState('toate');
   const [counts, setCounts] = useState({ toate: 0, viitoare: 0, trecute: 0, completate: 0 });
 
 
@@ -80,7 +80,6 @@ export default function Programari() {
   const openCalendar = (programare) => {
     setSelectedProgramare(programare);
     setCalendarOpen(true);
-    // Daca programarea are deja o data, o setam in calendar pentru reprogramare
     // Convertim la format datetime-local (YYYY-MM-DDTHH:mm)
     if (programare.data_programare) {
       const date = new Date(programare.data_programare);
@@ -95,15 +94,11 @@ export default function Programari() {
     if (!selectedDate || !selectedProgramare) return;
 
     try {
-      // Convertim data din datetime-local la ISO string
       const isoDate = new Date(selectedDate).toISOString();
       
-      // Dacă programarea are deja un ID, folosim PUT pentru reprogramare
-      // Altfel, folosim POST pentru programare nouă
       if (selectedProgramare.id) {
         await api.put(`${API_URL}/${selectedProgramare.id}`, {
           data_programare: isoDate,
-          // Dacă programarea era completată, o resetăm automat la programată
           resetStatus: selectedProgramare.status === 'completata'
         });
       } else {
@@ -181,12 +176,11 @@ export default function Programari() {
   const handleFilterChange = (e, newFilter) => {
     if (newFilter) {
       setFilter(newFilter);
-      setCurrentPage(1); // Reset la prima pagină când schimbăm filtrul
+      setCurrentPage(1);
     }
   };
 
   const getStatusChip = (dataOra, status) => {
-    // Daca programarea e completata
     if (status === 'completata') {
       return <Chip size="small" label="Completată" color="info" />;
     }
@@ -374,7 +368,6 @@ export default function Programari() {
     </Table>
   </Paper>
 )}
-        {/* Paginare */}
         {!loading && (
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 2 }}>
             <Button 

@@ -29,7 +29,6 @@ class SensorManager:
             "temperatura": TemperatureSensor,
         }
 
-        # Selectează senzorii de rulat
         if sensors_to_run is None:
             sensors_to_run = list(available_sensors.keys())
 
@@ -60,10 +59,8 @@ class SensorManager:
             thread.start()
             print(f"[MANAGER] Thread '{name}' pornit")
 
-        # Menține thread-ul principal activ
         try:
             while self.running:
-                # Verifică dacă thread-urile mai rulează
                 alive = sum(1 for t in self.threads.values() if t.is_alive())
                 if alive == 0:
                     print("[MANAGER] Toți senzorii s-au oprit")
@@ -83,7 +80,6 @@ class SensorManager:
             except Exception as e:
                 print(f"[MANAGER] Eroare oprire '{name}': {e}")
 
-        # Așteaptă terminarea thread-urilor
         for name, thread in self.threads.items():
             thread.join(timeout=5)
 

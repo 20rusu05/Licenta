@@ -5,7 +5,6 @@ import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
-// Register
 router.post("/register", async (req, res) => {
   const { nume, prenume, email, parola, telefon } = req.body;
   if (!nume || !prenume || !email || !parola || !telefon)
@@ -55,7 +54,6 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// Login
 router.post("/login", async (req, res) => {
   const { email, parola } = req.body;
   if (!email || !parola) return res.status(400).json({ error: "Campuri lipsa" });
@@ -64,7 +62,6 @@ router.post("/login", async (req, res) => {
     let user = null;
     let role = null;
 
-    // Check admini first
     const [admini] = await db
       .promise()
       .query("SELECT id, nume, prenume, email, telefon, parola FROM admini WHERE email = ?", [email]);

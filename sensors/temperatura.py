@@ -21,7 +21,6 @@ import glob
 from sensor_client import SensorClient
 from config import INTERVALS, DS18B20
 
-# Verificare dacă modulul 1-Wire este disponibil
 HARDWARE_AVAILABLE = os.path.isdir(DS18B20["base_dir"])
 
 
@@ -69,12 +68,10 @@ class TemperatureSensor:
         try:
             lines = self._read_raw()
 
-            # Verificare CRC
             while lines[0].strip()[-3:] != "YES":
                 time.sleep(0.2)
                 lines = self._read_raw()
 
-            # Extrage temperatura
             equals_pos = lines[1].find("t=")
             if equals_pos != -1:
                 temp_string = lines[1][equals_pos + 2:]
@@ -92,7 +89,6 @@ class TemperatureSensor:
         import math
 
         t = time.time()
-        # Temperatură corporală normală cu variație mică
         base_temp = 36.6
         temp = base_temp + 0.3 * math.sin(t * 0.05) + random.gauss(0, 0.1)
         return round(temp, 2)

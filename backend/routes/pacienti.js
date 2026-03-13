@@ -19,7 +19,6 @@ router.get("/", verifyToken, async (req, res) => {
   const search = req.query.search || '';
 
   try {
-    // Construim clauza de search
     let searchCondition = '';
     let searchParams = [];
     
@@ -29,7 +28,6 @@ router.get("/", verifyToken, async (req, res) => {
       searchParams = [searchPattern, searchPattern, searchPattern, searchPattern];
     }
 
-    // Count total pacienți (cu search dacă există)
     const [[{ total }]] = await db.promise().query(
       `
       SELECT COUNT(DISTINCT p.id) AS total
@@ -46,7 +44,6 @@ router.get("/", verifyToken, async (req, res) => {
       [userId, userId, ...searchParams]
     );
 
-    // Selectează pacienții care au avut programări sau aplicări la medicamentele doctorului
     const [rows] = await db.promise().query(
       `
       SELECT DISTINCT 
@@ -96,13 +93,11 @@ router.put("/:id", verifyToken, async (req, res) => {
   const role = req.user.role;
   const { nume, prenume, telefon } = req.body;
 
-  // Verificăm că utilizatorul își actualizează propriul profil
   if (parseInt(userId) !== parseInt(profileId)) {
     return res.status(403).json({ error: "Nu aveți permisiunea de a actualiza acest profil" });
   }
 
   try {
-    // Validări
     if (!nume || !prenume) {
       return res.status(400).json({ error: "Numele și prenumele sunt obligatorii" });
     }
@@ -111,10 +106,8 @@ router.put("/:id", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Numărul de telefon nu este valid" });
     }
 
-    // Determinăm tabela în funcție de rol
     const table = role === "doctor" ? "doctori" : "pacienti";
 
-    // Actualizare
     await db.promise().query(
       `UPDATE ${table} 
        SET nume = ?, prenume = ?, telefon = ?

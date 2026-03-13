@@ -31,7 +31,6 @@ class SensorClient:
         def connect():
             self.connected = True
             print(f"[{self.sensor_type}] Conectat la server via WebSocket")
-            # Înregistrează senzorul
             self.sio.emit("register_sensor", {
                 "sensor_type": self.sensor_type,
                 "device_id": self.device_id,
@@ -45,7 +44,6 @@ class SensorClient:
         @self.sio.on("command")
         def on_command(data):
             print(f"[{self.sensor_type}] Comandă primită: {data}")
-            # Poate fi extins pentru control remote
 
     def connect_to_server(self):
         """Conectare la server via Socket.IO."""
@@ -71,7 +69,6 @@ class SensorClient:
         try:
             self.data_queue.put_nowait(data)
         except queue.Full:
-            # Dacă coada e plină, elimină cel mai vechi element
             try:
                 self.data_queue.get_nowait()
             except queue.Empty:
@@ -102,7 +99,6 @@ class SensorClient:
                     if self.connected:
                         self.sio.emit("sensor_data", data)
                     else:
-                        # Fallback: trimite via HTTP
                         try:
                             requests.post(
                                 f"{self.server_url}/api/sensors/reading",

@@ -8,7 +8,6 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    // Caută în ambele tabele
     let user = null;
     let tableName = null;
 
@@ -37,10 +36,8 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Actualizează parola și șterge token-ul
     await db.promise().query(
       `UPDATE ${tableName} SET parola = ?, reset_token = NULL, reset_token_expiry = NULL WHERE reset_token = ?`,
       [hashedPassword, token]

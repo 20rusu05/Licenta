@@ -35,7 +35,6 @@ export default function SenzoriLive() {
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
 
-  // Conectare Socket.IO
   useEffect(() => {
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
@@ -46,7 +45,6 @@ export default function SenzoriLive() {
 
     socket.on('connect', () => {
       setConnected(true);
-      // Abonare la toți senzorii
       socket.emit('subscribe_sensor', 'ecg');
       socket.emit('subscribe_sensor', 'pulsoximetru');
       socket.emit('subscribe_sensor', 'temperatura');
@@ -68,7 +66,6 @@ export default function SenzoriLive() {
       }));
     });
 
-    // Date ECG individual
     socket.on('sensor_update', (data) => {
       if (data.sensor_type === 'pulsoximetru') {
         setLatestPulse({ hr: data.value_1, spo2: data.value_2 });
@@ -92,7 +89,6 @@ export default function SenzoriLive() {
       }
     });
 
-    // Batch ECG
     socket.on('sensor_batch_update', (data) => {
       if (data.sensor_type === 'ecg') {
         const newPoints = data.readings.map((r, i) => ({
@@ -105,7 +101,6 @@ export default function SenzoriLive() {
       }
     });
 
-    // Încarcă status senzori la conectare
     api.get('/sensors/status').then(res => {
       const statusMap = {};
       (res.data.sensors || []).forEach(s => {
@@ -136,7 +131,6 @@ export default function SenzoriLive() {
   return (
     <AppLayout>
       <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
-        {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
@@ -162,7 +156,6 @@ export default function SenzoriLive() {
           </Box>
         </Box>
 
-        {/* Carduri status senzori */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={4}>
             <SensorStatusCard
@@ -192,7 +185,6 @@ export default function SenzoriLive() {
           </Grid>
         </Grid>
 
-        {/* Tab-uri selectare senzor */}
         <ToggleButtonGroup
           value={activeTab}
           exclusive
@@ -210,7 +202,6 @@ export default function SenzoriLive() {
           </ToggleButton>
         </ToggleButtonGroup>
 
-        {/* Graficul activ */}
         {activeTab === 'ecg' && <ECGChart data={ecgData} theme={theme} />}
         {activeTab === 'pulsoximetru' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
         {activeTab === 'temperatura' && <TempChart data={tempData} latest={latestTemp} theme={theme} />}
@@ -218,8 +209,6 @@ export default function SenzoriLive() {
     </AppLayout>
   );
 }
-
-// ========== Componente auxiliare ==========
 
 function SensorStatusCard({ icon, label, online, color, extra }) {
   return (
@@ -305,7 +294,6 @@ function PulseChart({ data, latest, theme }) {
 
   return (
     <Grid container spacing={3}>
-      {/* Valori curente */}
       <Grid item xs={12} sm={6} md={3}>
         <Card sx={{ textAlign: 'center', background: 'linear-gradient(135deg, #e91e63 0%, #f44336 100%)', color: '#fff' }}>
           <CardContent>
@@ -329,7 +317,6 @@ function PulseChart({ data, latest, theme }) {
         </Card>
       </Grid>
 
-      {/* Grafice */}
       <Grid item xs={12} md={6}>
         <Card>
           <CardContent>

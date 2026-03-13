@@ -28,9 +28,8 @@ function App() {
       setUser(updatedUser ? JSON.parse(updatedUser) : null)
     }
 
-    // Adăugăm ambele evenimente pentru a prinde toate schimbările
-    window.addEventListener('storage', handleStorageChange) // 1. Acesta e corect
-    document.addEventListener('storage', handleStorageChange) // 2. Acesta este incorect
+window.addEventListener('storage', handleStorageChange)
+    document.addEventListener('storage', handleStorageChange)
     
     return () => {
       window.removeEventListener('storage', handleStorageChange)

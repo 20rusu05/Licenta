@@ -27,7 +27,6 @@ import time
 import signal
 import sys
 
-# Încercare import biblioteci hardware (funcționează doar pe RPi)
 try:
     import spidev
     import RPi.GPIO as GPIO
@@ -49,12 +48,10 @@ class ECGSensor:
         self.batch = []
 
         if HARDWARE_AVAILABLE:
-            # Setup GPIO pentru LO+/LO-
             GPIO.setmode(GPIO.BCM)
             GPIO.setup(PINS["ecg_lo_plus"], GPIO.IN)
             GPIO.setup(PINS["ecg_lo_minus"], GPIO.IN)
 
-            # Setup SPI pentru MCP3008
             self.spi = spidev.SpiDev()
             self.spi.open(ADC["spi_port"], ADC["spi_device"])
             self.spi.max_speed_hz = 1350000
@@ -62,34 +59,29 @@ class ECGSensor:
     def read_adc(self, channel):
         """Citire canal ADC MCP3008 (0-1023)."""
         if not HARDWARE_AVAILABLE:
-            # Simulare: generează semnal ECG sintetic
             import math
             import random
             t = time.time()
-            # Simulare PQRST waveform
-            heart_rate = 72  # BPM
+            heart_rate = 72
             period = 60.0 / heart_rate
             phase = (t % period) / period
 
-            # Forma de undă ECG simplificată
-            if 0.0 <= phase < 0.05:      # P wave
+            if 0.0 <= phase < 0.05:
                 value = 512 + 30 * math.sin(phase / 0.05 * math.pi)
-            elif 0.15 <= phase < 0.18:    # Q wave
+            elif 0.15 <= phase < 0.18:
                 value = 512 - 40 * math.sin((phase - 0.15) / 0.03 * math.pi)
-            elif 0.18 <= phase < 0.22:    # R wave (peak)
+            elif 0.18 <= phase < 0.22:
                 value = 512 + 350 * math.sin((phase - 0.18) / 0.04 * math.pi)
-            elif 0.22 <= phase < 0.26:    # S wave
+            elif 0.22 <= phase < 0.26:
                 value = 512 - 60 * math.sin((phase - 0.22) / 0.04 * math.pi)
-            elif 0.30 <= phase < 0.45:    # T wave
+            elif 0.30 <= phase < 0.45:
                 value = 512 + 50 * math.sin((phase - 0.30) / 0.15 * math.pi)
             else:
                 value = 512
 
-            # Adaugă zgomot
             value += random.gauss(0, 5)
             return max(0, min(1023, int(value)))
 
-        # Citire reală MCP3008
         adc = self.spi.xfer2([1, (8 + channel) << 4, 0])
         value = ((adc[1] & 3) << 8) + adc[2]
         return value
@@ -102,7 +94,6 @@ class ECGSensor:
         lo_plus = GPIO.input(PINS["ecg_lo_plus"])
         lo_minus = GPIO.input(PINS["ecg_lo_minus"])
 
-        # Dacă LO+ sau LO- sunt HIGH, electrozii nu sunt atașați
         return lo_plus == 0 and lo_minus == 0
 
     def start(self, pacient_id=None):
@@ -116,7 +107,6 @@ class ECGSensor:
             try:
                 if self.check_leads():
                     value = self.read_adc(ADC["ecg_channel"])
-                    # Conversie la mV (0-3.3V, 10-bit ADC)
                     voltage_mv = (value / 1023.0) * 3300.0
 
                     self.batch.append({
@@ -129,7 +119,6 @@ class ECGSensor:
                         self.client.send_batch(self.batch, pacient_id)
                         self.batch = []
                 else:
-                    # Electrozii nu sunt conectați
                     self.client.send_reading(
                         value_1=0,
                         value_2=None,

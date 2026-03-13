@@ -4,14 +4,12 @@ import { verifyToken } from './middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// GET /api/dashboard/stats - Statistici pentru dashboard
 router.get('/stats', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
 
     if (userRole === 'doctor') {
-      // Statistici pentru doctor
       const [totalPacienti] = await db.promise().query(
         'SELECT COUNT(DISTINCT pacient_id) as total FROM programari WHERE doctor_id = ?',
         [userId]
@@ -45,7 +43,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Programări de azi
       const [programariDeAzi] = await db.promise().query(
         `SELECT p.id, p.data_programare, p.status,
                 pac.nume, pac.prenume, pac.email
@@ -59,7 +56,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Activitate recentă (ultimele 10 acțiuni)
       const [activitateRecenta] = await db.promise().query(
         `SELECT 'programare' as tip, p.id, p.created_at as data, 
                 pac.nume, pac.prenume, DATE_FORMAT(p.data_programare, '%d/%m/%Y %H:%i') as detalii
@@ -78,7 +74,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId, userId]
       );
 
-      // Statistici programări pe următoarele 7 zile
       const [programariSaptamanalaRaw] = await db.promise().query(
         `SELECT DATE(data_programare) as data, COUNT(*) as total
          FROM programari
@@ -109,7 +104,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         };
       });
 
-      // Toate programările din următoarea săptămână (pentru popup)
       const [programariSaptamanaDetalii] = await db.promise().query(
         `SELECT p.id, p.data_programare, p.status,
                 pac.nume, pac.prenume, pac.email
@@ -123,7 +117,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Top 5 pacienți după număr de programări
       const [topPacienti] = await db.promise().query(
         `SELECT pac.id, pac.nume, pac.prenume, pac.email,
                 COUNT(p.id) as total_programari,
@@ -153,7 +146,6 @@ router.get('/stats', verifyToken, async (req, res) => {
       });
 
     } else {
-      // Statistici pentru pacient
       const [totalProgramari] = await db.promise().query(
         'SELECT COUNT(*) as total FROM programari WHERE pacient_id = ?',
         [userId]
@@ -179,7 +171,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Următoarea programare
       const [urmatoareaProgramare] = await db.promise().query(
         `SELECT p.id, p.data_programare, p.status,
                 d.nume as doctor_nume, d.prenume as doctor_prenume
@@ -193,7 +184,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Medicamentele mele
       const [medicamentele] = await db.promise().query(
         `SELECT am.id, am.status, am.created_at,
                 m.denumire, m.descriere,
@@ -207,7 +197,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Istoric programări (ultimele 5)
       const [istoricProgramari] = await db.promise().query(
         `SELECT p.id, p.data_programare, p.status,
                 d.nume as doctor_nume, d.prenume as doctor_prenume
@@ -219,7 +208,6 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Programări viitoare
       const [programariViitoareList] = await db.promise().query(
         `SELECT p.id, p.data_programare, p.status,
                 d.nume as doctor_nume, d.prenume as doctor_prenume
