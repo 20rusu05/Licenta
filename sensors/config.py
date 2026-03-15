@@ -25,9 +25,13 @@ ADC = {
     "ecg_channel": 0,
 }
 
-I2C = {
+ADS1115 = {
     "bus": 1,
-    "max30102_addr": 0x57,
+    "address": 0x48,
+    "pulse_channel": 0,
+    "pga": "4.096",        # Evită saturarea când alimentăm senzorul la 3.3V
+    "data_rate": 250,       # Conversii/secundă mai stabile pentru semnalul de puls
+    "pulse_sample_rate_hz": 75,
 }
 
 DS18B20 = {

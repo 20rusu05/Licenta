@@ -8,7 +8,13 @@ import time
 import threading
 import queue
 import requests
-import socketio
+
+try:
+    import socketio
+    SOCKETIO_AVAILABLE = True
+except ImportError:
+    socketio = None
+    SOCKETIO_AVAILABLE = False
 
 from config import SERVER_URL, DEVICE_ID
 
@@ -20,13 +26,22 @@ class SensorClient:
         self.sensor_type = sensor_type
         self.device_id = DEVICE_ID
         self.server_url = SERVER_URL
-        self.sio = socketio.Client(reconnection=True, reconnection_delay=2)
+        self.sio = None
+        if SOCKETIO_AVAILABLE:
+            self.sio = socketio.Client(reconnection=True, reconnection_delay=2)
         self.connected = False
+        self.socketio_available = SOCKETIO_AVAILABLE
         self.data_queue = queue.Queue(maxsize=1000)
-        self._setup_socket_events()
+        if self.sio is not None:
+            self._setup_socket_events()
+        else:
+            print(f"[{self.sensor_type}] python-socketio nu este instalat - mod HTTP only")
         self._start_sender_thread()
 
     def _setup_socket_events(self):
+        if self.sio is None:
+            return
+
         @self.sio.event
         def connect():
             self.connected = True
@@ -47,6 +62,10 @@ class SensorClient:
 
     def connect_to_server(self):
         """Conectare la server via Socket.IO."""
+        if self.sio is None:
+            print(f"[{self.sensor_type}] WebSocket indisponibil - se folosește doar HTTP POST")
+            return
+
         while True:
             try:
                 print(f"[{self.sensor_type}] Se conectează la {self.server_url}...")
@@ -84,11 +103,18 @@ class SensorClient:
             "pacient_id": pacient_id,
             "timestamp": time.time(),
         }
-        if self.connected:
+        if self.connected and self.sio is not None:
             try:
                 self.sio.emit("sensor_batch", data)
             except Exception as e:
                 print(f"[{self.sensor_type}] Eroare trimitere batch: {e}")
+        else:
+            for reading in readings:
+                self.send_reading(
+                    value_1=reading.get("value"),
+                    value_2=None,
+                    pacient_id=pacient_id,
+                )
 
     def _start_sender_thread(self):
         """Thread separat pentru trimiterea datelor."""
@@ -118,5 +144,5 @@ class SensorClient:
 
     def disconnect_from_server(self):
         """Deconectare."""
-        if self.connected:
+        if self.connected and self.sio is not None:
             self.sio.disconnect()
