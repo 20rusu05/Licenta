@@ -7,7 +7,6 @@ import {
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
-import BloodtypeIcon from '@mui/icons-material/Bloodtype';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
@@ -30,7 +29,7 @@ export default function SenzoriLive() {
   const [ecgData, setEcgData] = useState([]);
   const [pulseData, setPulseData] = useState([]);
   const [tempData, setTempData] = useState([]);
-  const [latestPulse, setLatestPulse] = useState({ hr: '--', spo2: '--' });
+  const [latestPulse, setLatestPulse] = useState({ hr: '--' });
   const [latestTemp, setLatestTemp] = useState('--');
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
@@ -68,12 +67,11 @@ export default function SenzoriLive() {
 
     socket.on('sensor_update', (data) => {
       if (data.sensor_type === 'pulsoximetru') {
-        setLatestPulse({ hr: data.value_1, spo2: data.value_2 });
+        setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
           const next = [...prev, {
             time: new Date(data.timestamp).toLocaleTimeString('ro-RO'),
             hr: data.value_1,
-            spo2: data.value_2,
           }];
           return next.slice(-MAX_VITAL_POINTS);
         });
@@ -124,7 +122,7 @@ export default function SenzoriLive() {
     setPulseData([]);
     setTempData([]);
     ecgBufferRef.current = [];
-    setLatestPulse({ hr: '--', spo2: '--' });
+    setLatestPulse({ hr: '--' });
     setLatestTemp('--');
   };
 
@@ -168,10 +166,10 @@ export default function SenzoriLive() {
           <Grid item xs={12} sm={4}>
             <SensorStatusCard
               icon={<FavoriteIcon sx={{ fontSize: 28 }} />}
-              label="Pulsoximetru (MAX30102)"
+              label="Senzor puls analogic"
               online={isSensorOnline('pulsoximetru')}
               color="#e91e63"
-              extra={latestPulse.hr !== '--' ? `${latestPulse.hr} BPM | SpO2: ${latestPulse.spo2}%` : null}
+              extra={latestPulse.hr !== '--' ? `${latestPulse.hr} BPM` : null}
             />
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -294,7 +292,7 @@ function PulseChart({ data, latest, theme }) {
 
   return (
     <Grid container spacing={3}>
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={4}>
         <Card sx={{ textAlign: 'center', background: 'linear-gradient(135deg, #e91e63 0%, #f44336 100%)', color: '#fff' }}>
           <CardContent>
             <FavoriteIcon sx={{ fontSize: 40, mb: 1, opacity: 0.9 }} />
@@ -305,19 +303,7 @@ function PulseChart({ data, latest, theme }) {
           </CardContent>
         </Card>
       </Grid>
-      <Grid item xs={12} sm={6} md={3}>
-        <Card sx={{ textAlign: 'center', background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)', color: '#fff' }}>
-          <CardContent>
-            <BloodtypeIcon sx={{ fontSize: 40, mb: 1, opacity: 0.9 }} />
-            <Typography variant="h3" sx={{ fontWeight: 700 }}>
-              {latest.spo2 !== '--' ? Math.round(latest.spo2) : '--'}
-            </Typography>
-            <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>SpO2 %</Typography>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={6}>
+      <Grid item xs={12} md={8}>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
@@ -337,31 +323,6 @@ function PulseChart({ data, latest, theme }) {
                   <ReferenceLine y={60} stroke="#ff9800" strokeDasharray="3 3" />
                   <ReferenceLine y={100} stroke="#ff9800" strokeDasharray="3 3" />
                   <Area type="monotone" dataKey="hr" stroke="#e91e63" fill="#e91e6330" strokeWidth={2} dot={false} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </Grid>
-      <Grid item xs={12} md={6}>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-              Saturație oxigen (SpO2 %)
-            </Typography>
-            {data.length === 0 ? (
-              <Box sx={{ py: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">Se așteaptă date...</Typography>
-              </Box>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                  <YAxis domain={[85, 100]} tick={{ fontSize: 11 }} />
-                  <RechartsTooltip />
-                  <ReferenceLine y={95} stroke="#4caf50" strokeDasharray="3 3" label="Normal" />
-                  <Area type="monotone" dataKey="spo2" stroke="#2196F3" fill="#2196F330" strokeWidth={2} dot={false} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             )}

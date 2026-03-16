@@ -1,5 +1,6 @@
 import express from "express";
 import { db } from "../db.js";
+import { applyPlausibilityFilter } from "../sensorPlausibility.js";
 
 const router = express.Router();
 
@@ -83,10 +84,25 @@ router.get("/history/:sensorType", (req, res) => {
 
 // POST /api/sensors/reading - Primește o citire de la senzor (fallback HTTP)
 router.post("/reading", (req, res) => {
-  const { sensor_type, value_1, value_2, device_id, pacient_id } = req.body;
+  const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp } = req.body;
 
   if (!sensor_type || value_1 === undefined) {
     return res.status(400).json({ error: "Date incomplete" });
+  }
+
+  const sensorFilterState = req.app.get("sensorFilterState") || new Map();
+  const filtered = applyPlausibilityFilter({
+    sensorType: sensor_type,
+    value1: value_1,
+    value2: value_2,
+    deviceId: device_id,
+    pacientId: pacient_id,
+    timestampMs: typeof timestamp === "number" ? timestamp * 1000 : Date.now(),
+    stateMap: sensorFilterState,
+  });
+
+  if (filtered.value1 === null || filtered.value1 === undefined) {
+    return res.status(400).json({ error: "Valoare senzor invalida" });
   }
 
   const query = `
@@ -96,7 +112,7 @@ router.post("/reading", (req, res) => {
 
   db.query(
     query,
-    [sensor_type, pacient_id || null, value_1, value_2 || null, device_id || "unknown"],
+    [sensor_type, pacient_id || null, filtered.value1, filtered.value2 || null, device_id || "unknown"],
     (err, result) => {
       if (err) {
         console.error("Eroare salvare citire:", err);
@@ -108,15 +124,22 @@ router.post("/reading", (req, res) => {
       if (io) {
         io.to(`sensor_${sensor_type}`).emit("sensor_update", {
           sensor_type,
-          value_1,
-          value_2,
+          value_1: filtered.value1,
+          value_2: filtered.value2,
           device_id,
           pacient_id,
           timestamp: new Date().toISOString(),
+          filtered: filtered.filtered,
+          filter_reason: filtered.reason,
         });
       }
 
-      res.json({ success: true, id: result.insertId });
+      res.json({
+        success: true,
+        id: result.insertId,
+        filtered: filtered.filtered,
+        filter_reason: filtered.reason,
+      });
     }
   );
 });

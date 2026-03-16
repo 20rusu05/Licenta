@@ -13,6 +13,7 @@ import resetPasswordRouter from "./routes/reset-password.js";
 import adminRouter from "./routes/admin.js";
 import sensorsRouter from "./routes/sensors.js";
 import { db } from "./db.js";
+import { applyPlausibilityFilter } from "./sensorPlausibility.js";
 
 dotenv.config();
 
@@ -28,8 +29,10 @@ const io = new Server(httpServer, {
 });
 
 const connectedSensors = {};
+const sensorFilterState = new Map();
 app.set("io", io);
 app.set("connectedSensors", connectedSensors);
+app.set("sensorFilterState", sensorFilterState);
 
 app.use(cors({ origin: (origin, callback) => callback(null, true), credentials: true }));
 app.use(express.json());
@@ -65,7 +68,24 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sensor_data", (data) => {
-    const { sensor_type, value_1, value_2, device_id, pacient_id } = data;
+    const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp } = data;
+
+    const filtered = applyPlausibilityFilter({
+      sensorType: sensor_type,
+      value1: value_1,
+      value2: value_2,
+      deviceId: device_id,
+      pacientId: pacient_id,
+      timestampMs: typeof timestamp === "number" ? timestamp * 1000 : Date.now(),
+      stateMap: sensorFilterState,
+    });
+
+    const filteredValue1 = filtered.value1;
+    const filteredValue2 = filtered.value2;
+
+    if (filteredValue1 === null || filteredValue1 === undefined) {
+      return;
+    }
 
     // Update last reading
     if (connectedSensors[socket.id]) {
@@ -76,17 +96,19 @@ io.on("connection", (socket) => {
       INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
       VALUES (?, ?, ?, ?, ?)
     `;
-    db.query(query, [sensor_type, pacient_id || null, value_1, value_2 || null, device_id || "unknown"], (err) => {
+    db.query(query, [sensor_type, pacient_id || null, filteredValue1, filteredValue2 || null, device_id || "unknown"], (err) => {
       if (err) console.error("[DB] Eroare salvare citire:", err.message);
     });
 
     io.to(`sensor_${sensor_type}`).emit("sensor_update", {
       sensor_type,
-      value_1,
-      value_2,
+      value_1: filteredValue1,
+      value_2: filteredValue2,
       device_id,
       pacient_id,
       timestamp: new Date().toISOString(),
+      filtered: filtered.filtered,
+      filter_reason: filtered.reason,
     });
   });
 
