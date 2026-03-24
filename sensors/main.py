@@ -10,7 +10,7 @@ import threading
 import argparse
 
 from ekg import ECGSensor
-from pulsoximetru import PulsOximeter
+from puls import PulsOximeter
 from temperatura import TemperatureSensor
 
 
@@ -25,7 +25,7 @@ class SensorManager:
 
         available_sensors = {
             "ecg": ECGSensor,
-            "pulsoximetru": PulsOximeter,
+            "puls": PulsOximeter,
             "temperatura": TemperatureSensor,
         }
 
@@ -34,6 +34,8 @@ class SensorManager:
 
         for name in sensors_to_run:
             if name in available_sensors:
+                if name in self.sensors:
+                    continue
                 try:
                     self.sensors[name] = available_sensors[name]()
                     print(f"[MANAGER] Senzor '{name}' inițializat")
@@ -95,14 +97,14 @@ Exemple de utilizare:
   python main.py                          # Pornește toți senzorii
   python main.py --pacient 1              # Monitorizare pacient cu ID 1
   python main.py --sensors ecg temperatura  # Doar ECG și temperatură
-  python main.py --sensors pulsoximetru   # Doar pulsoximetru
+    python main.py --sensors puls           # Doar senzorul de puls
         """
     )
     parser.add_argument("--pacient", type=int, help="ID-ul pacientului monitorizat")
     parser.add_argument(
         "--sensors",
         nargs="+",
-        choices=["ecg", "pulsoximetru", "temperatura"],
+        choices=["ecg", "puls", "temperatura"],
         help="Senzorii de pornit (implicit: toți)"
     )
     args = parser.parse_args()

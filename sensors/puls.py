@@ -22,21 +22,23 @@ import time
 import signal
 import sys
 
+LOG_TAG = "[PULS]"
+
 try:
     import smbus2
     from smbus2 import i2c_msg
     import os
     HARDWARE_AVAILABLE = os.path.exists("/dev/i2c-1")
     if not HARDWARE_AVAILABLE:
-        print("[PULSOXIMETRU] I2C /dev/i2c-1 indisponibil - mod simulare activat")
+        print(f"{LOG_TAG} I2C /dev/i2c-1 indisponibil - mod simulare activat")
 except ImportError:
     HARDWARE_AVAILABLE = False
-    print("[PULSOXIMETRU] Biblioteci hardware indisponibile - mod simulare activat")
+    print(f"{LOG_TAG} Biblioteci hardware indisponibile - mod simulare activat")
 
 from sensor_client import SensorClient
 import config as sensor_config
 
-INTERVALS = getattr(sensor_config, "INTERVALS", {"pulsoximetru": 1.0})
+INTERVALS = getattr(sensor_config, "INTERVALS", {"puls": 1.0})
 ADS1115 = getattr(sensor_config, "ADS1115", {})
 
 
@@ -44,7 +46,7 @@ class PulsOximeter:
     """Citire puls prin senzor analogic + ADS1115."""
 
     def __init__(self, debug=False, raw_only=False, hardware_test=False, no_send=False):
-        self.client = SensorClient("pulsoximetru")
+        self.client = SensorClient("puls")
         self.running = False
         self.hardware_available = HARDWARE_AVAILABLE
         self.debug = debug
@@ -125,13 +127,13 @@ class PulsOximeter:
                 self.bus = smbus2.SMBus(self.i2c_bus)
                 self.address = self._probe_ads1115(self.address)
                 print(
-                    f"[PULSOXIMETRU] ADS1115 detectat pe I2C-{self.i2c_bus} "
+                    f"{LOG_TAG} ADS1115 detectat pe I2C-{self.i2c_bus} "
                     f"addr 0x{self.address:02X}, canal A{self.channel}, "
                     f"PGA={self.pga}V, DR={self.data_rate}SPS"
                 )
             except Exception as e:
                 self.hardware_available = False
-                print(f"[PULSOXIMETRU] Eroare inițializare ADS1115: {e}. Mod simulare activat.")
+                print(f"{LOG_TAG} Eroare inițializare ADS1115: {e}. Mod simulare activat.")
 
     @staticmethod
     def _swap16(value):
@@ -364,8 +366,8 @@ class PulsOximeter:
     def run_hardware_test(self):
         """Diagnostic simplu pentru senzor si ADS1115 fara estimare BPM."""
         self.running = True
-        print("[PULSOXIMETRU] Mod hardware-test pornit. Nu trimite date la server.")
-        print("[PULSOXIMETRU] Urmareste RAW, SPAN si STATUS pentru a verifica senzorul si cablarea.")
+        print(f"{LOG_TAG} Mod hardware-test pornit. Nu trimite date la server.")
+        print(f"{LOG_TAG} Urmareste RAW, SPAN si STATUS pentru a verifica senzorul si cablarea.")
 
         while self.running:
             loop_start = time.time()
@@ -386,7 +388,7 @@ class PulsOximeter:
                     stability = self._signal_stability(recent)
                     status = self._hardware_test_status(recent)
                     print(
-                        "[PULSOXIMETRU][TEST] "
+                        f"{LOG_TAG}[TEST] "
                         f"RAW={raw_value} | SPAN={round(metrics['span'])} | "
                         f"MEDIAN={int(metrics['median'])} | MAD={metrics['mad']:.1f} | "
                         f"DRIFT={stability['baseline_drift']:.1f} | STEP={stability['diff_p90']:.1f} | "
@@ -400,7 +402,7 @@ class PulsOximeter:
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                print(f"[PULSOXIMETRU][TEST] Eroare: {e}")
+                print(f"{LOG_TAG}[TEST] Eroare: {e}")
                 time.sleep(0.5)
 
         self.stop()
@@ -1066,7 +1068,7 @@ class PulsOximeter:
         return round(hr, 1), raw
 
     def start(self, pacient_id=None):
-        """Pornește citirea pulsoximetrului."""
+        """Pornește citirea senzorului de puls."""
         if self.hardware_test:
             return self.run_hardware_test()
 
@@ -1074,9 +1076,9 @@ class PulsOximeter:
         if not self.no_send:
             self.client.connect_to_server()
         else:
-            print("[PULSOXIMETRU] --no-send activ: nu trimite date la server")
+            print(f"{LOG_TAG} --no-send activ: nu trimite date la server")
 
-        print("[PULSOXIMETRU] Citire pornită. CTRL+C pentru oprire.")
+        print(f"{LOG_TAG} Citire pornită. CTRL+C pentru oprire.")
 
         while self.running:
             loop_start = time.time()
@@ -1109,7 +1111,7 @@ class PulsOximeter:
                     bpm, raw_value = self._simulate_reading()
                     glitch_reason = None
 
-                if (loop_start - self.last_sent) >= INTERVALS["pulsoximetru"]:
+                if (loop_start - self.last_sent) >= INTERVALS["puls"]:
                     self.last_sent = loop_start
                     recent = [v for _, v in self.samples[-self.sample_rate_hz:]] if self.samples else [raw_value]
                     metrics = self._signal_metrics(recent)
@@ -1221,7 +1223,7 @@ class PulsOximeter:
                     if self.raw_only:
                         status = "OK" if quality_ok and not motion_confirmed else "NOISY"
                         print(
-                            f"[PULSOXIMETRU] RAW: {raw_value} | SPAN: {span} | STATUS: {status}"
+                            f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | STATUS: {status}"
                             f"{quality_note}{debug_suffix}"
                         )
                         continue
@@ -1238,14 +1240,23 @@ class PulsOximeter:
                                 value_2=None,
                                 pacient_id=pacient_id,
                             )
-                        print(f"[PULSOXIMETRU] HR: {bpm:.1f} BPM | RAW: {raw_value} | SPAN: {span}{quality_note}{debug_suffix}")
+                        if self.debug:
+                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {bpm:.1f}{quality_note}{debug_suffix}")
+                        else:
+                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {bpm:.1f}")
                     elif predicted_bpm is not None:
-                        print(
-                            f"[PULSOXIMETRU] HR estimat: {predicted_bpm:.1f} BPM | "
-                            f"RAW: {raw_value} | SPAN: {span}{quality_note} | predictie scurta{debug_suffix}"
-                        )
+                        if self.debug:
+                            print(
+                                f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {predicted_bpm:.1f}"
+                                f"{quality_note} | predictie scurta{debug_suffix}"
+                            )
+                        else:
+                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {predicted_bpm:.1f}")
                     else:
-                        print(f"[PULSOXIMETRU] RAW: {raw_value} | SPAN: {span} | BPM: -- (semnal slab/fără deget){quality_note}{debug_suffix}")
+                        if self.debug:
+                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: -- (semnal slab/fără deget){quality_note}{debug_suffix}")
+                        else:
+                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: --")
 
                 elapsed = time.time() - loop_start
                 sleep_time = self.sample_period - elapsed
@@ -1255,7 +1266,7 @@ class PulsOximeter:
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                print(f"[PULSOXIMETRU] Eroare: {e}")
+                print(f"{LOG_TAG} Eroare: {e}")
                 time.sleep(0.5)
 
         self.stop()
@@ -1266,7 +1277,7 @@ class PulsOximeter:
         if self.hardware_available:
             self.bus.close()
         self.client.disconnect_from_server()
-        print("[PULSOXIMETRU] Oprit.")
+        print(f"{LOG_TAG} Oprit.")
 
 
 def main():

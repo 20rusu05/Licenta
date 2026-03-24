@@ -23,7 +23,7 @@ router.get("/latest/:sensorType", (req, res) => {
   const { sensorType } = req.params;
   const limit = parseInt(req.query.limit) || 100;
 
-  const validTypes = ["ecg", "pulsoximetru", "temperatura"];
+  const validTypes = ["ecg", "puls", "temperatura"];
   if (!validTypes.includes(sensorType)) {
     return res.status(400).json({ error: "Tip senzor invalid" });
   }

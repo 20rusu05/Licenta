@@ -8,7 +8,7 @@ DEVICE_ID = "rpi5-01"
 
 INTERVALS = {
     "ecg": 0.01,
-    "pulsoximetru": 1.0,
+    "puls": 1.0,
     "temperatura": 2.0,
 }
 
@@ -41,6 +41,6 @@ DS18B20 = {
 
 BATCH_SIZE = {
     "ecg": 50,
-    "pulsoximetru": 1,
+    "puls": 1,
     "temperatura": 1,
 }

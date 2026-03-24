@@ -29,7 +29,7 @@ export function applyPlausibilityFilter({
   timestampMs,
   stateMap,
 }) {
-  if (sensorType !== "pulsoximetru") {
+  if (sensorType !== "puls") {
     return {
       value1,
       value2,

@@ -45,7 +45,7 @@ export default function SenzoriLive() {
     socket.on('connect', () => {
       setConnected(true);
       socket.emit('subscribe_sensor', 'ecg');
-      socket.emit('subscribe_sensor', 'pulsoximetru');
+      socket.emit('subscribe_sensor', 'puls');
       socket.emit('subscribe_sensor', 'temperatura');
     });
 
@@ -66,7 +66,7 @@ export default function SenzoriLive() {
     });
 
     socket.on('sensor_update', (data) => {
-      if (data.sensor_type === 'pulsoximetru') {
+      if (data.sensor_type === 'puls') {
         setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
           const next = [...prev, {
@@ -109,7 +109,7 @@ export default function SenzoriLive() {
 
     return () => {
       socket.emit('unsubscribe_sensor', 'ecg');
-      socket.emit('unsubscribe_sensor', 'pulsoximetru');
+      socket.emit('unsubscribe_sensor', 'puls');
       socket.emit('unsubscribe_sensor', 'temperatura');
       socket.disconnect();
     };
@@ -167,7 +167,7 @@ export default function SenzoriLive() {
             <SensorStatusCard
               icon={<FavoriteIcon sx={{ fontSize: 28 }} />}
               label="Senzor puls analogic"
-              online={isSensorOnline('pulsoximetru')}
+              online={isSensorOnline('puls')}
               color="#e91e63"
               extra={latestPulse.hr !== '--' ? `${latestPulse.hr} BPM` : null}
             />
@@ -192,8 +192,8 @@ export default function SenzoriLive() {
           <ToggleButton value="ecg">
             <MonitorHeartIcon sx={{ mr: 1 }} /> ECG
           </ToggleButton>
-          <ToggleButton value="pulsoximetru">
-            <FavoriteIcon sx={{ mr: 1 }} /> Pulsoximetru
+          <ToggleButton value="puls">
+            <FavoriteIcon sx={{ mr: 1 }} /> Puls
           </ToggleButton>
           <ToggleButton value="temperatura">
             <ThermostatIcon sx={{ mr: 1 }} /> Temperatură
@@ -201,7 +201,7 @@ export default function SenzoriLive() {
         </ToggleButtonGroup>
 
         {activeTab === 'ecg' && <ECGChart data={ecgData} theme={theme} />}
-        {activeTab === 'pulsoximetru' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
+        {activeTab === 'puls' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
         {activeTab === 'temperatura' && <TempChart data={tempData} latest={latestTemp} theme={theme} />}
       </Container>
     </AppLayout>

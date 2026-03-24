@@ -100,10 +100,10 @@ CREATE TABLE programari (
 -- Tabel pentru datele senzorilor Raspberry Pi
 CREATE TABLE sensor_readings (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  sensor_type ENUM('ecg', 'pulsoximetru', 'temperatura') NOT NULL,
+  sensor_type ENUM('ecg', 'puls', 'temperatura') NOT NULL,
   pacient_id INT NULL,
-  value_1 FLOAT NOT NULL COMMENT 'ECG: voltage, Pulsoximetru: heart_rate, Temperatura: temp_celsius',
-  value_2 FLOAT NULL COMMENT 'Pulsoximetru: spo2',
+  value_1 FLOAT NOT NULL COMMENT 'ECG: voltage, Puls: heart_rate, Temperatura: temp_celsius',
+  value_2 FLOAT NULL COMMENT 'Puls: extra_value',
   device_id VARCHAR(50) DEFAULT 'rpi5-01',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (pacient_id) REFERENCES pacienti(id) ON DELETE SET NULL,
@@ -118,7 +118,7 @@ CREATE TABLE monitoring_sessions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   pacient_id INT NOT NULL,
   doctor_id INT NULL,
-  sensor_type ENUM('ecg', 'pulsoximetru', 'temperatura') NOT NULL,
+  sensor_type ENUM('ecg', 'puls', 'temperatura') NOT NULL,
   status ENUM('activa', 'finalizata') DEFAULT 'activa',
   started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   ended_at TIMESTAMP NULL,
