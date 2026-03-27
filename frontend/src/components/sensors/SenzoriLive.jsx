@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Container, Typography, Grid, Card, CardContent, Chip,
-  ToggleButton, ToggleButtonGroup, CircularProgress, Alert, IconButton,
+  ToggleButton, ToggleButtonGroup, CircularProgress, Alert, IconButton, Button,
   Tooltip, Paper, useTheme
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -9,6 +9,8 @@ import ThermostatIcon from '@mui/icons-material/Thermostat';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, AreaChart, Area, ReferenceLine
@@ -20,6 +22,104 @@ import { api } from '../../services/api';
 const SOCKET_URL = `http://${window.location.hostname}:3001`;
 const MAX_ECG_POINTS = 300;
 const MAX_VITAL_POINTS = 60;
+const ECG_INVERT_DISPLAY = false;
+const ECG_LEADOFF_THRESHOLD = 1;
+const ECG_SHOW_AC_ONLY = true;
+const ECG_SMOOTH_WINDOW = 7;
+const ECG_TARGET_HALF_SPAN_MV = 85;
+const ECG_MAX_GAIN = 12;
+const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
+
+function normalizeEcgValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  if (numeric <= ECG_LEADOFF_THRESHOLD) return null;
+
+  const clamped = Math.max(0, Math.min(3300, numeric));
+  return ECG_INVERT_DISPLAY ? (3300 - clamped) : clamped;
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+function smoothSeries(values, windowSize) {
+  const w = Math.max(1, windowSize | 0);
+  if (w === 1 || values.length <= 2) return values;
+
+  const out = [];
+  const half = Math.floor(w / 2);
+  for (let i = 0; i < values.length; i += 1) {
+    const start = Math.max(0, i - half);
+    const end = Math.min(values.length, i + half + 1);
+    const chunk = values.slice(start, end);
+    out.push(chunk.reduce((acc, v) => acc + v, 0) / chunk.length);
+  }
+  return out;
+}
+
+function buildEcgDisplay(data) {
+  if (!data.length) {
+    return {
+      chartData: [],
+      yDomain: [0, 3300],
+      yLabel: 'mV',
+      baseline: 1650,
+      quality: 'N/A',
+      gain: 1,
+      halfSpan: 0,
+    };
+  }
+
+  if (!ECG_SHOW_AC_ONLY) {
+    return {
+      chartData: data,
+      yDomain: [0, 3300],
+      yLabel: 'mV',
+      baseline: 1650,
+      quality: 'RAW',
+      gain: 1,
+      halfSpan: 1650,
+    };
+  }
+
+  const rawValues = data.map((p) => p.value);
+  const baseline = median(rawValues);
+  const acValues = rawValues.map((v) => v - baseline);
+  const smoothed = smoothSeries(acValues, ECG_SMOOTH_WINDOW);
+
+  const halfSpan = Math.max(...smoothed.map((v) => Math.abs(v)), 0);
+  const computedGain = halfSpan > 0
+    ? Math.min(ECG_MAX_GAIN, Math.max(1, ECG_TARGET_HALF_SPAN_MV / halfSpan))
+    : 1;
+
+  const quality = halfSpan < ECG_MIN_USEFUL_HALF_SPAN_MV ? 'Semnal slab' : 'Semnal util';
+  const amplified = smoothed.map((v) => v * computedGain);
+
+  const chartData = data.map((p, i) => ({
+    ...p,
+    value: amplified[i],
+  }));
+
+  const absMax = Math.max(20, ...amplified.map((v) => Math.abs(v)));
+  const margin = Math.max(8, Math.round(absMax * 0.15));
+  const limit = Math.round(absMax + margin);
+
+  return {
+    chartData,
+    yDomain: [-limit, limit],
+    yLabel: 'mV (AC)',
+    baseline: 0,
+    quality,
+    gain: computedGain,
+    halfSpan,
+  };
+}
 
 export default function SenzoriLive() {
   const theme = useTheme();
@@ -27,12 +127,30 @@ export default function SenzoriLive() {
   const [connected, setConnected] = useState(false);
   const [sensorStatus, setSensorStatus] = useState({});
   const [ecgData, setEcgData] = useState([]);
+  const [ecgPaused, setEcgPaused] = useState(false);
   const [pulseData, setPulseData] = useState([]);
   const [tempData, setTempData] = useState([]);
   const [latestPulse, setLatestPulse] = useState({ hr: '--' });
   const [latestTemp, setLatestTemp] = useState('--');
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
+  const ecgPausedRef = useRef(false);
+
+  useEffect(() => {
+    ecgPausedRef.current = ecgPaused;
+  }, [ecgPaused]);
+
+  const appendEcgPoint = useCallback((value, leadsOk = true) => {
+    if (ecgPausedRef.current) return;
+
+    const nextPoint = {
+      idx: ecgBufferRef.current.length,
+      value,
+      leads_ok: leadsOk,
+    };
+    ecgBufferRef.current = [...ecgBufferRef.current, nextPoint].slice(-MAX_ECG_POINTS);
+    setEcgData([...ecgBufferRef.current]);
+  }, []);
 
   useEffect(() => {
     const socket = io(SOCKET_URL, {
@@ -66,7 +184,11 @@ export default function SenzoriLive() {
     });
 
     socket.on('sensor_update', (data) => {
-      if (data.sensor_type === 'puls') {
+      if (data.sensor_type === 'ecg') {
+        const ecgValue = normalizeEcgValue(data.value_1);
+        if (ecgValue === null) return;
+        appendEcgPoint(ecgValue, data.value_1 > 0);
+      } else if (data.sensor_type === 'puls') {
         setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
           const next = [...prev, {
@@ -89,13 +211,10 @@ export default function SenzoriLive() {
 
     socket.on('sensor_batch_update', (data) => {
       if (data.sensor_type === 'ecg') {
-        const newPoints = data.readings.map((r, i) => ({
-          idx: ecgBufferRef.current.length + i,
-          value: r.value_1,
-          leads_ok: r.leads_ok,
-        }));
-        ecgBufferRef.current = [...ecgBufferRef.current, ...newPoints].slice(-MAX_ECG_POINTS);
-        setEcgData([...ecgBufferRef.current]);
+        data.readings
+          .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: r.leads_ok }))
+          .filter((r) => r.value !== null)
+          .forEach((r) => appendEcgPoint(r.value, r.leads_ok));
       }
     });
 
@@ -113,7 +232,7 @@ export default function SenzoriLive() {
       socket.emit('unsubscribe_sensor', 'temperatura');
       socket.disconnect();
     };
-  }, []);
+  }, [appendEcgPoint]);
 
   const isSensorOnline = (type) => sensorStatus[type]?.online;
 
@@ -200,7 +319,14 @@ export default function SenzoriLive() {
           </ToggleButton>
         </ToggleButtonGroup>
 
-        {activeTab === 'ecg' && <ECGChart data={ecgData} theme={theme} />}
+        {activeTab === 'ecg' && (
+          <ECGChart
+            data={ecgData}
+            theme={theme}
+            paused={ecgPaused}
+            onTogglePause={() => setEcgPaused((prev) => !prev)}
+          />
+        )}
         {activeTab === 'puls' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
         {activeTab === 'temperatura' && <TempChart data={tempData} latest={latestTemp} theme={theme} />}
       </Container>
@@ -237,16 +363,48 @@ function SensorStatusCard({ icon, label, online, color, extra }) {
   );
 }
 
-function ECGChart({ data, theme }) {
+function ECGChart({ data, theme, paused, onTogglePause }) {
   const isDark = theme.palette.mode === 'dark';
+  const display = buildEcgDisplay(data);
 
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-          <MonitorHeartIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
-          Electrocardiogramă (ECG) - Timp Real
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            <MonitorHeartIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
+            Electrocardiogramă (ECG) - Timp Real
+          </Typography>
+          <Button
+            size="small"
+            variant={paused ? 'contained' : 'outlined'}
+            color={paused ? 'warning' : 'primary'}
+            onClick={onTogglePause}
+            startIcon={paused ? <PlayArrowIcon /> : <PauseIcon />}
+          >
+            {paused ? 'Resume' : 'Pauza'}
+          </Button>
+        </Box>
+        {data.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+            <Chip
+              size="small"
+              label={`Calitate: ${display.quality}`}
+              color={display.quality === 'Semnal util' ? 'success' : 'warning'}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`Zoom x${display.gain.toFixed(1)}`}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`Amplitudine ±${display.halfSpan.toFixed(1)} mV`}
+              variant="outlined"
+            />
+          </Box>
+        )}
         {data.length === 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
             <CircularProgress size={40} sx={{ mb: 2 }} />
@@ -259,24 +417,25 @@ function ECGChart({ data, theme }) {
           </Box>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+            <LineChart data={display.chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
                 stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'}
               />
               <XAxis dataKey="idx" tick={false} />
               <YAxis
-                domain={[0, 3300]}
-                label={{ value: 'mV', angle: -90, position: 'insideLeft' }}
+                domain={display.yDomain}
+                label={{ value: display.yLabel, angle: -90, position: 'insideLeft' }}
                 tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
               />
-              <ReferenceLine y={1650} stroke="#666" strokeDasharray="5 5" label="Baseline" />
+              <ReferenceLine y={display.baseline} stroke="#666" strokeDasharray="5 5" label="Baseline" />
               <Line
                 type="monotone"
                 dataKey="value"
                 stroke="#f44336"
                 strokeWidth={1.5}
                 dot={false}
+                activeDot={false}
                 isAnimationActive={false}
               />
             </LineChart>

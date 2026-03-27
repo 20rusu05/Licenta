@@ -121,6 +121,9 @@ class PulsOximeter:
         self.low_span_since = 0.0
         self.low_span_threshold_for_gain = 3.0
         self.low_span_gain_wait_seconds = 2.5
+        self.ui_last_status = None
+        self.ui_last_detail_at = 0.0
+        self.ui_detail_interval_seconds = 5.0
 
         if self.hardware_available:
             try:
@@ -449,6 +452,80 @@ class PulsOximeter:
             f" | step={stability['diff_p90']:.1f}"
             f" | energy={stability['pulsatile_energy']:.1f}"
         )
+
+    def _status_label_and_hint(self, bpm, predicted_bpm, span, motion_confirmed, clipped_high, clipped_low):
+        if bpm is not None:
+            return "VALID", ""
+        if predicted_bpm is not None:
+            return "PRED", "estimare din ultima valoare buna"
+        if motion_confirmed:
+            return "MISCARE", "tine degetul si firele nemiscate"
+        if clipped_high > 0:
+            return "SAT_H", "verifica V+, S->A0 si masa comuna"
+        if clipped_low > 0:
+            return "SAT_L", "verifica GND si pinul S"
+        if span < self.min_signal_span:
+            return "SLAB", "apasa usor mai ferm si acopera LED-ul"
+        if span > self.max_span_hard_reject:
+            return "ZGOMOT", "contact instabil sau saturatie"
+        return "CAUTA", "algoritmul strange batai valide"
+
+    def _format_live_output(
+        self,
+        raw_value,
+        span,
+        bpm,
+        predicted_bpm,
+        motion_confirmed,
+        clipped_high,
+        clipped_low,
+        confidence,
+        debug_suffix,
+        quality_note,
+        now,
+    ):
+        status, hint = self._status_label_and_hint(
+            bpm=bpm,
+            predicted_bpm=predicted_bpm,
+            span=span,
+            motion_confirmed=motion_confirmed,
+            clipped_high=clipped_high,
+            clipped_low=clipped_low,
+        )
+
+        shown_bpm = "--"
+        if bpm is not None:
+            shown_bpm = f"{bpm:.1f}"
+        elif predicted_bpm is not None:
+            shown_bpm = f"~{predicted_bpm:.1f}"
+
+        if self.debug:
+            line = (
+                f"{LOG_TAG} BPM={shown_bpm:>6} | STARE={status:<7} "
+                f"| RAW={raw_value:4d} | SPAN={span:3d}"
+            )
+            if hint:
+                line = f"{line} | SFAT: {hint}"
+            if quality_note:
+                line = f"{line}{quality_note}"
+            line = f"{line} | conf={confidence}%{debug_suffix.replace(' | conf=' + str(confidence) + '%', '')}"
+            self.ui_last_status = status
+            self.ui_last_detail_at = now
+            return line
+
+        line = f"{LOG_TAG} BPM={shown_bpm:>6} | STARE={status:<7}"
+
+        status_changed = status != self.ui_last_status
+        periodic_detail = (now - self.ui_last_detail_at) >= self.ui_detail_interval_seconds
+        if status_changed or periodic_detail:
+            line = f"{line} | RAW={raw_value:4d} | SPAN={span:3d}"
+            if hint:
+                line = f"{line} | SFAT: {hint}"
+            self.ui_last_detail_at = now
+
+        self.ui_last_status = status
+
+        return line
 
     def _apply_high_bpm_spike_guard(self, bpm, span, stability, confidence):
         if bpm is None:
@@ -1228,6 +1305,20 @@ class PulsOximeter:
                         )
                         continue
 
+                    live_line = self._format_live_output(
+                        raw_value=raw_value,
+                        span=span,
+                        bpm=bpm,
+                        predicted_bpm=predicted_bpm,
+                        motion_confirmed=motion_confirmed,
+                        clipped_high=clipped_high,
+                        clipped_low=clipped_low,
+                        confidence=confidence,
+                        debug_suffix=debug_suffix,
+                        quality_note=quality_note,
+                        now=loop_start,
+                    )
+
                     if bpm is not None:
                         self.reacquire_active = False
                         self.last_valid_bpm = bpm
@@ -1240,23 +1331,11 @@ class PulsOximeter:
                                 value_2=None,
                                 pacient_id=pacient_id,
                             )
-                        if self.debug:
-                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {bpm:.1f}{quality_note}{debug_suffix}")
-                        else:
-                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {bpm:.1f}")
+                        print(live_line)
                     elif predicted_bpm is not None:
-                        if self.debug:
-                            print(
-                                f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {predicted_bpm:.1f}"
-                                f"{quality_note} | predictie scurta{debug_suffix}"
-                            )
-                        else:
-                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: {predicted_bpm:.1f}")
+                        print(live_line)
                     else:
-                        if self.debug:
-                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: -- (semnal slab/fără deget){quality_note}{debug_suffix}")
-                        else:
-                            print(f"{LOG_TAG} RAW: {raw_value} | SPAN: {span} | BPM: --")
+                        print(live_line)
 
                 elapsed = time.time() - loop_start
                 sleep_time = self.sample_period - elapsed
