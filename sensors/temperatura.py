@@ -5,11 +5,11 @@ Conexiuni hardware:
   DS18B20 → Raspberry Pi 5
   - VCC (roșu) → 3.3V
   - GND (negru) → GND
-  - DATA (galben) → GPIO 4
+    - DATA (galben) → GPIO configurat (acum GPIO 22)
   - Rezistor pull-up 4.7kΩ între DATA și VCC
 
 Notă: Trebuie activat 1-Wire în raspi-config sau /boot/firmware/config.txt:
-  dtoverlay=w1-gpio
+    dtoverlay=w1-gpio,gpiopin=22
 """
 
 import time
@@ -19,7 +19,7 @@ import os
 import glob
 
 from sensor_client import SensorClient
-from config import INTERVALS, DS18B20
+from config import INTERVALS, DS18B20, PINS
 
 HARDWARE_AVAILABLE = os.path.isdir(DS18B20["base_dir"])
 
@@ -50,8 +50,8 @@ class TemperatureSensor:
         else:
             print("[TEMPERATURĂ] ⚠ Niciun senzor DS18B20 detectat!")
             print("  Verifică:")
-            print("  1. dtoverlay=w1-gpio în /boot/firmware/config.txt")
-            print("  2. Conexiunea fizică (DATA → GPIO 4, rezistor 4.7kΩ)")
+            print(f"  1. dtoverlay=w1-gpio,gpiopin={PINS['ds18b20_data']} în /boot/firmware/config.txt")
+            print(f"  2. Conexiunea fizică (DATA → GPIO {PINS['ds18b20_data']}, rezistor 4.7kΩ)")
             print("  3. sudo modprobe w1-gpio && sudo modprobe w1-therm")
 
     def _read_raw(self):

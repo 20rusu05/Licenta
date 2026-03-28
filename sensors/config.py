@@ -56,7 +56,7 @@ ECG_INPUT = {
 PINS = {
     "ecg_lo_plus": 17,
     "ecg_lo_minus": 27,
-    "ds18b20_data": 4,
+    "ds18b20_data": 22,
 }
 
 # Notă: Pe Raspberry Pi 5, SPI bus-ul este 10 (nu 0 ca pe RPi 3/4)
