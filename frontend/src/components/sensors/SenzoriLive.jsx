@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Container, Typography, Grid, Card, CardContent, Chip,
   ToggleButton, ToggleButtonGroup, CircularProgress, Alert, IconButton, Button,
-  Tooltip, Paper, useTheme
+  Tooltip, Paper, useTheme, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
@@ -11,6 +11,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopIcon from '@mui/icons-material/Stop';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, AreaChart, Area, ReferenceLine
@@ -132,12 +133,66 @@ export default function SenzoriLive() {
   const [tempData, setTempData] = useState([]);
   const [latestPulse, setLatestPulse] = useState({ hr: '--' });
   const [latestTemp, setLatestTemp] = useState('--');
+  const [sensorsRunning, setSensorsRunning] = useState({
+    ecg: false,
+    puls: false,
+    temperatura: false
+  });
+  const [loadingControl, setLoadingControl] = useState({});
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
   const ecgPausedRef = useRef(false);
 
   useEffect(() => {
     ecgPausedRef.current = ecgPaused;
+  }, [ecgPaused]);
+
+  const handleStartSensors = async (sensorType) => {
+    try {
+      setLoadingControl(prev => ({ ...prev, [sensorType]: true }));
+      const response = await api.post('/sensors/start', {
+        sensorType
+      });
+      if (response.data.success) {
+        setSensorsRunning(prev => ({ ...prev, [sensorType]: true }));
+      }
+    } catch (err) {
+      console.error(`Eroare pornire ${sensorType}:`, err);
+      alert(`Eroare la pornirea senzorului ${sensorType}`);
+    } finally {
+      setLoadingControl(prev => ({ ...prev, [sensorType]: false }));
+    }
+  };
+
+  const handleStopSensors = async (sensorType) => {
+    try {
+      setLoadingControl(prev => ({ ...prev, [sensorType]: true }));
+      const response = await api.post('/sensors/stop', {
+        sensorType
+      });
+      if (response.data.success) {
+        setSensorsRunning(prev => ({ ...prev, [sensorType]: false }));
+      }
+    } catch (err) {
+      console.error(`Eroare oprire ${sensorType}:`, err);
+      alert(`Eroare la oprirea senzorului ${sensorType}`);
+    } finally {
+      setLoadingControl(prev => ({ ...prev, [sensorType]: false }));
+    }
+  };
+
+  const checkSensorsRunning = async () => {
+    try {
+      const response = await api.get('/sensors/running');
+      setSensorsRunning(response.data.running);
+    } catch (err) {
+      console.error('Eroare verificare status:', err);
+    }
+  };
+
+  useEffect(() => {
+    ecgPausedRef.current = ecgPaused;
+    checkSensorsRunning();
   }, [ecgPaused]);
 
   const appendEcgPoint = useCallback((value, leadsOk = true) => {
@@ -215,17 +270,36 @@ export default function SenzoriLive() {
           .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: r.leads_ok }))
           .filter((r) => r.value !== null)
           .forEach((r) => appendEcgPoint(r.value, r.leads_ok));
+      } else if (data.sensor_type === 'puls') {
+        setPulseData(prev => {
+          const next = [...prev];
+          data.readings.forEach(r => {
+            next.push({
+              time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
+              hr: r.value_1,
+            });
+          });
+          return next.slice(-MAX_VITAL_POINTS);
+        });
+        if (data.readings.length > 0) {
+          setLatestPulse({ hr: data.readings[data.readings.length - 1].value_1 });
+        }
+      } else if (data.sensor_type === 'temperatura') {
+        setTempData(prev => {
+          const next = [...prev];
+          data.readings.forEach(r => {
+            next.push({
+              time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
+              temp: r.value_1,
+            });
+          });
+          return next.slice(-MAX_VITAL_POINTS);
+        });
+        if (data.readings.length > 0) {
+          setLatestTemp(data.readings[data.readings.length - 1].value_1);
+        }
       }
     });
-
-    api.get('/sensors/status').then(res => {
-      const statusMap = {};
-      (res.data.sensors || []).forEach(s => {
-        statusMap[s.sensor_type] = { ...s, online: true };
-      });
-      setSensorStatus(statusMap);
-    }).catch(() => {});
-
     return () => {
       socket.emit('unsubscribe_sensor', 'ecg');
       socket.emit('unsubscribe_sensor', 'puls');
@@ -247,8 +321,8 @@ export default function SenzoriLive() {
 
   return (
     <AppLayout>
-      <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
               Monitorizare Senzori Live
@@ -265,6 +339,15 @@ export default function SenzoriLive() {
               variant="outlined"
               size="small"
             />
+            <Tooltip title={Object.values(sensorsRunning).some(v => v) ? 'Ceva senzori rulează' : 'Niciun senzor activ'}>
+              <Chip
+                icon={<FiberManualRecordIcon sx={{ fontSize: 12 }} />}
+                label={Object.values(sensorsRunning).some(v => v) ? 'Senzori Activi' : 'Senzori Inactivi'}
+                color={Object.values(sensorsRunning).some(v => v) ? 'success' : 'default'}
+                variant="outlined"
+                size="small"
+              />
+            </Tooltip>
             <Tooltip title="Resetează datele">
               <IconButton onClick={handleRefresh} size="small">
                 <RefreshIcon />
@@ -273,13 +356,18 @@ export default function SenzoriLive() {
           </Box>
         </Box>
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={1.5} sx={{ mb: 2 }}>
           <Grid item xs={12} sm={4}>
             <SensorStatusCard
               icon={<MonitorHeartIcon sx={{ fontSize: 28 }} />}
               label="ECG (AD8232)"
               online={isSensorOnline('ecg')}
               color="#f44336"
+              sensorType="ecg"
+              onStart={handleStartSensors}
+              onStop={handleStopSensors}
+              running={sensorsRunning.ecg}
+              loading={loadingControl.ecg}
             />
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -288,7 +376,11 @@ export default function SenzoriLive() {
               label="Senzor puls analogic"
               online={isSensorOnline('puls')}
               color="#e91e63"
-              extra={latestPulse.hr !== '--' ? `${latestPulse.hr} BPM` : null}
+              sensorType="puls"
+              onStart={handleStartSensors}
+              onStop={handleStopSensors}
+              running={sensorsRunning.puls}
+              loading={loadingControl.puls}
             />
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -297,7 +389,11 @@ export default function SenzoriLive() {
               label="Temperatură (DS18B20)"
               online={isSensorOnline('temperatura')}
               color="#ff9800"
-              extra={latestTemp !== '--' ? `${latestTemp}°C` : null}
+              sensorType="temperatura"
+              onStart={handleStartSensors}
+              onStop={handleStopSensors}
+              running={sensorsRunning.temperatura}
+              loading={loadingControl.temperatura}
             />
           </Grid>
         </Grid>
@@ -329,35 +425,64 @@ export default function SenzoriLive() {
         )}
         {activeTab === 'puls' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
         {activeTab === 'temperatura' && <TempChart data={tempData} latest={latestTemp} theme={theme} />}
-      </Container>
+      </Box>
     </AppLayout>
   );
 }
 
-function SensorStatusCard({ icon, label, online, color, extra }) {
+function SensorStatusCard({ icon, label, online, color, extra, sensorType, onStart, onStop, running, loading }) {
   return (
     <Card sx={{
       borderLeft: `4px solid ${online ? color : '#9e9e9e'}`,
       opacity: online ? 1 : 0.6,
       transition: 'all 0.3s',
     }}>
-      <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-        <Box sx={{ color: online ? color : 'text.disabled' }}>{icon}</Box>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{label}</Typography>
-          {extra && (
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-              {extra}
-            </Typography>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ color: online ? color : 'text.disabled' }}>{icon}</Box>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{label}</Typography>
+            {extra && (
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                {extra}
+              </Typography>
+            )}
+          </Box>
+          <Chip
+            size="small"
+            label={online ? 'Online' : 'Offline'}
+            color={online ? 'success' : 'default'}
+            variant={online ? 'filled' : 'outlined'}
+            sx={{ fontSize: '0.7rem' }}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {running ? (
+            <Button
+              fullWidth
+              size="small"
+              variant="contained"
+              color="error"
+              startIcon={loading ? <CircularProgress size={16} /> : <StopIcon />}
+              onClick={() => onStop(sensorType)}
+              disabled={loading}
+            >
+              Stop
+            </Button>
+          ) : (
+            <Button
+              fullWidth
+              size="small"
+              variant="contained"
+              color="success"
+              startIcon={loading ? <CircularProgress size={16} /> : <PlayArrowIcon />}
+              onClick={() => onStart(sensorType)}
+              disabled={loading}
+            >
+              Start
+            </Button>
           )}
         </Box>
-        <Chip
-          size="small"
-          label={online ? 'Online' : 'Offline'}
-          color={online ? 'success' : 'default'}
-          variant={online ? 'filled' : 'outlined'}
-          sx={{ fontSize: '0.7rem' }}
-        />
       </CardContent>
     </Card>
   );
@@ -411,9 +536,6 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
             <Typography color="text.secondary">
               Se așteaptă date ECG de la senzor...
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-              Pornește scriptul: <code>python sensors/ekg.py</code>
-            </Typography>
           </Box>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
@@ -450,45 +572,41 @@ function PulseChart({ data, latest, theme }) {
   const isDark = theme.palette.mode === 'dark';
 
   return (
-    <Grid container spacing={3}>
-      <Grid item xs={12} sm={6} md={4}>
-        <Card sx={{ textAlign: 'center', background: 'linear-gradient(135deg, #e91e63 0%, #f44336 100%)', color: '#fff' }}>
-          <CardContent>
-            <FavoriteIcon sx={{ fontSize: 40, mb: 1, opacity: 0.9 }} />
-            <Typography variant="h3" sx={{ fontWeight: 700 }}>
-              {latest.hr !== '--' ? Math.round(latest.hr) : '--'}
-            </Typography>
-            <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>BPM</Typography>
-          </CardContent>
-        </Card>
-      </Grid>
-      <Grid item xs={12} md={8}>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+    <Box>
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <FavoriteIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#e91e63' }} />
               Frecvență cardiacă (BPM)
             </Typography>
-            {data.length === 0 ? (
-              <Box sx={{ py: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">Se așteaptă date...</Typography>
-              </Box>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                  <YAxis domain={[40, 140]} tick={{ fontSize: 11 }} />
-                  <RechartsTooltip />
-                  <ReferenceLine y={60} stroke="#ff9800" strokeDasharray="3 3" />
-                  <ReferenceLine y={100} stroke="#ff9800" strokeDasharray="3 3" />
-                  <Area type="monotone" dataKey="hr" stroke="#e91e63" fill="#e91e6330" strokeWidth={2} dot={false} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
+            <Box sx={{ textAlign: 'right' }}>
+              <FavoriteIcon sx={{ fontSize: 28, color: '#e91e63' }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: '#e91e63' }}>
+                {latest.hr !== '--' ? Math.round(latest.hr) : '--'}
+              </Typography>
+            </Box>
+          </Box>
+          {data.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <Typography color="text.secondary">Se așteaptă date...</Typography>
+            </Box>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                <YAxis domain={[40, 140]} tick={{ fontSize: 11 }} />
+                <RechartsTooltip />
+                <ReferenceLine y={60} stroke="#ff9800" strokeDasharray="3 3" />
+                <ReferenceLine y={100} stroke="#ff9800" strokeDasharray="3 3" />
+                <Area type="monotone" dataKey="hr" stroke="#e91e63" fill="#e91e6330" strokeWidth={2} dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
 
@@ -514,56 +632,45 @@ function TempChart({ data, latest, theme }) {
   };
 
   return (
-    <Grid container spacing={3}>
-      <Grid item xs={12} sm={4}>
-        <Card sx={{
-          textAlign: 'center',
-          background: `linear-gradient(135deg, ${getTemperatureColor(latest)}CC 0%, ${getTemperatureColor(latest)} 100%)`,
-          color: '#fff',
-        }}>
-          <CardContent>
-            <ThermostatIcon sx={{ fontSize: 48, mb: 1, opacity: 0.9 }} />
-            <Typography variant="h2" sx={{ fontWeight: 700 }}>
-              {latest !== '--' ? latest : '--'}
-            </Typography>
-            <Typography variant="h6" sx={{ opacity: 0.9 }}>°C</Typography>
-            <Chip
-              label={getTemperatureLabel(latest)}
-              sx={{ mt: 1, backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
-              size="small"
-            />
-          </CardContent>
-        </Card>
-      </Grid>
-      <Grid item xs={12} sm={8}>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+    <Box>
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <ThermostatIcon sx={{ mr: 1, verticalAlign: 'middle', color: getTemperatureColor(latest) }} />
               Evoluție temperatură
             </Typography>
-            {data.length === 0 ? (
-              <Box sx={{ py: 6, textAlign: 'center' }}>
-                <Typography color="text.secondary">Se așteaptă date de la senzor...</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                  Pornește: <code>python sensors/temperatura.py</code>
-                </Typography>
-              </Box>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                  <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} />
-                  <RechartsTooltip formatter={(val) => [`${val}°C`, 'Temperatură']} />
-                  <ReferenceLine y={37.2} stroke="#ff9800" strokeDasharray="3 3" label="37.2°C" />
-                  <ReferenceLine y={36.0} stroke="#2196F3" strokeDasharray="3 3" label="36.0°C" />
-                  <Area type="monotone" dataKey="temp" stroke="#ff9800" fill="#ff980030" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
+            <Box sx={{ textAlign: 'right' }}>
+              <ThermostatIcon sx={{ fontSize: 28, color: getTemperatureColor(latest) }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: getTemperatureColor(latest) }}>
+                {latest !== '--' ? latest : '--'}
+              </Typography>
+              <Chip
+                label={getTemperatureLabel(latest)}
+                size="small"
+                sx={{ mt: 0.5, backgroundColor: getTemperatureColor(latest), color: '#fff' }}
+              />
+            </Box>
+          </Box>
+          {data.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <Typography color="text.secondary">Se așteaptă date de la senzor...</Typography>
+            </Box>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} />
+                <RechartsTooltip formatter={(val) => [`${val}°C`, 'Temperatură']} />
+                <ReferenceLine y={37.2} stroke="#ff9800" strokeDasharray="3 3" label="37.2°C" />
+                <ReferenceLine y={36.0} stroke="#2196F3" strokeDasharray="3 3" label="36.0°C" />
+                <Area type="monotone" dataKey="temp" stroke="#ff9800" fill="#ff980030" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

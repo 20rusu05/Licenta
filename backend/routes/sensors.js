@@ -1,8 +1,21 @@
 import express from "express";
+import { spawn } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
 import { db } from "../db.js";
 import { applyPlausibilityFilter } from "../sensorPlausibility.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const router = express.Router();
+
+// Obiect global pentru a ține referințe la procesele de senzori
+const sensorProcesses = {
+  ecg: null,
+  puls: null,
+  temperatura: null,
+};
 
 router.get("/status", (req, res) => {
   const io = req.app.get("io");
@@ -243,6 +256,169 @@ router.delete("/cleanup", (req, res) => {
       return res.status(500).json({ error: "Eroare server" });
     }
     res.json({ success: true, deleted: result.affectedRows });
+  });
+});
+
+// POST /api/sensors/start - Pornește un senzor specific
+router.post("/start", (req, res) => {
+  const { sensorType, pacient_id } = req.body;
+
+  // Validează tipul senzorului
+  const validTypes = ["ecg", "puls", "temperatura"];
+  if (!sensorType || !validTypes.includes(sensorType)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Tip senzor invalid" 
+    });
+  }
+
+  // Dacă procesul deja rulează, returnează succes
+  if (sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed) {
+    return res.json({ 
+      success: true, 
+      message: `Senzorul '${sensorType}' este deja în execuție`,
+      running: true,
+      sensorType
+    });
+  }
+
+  try {
+    const sensorsPath = path.join(__dirname, "../../sensors");
+    
+    // Construiește argumentele pentru main.py
+    const args = [];
+    if (pacient_id) {
+      args.push("--pacient", String(pacient_id));
+    }
+    // Pornește doar senzorul specific
+    args.push("--sensors", sensorType);
+
+    // Pornește procesul
+    const process = spawn("python3", ["main.py", ...args], {
+      cwd: sensorsPath,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    sensorProcesses[sensorType] = process;
+
+    // Logare output
+    process.stdout.on("data", (data) => {
+      console.log(`[${sensorType.toUpperCase()}] ${data.toString()}`);
+    });
+
+    process.stderr.on("data", (data) => {
+      console.error(`[${sensorType.toUpperCase()} ERROR] ${data.toString()}`);
+    });
+
+    process.on("error", (err) => {
+      console.error(`[${sensorType}] Eroare start proces:`, err);
+      sensorProcesses[sensorType] = null;
+    });
+
+    process.on("exit", (code) => {
+      console.log(`[${sensorType}] Proces oprit cu cod ${code}`);
+      sensorProcesses[sensorType] = null;
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Senzorul '${sensorType}' a fost pornit`,
+      running: true,
+      sensorType,
+      pid: process.pid 
+    });
+  } catch (err) {
+    console.error(`[${sensorType}] Eroare pornire:`, err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Eroare pornire senzor",
+      sensorType,
+      error: err.message 
+    });
+  }
+});
+
+// POST /api/sensors/stop - Oprește un senzor specific
+router.post("/stop", (req, res) => {
+  const { sensorType } = req.body;
+
+  // Validează tipul senzorului
+  const validTypes = ["ecg", "puls", "temperatura"];
+  if (!sensorType || !validTypes.includes(sensorType)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Tip senzor invalid" 
+    });
+  }
+
+  if (!sensorProcesses[sensorType] || sensorProcesses[sensorType].killed) {
+    return res.json({ 
+      success: true, 
+      message: `Senzorul '${sensorType}' nu este în execuție`,
+      running: false,
+      sensorType
+    });
+  }
+
+  try {
+    // Trimite SIGTERM pentru a opri procesul în mod corect
+    process.kill(-sensorProcesses[sensorType].pid);
+    
+    res.json({ 
+      success: true, 
+      message: `Comanda de oprire a senzorului '${sensorType}' a fost trimisă`,
+      running: false,
+      sensorType
+    });
+  } catch (err) {
+    console.error(`[${sensorType}] Eroare oprire:`, err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Eroare oprire senzor",
+      sensorType,
+      error: err.message 
+    });
+  }
+});
+
+// GET /api/sensors/running/:sensorType - Verifică dacă un senzor rulează
+router.get("/running/:sensorType", (req, res) => {
+  const { sensorType } = req.params;
+
+  // Validează tipul senzorului
+  const validTypes = ["ecg", "puls", "temperatura"];
+  if (!validTypes.includes(sensorType)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Tip senzor invalid" 
+    });
+  }
+
+  const running = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
+  res.json({ 
+    running,
+    sensorType,
+    pid: running ? sensorProcesses[sensorType].pid : null 
+  });
+});
+
+// GET /api/sensors/running - Verifică statusul tuturor senzorilor
+router.get("/running", (req, res) => {
+  const running = {};
+  const pids = {};
+  
+  Object.keys(sensorProcesses).forEach(sensorType => {
+    const isRunning = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
+    running[sensorType] = isRunning;
+    if (isRunning) {
+      pids[sensorType] = sensorProcesses[sensorType].pid;
+    }
+  });
+
+  res.json({ 
+    running,
+    pids
   });
 });
 
