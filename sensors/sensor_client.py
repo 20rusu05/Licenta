@@ -8,6 +8,8 @@ import time
 import threading
 import queue
 import requests
+import os
+from urllib.parse import urlparse
 
 try:
     import socketio
@@ -16,7 +18,7 @@ except ImportError:
     socketio = None
     SOCKETIO_AVAILABLE = False
 
-from config import SERVER_URL, DEVICE_ID
+from config import SERVER_URL, DEVICE_ID, SENSOR_TLS_VERIFY, SENSOR_TLS_CA_CERT
 
 
 class SensorClient:
@@ -26,9 +28,18 @@ class SensorClient:
         self.sensor_type = sensor_type
         self.device_id = DEVICE_ID
         self.server_url = SERVER_URL
+        self.is_https = urlparse(self.server_url).scheme == "https"
+        self.verify_tls = self._resolve_tls_verify()
+        self.http_session = requests.Session()
+        self.http_session.verify = self.verify_tls
         self.sio = None
         if SOCKETIO_AVAILABLE:
-            self.sio = socketio.Client(reconnection=True, reconnection_delay=2)
+            self.sio = socketio.Client(
+                reconnection=True,
+                reconnection_delay=2,
+                http_session=self.http_session,
+                ssl_verify=self.verify_tls,
+            )
         self.connected = False
         self.socketio_available = SOCKETIO_AVAILABLE
         self.data_queue = queue.Queue(maxsize=1000)
@@ -37,6 +48,20 @@ class SensorClient:
         else:
             print(f"[{self.sensor_type}] python-socketio nu este instalat - mod HTTP only")
         self._start_sender_thread()
+
+    def _resolve_tls_verify(self):
+        # Prefer explicit certificate path when provided.
+        if SENSOR_TLS_CA_CERT:
+            if os.path.exists(SENSOR_TLS_CA_CERT):
+                return SENSOR_TLS_CA_CERT
+            print(f"[{self.sensor_type}] Atenție: SENSOR_TLS_CA_CERT inexistent: {SENSOR_TLS_CA_CERT}")
+
+        # In local development we often use self-signed certs.
+        if self.is_https and not SENSOR_TLS_VERIFY:
+            print(f"[{self.sensor_type}] HTTPS activ cu verificare TLS dezactivată (mod dev)")
+            return False
+
+        return True
 
     def _setup_socket_events(self):
         if self.sio is None:
@@ -129,6 +154,7 @@ class SensorClient:
                             requests.post(
                                 f"{self.server_url}/api/sensors/reading",
                                 json=data,
+                                verify=self.verify_tls,
                                 timeout=5
                             )
                         except Exception:

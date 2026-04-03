@@ -28,6 +28,12 @@ import os
 
 SERVER_URL = os.getenv("SERVER_URL", "https://localhost:3001")
 
+# TLS settings for sensor->backend HTTPS communication
+# SENSOR_TLS_VERIFY: true|false (default false for local self-signed certs)
+# SENSOR_TLS_CA_CERT: path to CA/server cert file to enable strict verification
+SENSOR_TLS_VERIFY = os.getenv("SENSOR_TLS_VERIFY", "false").strip().lower() in ("1", "true", "yes", "on")
+SENSOR_TLS_CA_CERT = os.getenv("SENSOR_TLS_CA_CERT", "").strip()
+
 DEVICE_ID = "rpi5-01"
 
 INTERVALS = {

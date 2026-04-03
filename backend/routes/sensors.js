@@ -1,5 +1,6 @@
 import express from "express";
 import { spawn } from "child_process";
+import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { db } from "../db.js";
@@ -284,6 +285,8 @@ router.post("/start", (req, res) => {
 
   try {
     const sensorsPath = path.join(__dirname, "../../sensors");
+    const venvPython = path.join(sensorsPath, "venv", "bin", "python3");
+    const pythonCmd = existsSync(venvPython) ? venvPython : "python3";
     
     // Construiește argumentele pentru main.py
     const args = [];
@@ -294,7 +297,7 @@ router.post("/start", (req, res) => {
     args.push("--sensors", sensorType);
 
     // Pornește procesul
-    const process = spawn("python3", ["main.py", ...args], {
+    const process = spawn(pythonCmd, ["main.py", ...args], {
       cwd: sensorsPath,
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
