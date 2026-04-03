@@ -10,3 +10,10 @@ Thumbsrusu@pi5.db
 
 # Logs
 *.log
+
+# secrets and local TLS files
+backend/.env
+backend/certs/server.key
+backend/certs/server.csr
+backend/certs/ca.key
+backend/certs/*.srl
