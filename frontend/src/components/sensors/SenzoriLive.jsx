@@ -124,7 +124,7 @@ function buildEcgDisplay(data) {
 
 export default function SenzoriLive() {
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState('ecg');
+  const [activeTab, setActiveTab] = useState('all');
   const [connected, setConnected] = useState(false);
   const [sensorStatus, setSensorStatus] = useState({});
   const [ecgData, setEcgData] = useState([]);
@@ -308,7 +308,7 @@ export default function SenzoriLive() {
     };
   }, [appendEcgPoint]);
 
-  const isSensorOnline = (type) => sensorStatus[type]?.online;
+  const isSensorOnline = (type) => Boolean(sensorStatus[type]?.online || sensorsRunning[type]);
 
   const handleRefresh = () => {
     setEcgData([]);
@@ -360,7 +360,7 @@ export default function SenzoriLive() {
           <Grid item xs={12} sm={4}>
             <SensorStatusCard
               icon={<MonitorHeartIcon sx={{ fontSize: 28 }} />}
-              label="ECG (AD8232)"
+              label="ECG"
               online={isSensorOnline('ecg')}
               color="#f44336"
               sensorType="ecg"
@@ -373,7 +373,7 @@ export default function SenzoriLive() {
           <Grid item xs={12} sm={4}>
             <SensorStatusCard
               icon={<FavoriteIcon sx={{ fontSize: 28 }} />}
-              label="Senzor puls analogic"
+              label="Puls"
               online={isSensorOnline('puls')}
               color="#e91e63"
               sensorType="puls"
@@ -386,7 +386,7 @@ export default function SenzoriLive() {
           <Grid item xs={12} sm={4}>
             <SensorStatusCard
               icon={<ThermostatIcon sx={{ fontSize: 28 }} />}
-              label="Temperatură (DS18B20)"
+              label="Temperatură"
               online={isSensorOnline('temperatura')}
               color="#ff9800"
               sensorType="temperatura"
@@ -404,6 +404,9 @@ export default function SenzoriLive() {
           onChange={(e, val) => val && setActiveTab(val)}
           sx={{ mb: 3 }}
         >
+          <ToggleButton value="all">
+            <MonitorHeartIcon sx={{ mr: 1 }} /> All
+          </ToggleButton>
           <ToggleButton value="ecg">
             <MonitorHeartIcon sx={{ mr: 1 }} /> ECG
           </ToggleButton>
@@ -414,6 +417,27 @@ export default function SenzoriLive() {
             <ThermostatIcon sx={{ mr: 1 }} /> Temperatură
           </ToggleButton>
         </ToggleButtonGroup>
+
+        {activeTab === 'all' && (
+          <>
+            <Grid container spacing={2} alignItems="stretch">
+            <Grid item xs={12} md={6} sx={{ display: 'flex' }}>
+              <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight />
+            </Grid>
+            <Grid item xs={12} md={6} sx={{ display: 'flex' }}>
+              <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight />
+            </Grid>
+            </Grid>
+            <Box sx={{ mt: 2, width: '100%' }}>
+              <ECGChart
+                data={ecgData}
+                theme={theme}
+                paused={ecgPaused}
+                onTogglePause={() => setEcgPaused((prev) => !prev)}
+              />
+            </Box>
+          </>
+        )}
 
         {activeTab === 'ecg' && (
           <ECGChart
@@ -498,7 +522,7 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             <MonitorHeartIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
-            Electrocardiogramă (ECG) - Timp Real
+            Electrocardiogramă (ECG)
           </Typography>
           <Button
             size="small"
@@ -532,14 +556,13 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
         )}
         {data.length === 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-            <CircularProgress size={40} sx={{ mb: 2 }} />
             <Typography color="text.secondary">
               Se așteaptă date ECG de la senzor...
             </Typography>
           </Box>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={display.chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+            <LineChart data={display.chartData} margin={{ top: 10, right: 8, left: 0, bottom: 10 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
                 stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'}
@@ -568,14 +591,14 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
   );
 }
 
-function PulseChart({ data, latest, theme }) {
+function PulseChart({ data, latest, theme, fullHeight = false }) {
   const isDark = theme.palette.mode === 'dark';
 
   return (
-    <Box>
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+    <Box sx={{ width: '100%', display: 'flex' }}>
+      <Card sx={{ width: '100%', display: 'flex', flexDirection: 'column', height: fullHeight ? '100%' : 'auto' }}>
+        <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: 2, pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, px: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               <FavoriteIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#e91e63' }} />
               Frecvență cardiacă (BPM)
@@ -588,15 +611,20 @@ function PulseChart({ data, latest, theme }) {
             </Box>
           </Box>
           {data.length === 0 ? (
-            <Box sx={{ py: 6, textAlign: 'center' }}>
+            <Box sx={{ py: 6, textAlign: 'center', px: 2 }}>
               <Typography color="text.secondary">Se așteaptă date...</Typography>
             </Box>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data}>
+              <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                <YAxis domain={[40, 140]} tick={{ fontSize: 11 }} />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  padding={{ left: 0, right: 0 }}
+                  scale="point"
+                />
+                <YAxis domain={[40, 140]} tick={{ fontSize: 11 }} width={34} />
                 <RechartsTooltip />
                 <ReferenceLine y={60} stroke="#ff9800" strokeDasharray="3 3" />
                 <ReferenceLine y={100} stroke="#ff9800" strokeDasharray="3 3" />
@@ -610,7 +638,7 @@ function PulseChart({ data, latest, theme }) {
   );
 }
 
-function TempChart({ data, latest, theme }) {
+function TempChart({ data, latest, theme, fullHeight = false }) {
   const isDark = theme.palette.mode === 'dark';
 
   const getTemperatureColor = (temp) => {
@@ -632,10 +660,10 @@ function TempChart({ data, latest, theme }) {
   };
 
   return (
-    <Box>
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+    <Box sx={{ width: '100%', display: 'flex' }}>
+      <Card sx={{ width: '100%', display: 'flex', flexDirection: 'column', height: fullHeight ? '100%' : 'auto' }}>
+        <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: 2, pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, px: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               <ThermostatIcon sx={{ mr: 1, verticalAlign: 'middle', color: getTemperatureColor(latest) }} />
               Evoluție temperatură
@@ -653,15 +681,20 @@ function TempChart({ data, latest, theme }) {
             </Box>
           </Box>
           {data.length === 0 ? (
-            <Box sx={{ py: 6, textAlign: 'center' }}>
+            <Box sx={{ py: 6, textAlign: 'center', px: 2 }}>
               <Typography color="text.secondary">Se așteaptă date de la senzor...</Typography>
             </Box>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data}>
+              <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  padding={{ left: 0, right: 0 }}
+                  scale="point"
+                />
+                <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} width={34} />
                 <RechartsTooltip formatter={(val) => [`${val}°C`, 'Temperatură']} />
                 <ReferenceLine y={37.2} stroke="#ff9800" strokeDasharray="3 3" label="37.2°C" />
                 <ReferenceLine y={36.0} stroke="#2196F3" strokeDasharray="3 3" label="36.0°C" />
