@@ -6,14 +6,21 @@ node_modules
 
 # System files
 .DS_Store
-Thumbsrusu@pi5.db
+Thumbs.db
 
 # Logs
 *.log
 
+# Python cache/venv
+**/__pycache__/
+*.py[cod]
+sensors/venv/
+
 # secrets and local TLS files
 backend/.env
+backend/certs/server.crt
 backend/certs/server.key
 backend/certs/server.csr
 backend/certs/ca.key
 backend/certs/*.srl
+backend/certs/*.cnf

@@ -56,7 +56,8 @@ router.post('/forgot-password', async (req, res) => {
       }
     });
 
-    const resetUrl = `http://localhost:3000/reset-password/${token}`;
+    const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://localhost:3000';
+    const resetUrl = `${frontendBaseUrl.replace(/\/$/, '')}/reset-password/${token}`;
 
     await transporter.sendMail({
       from: '"NewMed System" <rusucristian554@gmail.com>',

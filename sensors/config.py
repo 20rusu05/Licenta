@@ -24,7 +24,9 @@ MCP3008 -> Raspberry Pi
     - CH0   -> OUTPUT de la AD8232
 """
 
-SERVER_URL = "http://localhost:3001"
+import os
+
+SERVER_URL = os.getenv("SERVER_URL", "https://localhost:3001")
 
 DEVICE_ID = "rpi5-01"
 

@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BACKEND_ORIGIN = import.meta.env.VITE_BACKEND_URL || `https://${window.location.hostname}:3001`;
+
 export const api = axios.create({
-  baseURL: `http://${window.location.hostname}:3001/api`,
+  baseURL: new URL('/api', BACKEND_ORIGIN).toString(),
   headers: {
     'Content-Type': 'application/json'
   }

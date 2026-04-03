@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { createServer } from "http";
+import { existsSync, readFileSync } from "fs";
+import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
 import authRouter from "./routes/auth.js";
 import medicamenteRouter from "./routes/medicamente.js";
@@ -18,9 +19,24 @@ import { applyPlausibilityFilter } from "./sensorPlausibility.js";
 dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
+const httpsKeyPath = process.env.HTTPS_KEY_PATH || "./certs/server.key";
+const httpsCertPath = process.env.HTTPS_CERT_PATH || "./certs/server.crt";
 
-const io = new Server(httpServer, {
+if (!existsSync(httpsKeyPath) || !existsSync(httpsCertPath)) {
+  throw new Error(
+    `HTTPS certificates not found. Expected key at ${httpsKeyPath} and cert at ${httpsCertPath}.`
+  );
+}
+
+const httpsServer = createHttpsServer(
+  {
+    key: readFileSync(httpsKeyPath),
+    cert: readFileSync(httpsCertPath),
+  },
+  app
+);
+
+const io = new Server(httpsServer, {
   cors: {
     origin: (origin, callback) => callback(null, true),
     methods: ["GET", "POST"],
@@ -178,7 +194,7 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpsServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Socket.IO activ - așteptare senzori...`);
 });
