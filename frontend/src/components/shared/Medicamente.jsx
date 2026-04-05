@@ -40,6 +40,7 @@ const API_URL = "/medicamente";
 function StatusChip({ status }) {
   if (!status) return <Chip size="small" label="-" color="default" />;
   let label = status.charAt(0).toUpperCase() + status.slice(1);
+  if (status === "pending") label = "În așteptare";
   let color = "default";
   if (status === "pending") color = "warning";
   if (status === "acceptat") color = "success";
@@ -230,15 +231,9 @@ useEffect(() => {
 
   const handleAcceptWithProgramare = async (id, medicamentId) => {
   console.log('handleAcceptWithProgramare called:', id, 'medicamentId:', medicamentId);
-  try {
-    await api.post(`${API_URL}/aplicari/${id}/status`, { status: "acceptat" });
-    await reload(medicamentId);
-    setAplicareSelectata(id);
-    setMedicamentCurent(medicamentId);
-    setOpenProgramareDialog(true);
-  } catch (err) {
-    console.error("Eroare la acceptare:", err);
-  }
+  setAplicareSelectata(id);
+  setMedicamentCurent(medicamentId);
+  setOpenProgramareDialog(true);
 };
 
   const creeazaProgramare = async () => {
@@ -273,6 +268,13 @@ useEffect(() => {
     });
   }
 };
+
+  const closeProgramareDialog = () => {
+    setOpenProgramareDialog(false);
+    setDataProgramare("");
+    setAplicareSelectata(null);
+    setMedicamentCurent(null);
+  };
 
 
   const handleViewForm = (aplicant) => {
@@ -794,7 +796,7 @@ const handleConfirmRenunta = async () => {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={openProgramareDialog} onClose={() => setOpenProgramareDialog(false)}>
+        <Dialog open={openProgramareDialog} onClose={closeProgramareDialog}>
   <DialogTitle>Selecteaza data programarii</DialogTitle>
   <DialogContent>
     <TextField
@@ -806,7 +808,7 @@ const handleConfirmRenunta = async () => {
     />
   </DialogContent>
   <DialogActions>
-    <Button onClick={() => setOpenProgramareDialog(false)}>Renunta</Button>
+    <Button onClick={closeProgramareDialog}>Renunta</Button>
     <Button onClick={creeazaProgramare} variant="contained" color="primary">
       Creeaza
     </Button>

@@ -1,6 +1,5 @@
 USE licenta;
 
--- Tabel pentru admini
 CREATE TABLE admini (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nume VARCHAR(100) NOT NULL,
@@ -14,7 +13,6 @@ CREATE TABLE admini (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Tabel pentru pacienți
 CREATE TABLE pacienti (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nume VARCHAR(100) NOT NULL,
@@ -28,7 +26,6 @@ CREATE TABLE pacienti (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Tabel pentru doctori (cu aceleași atribute ca pacienții)
 CREATE TABLE doctori (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nume VARCHAR(100) NOT NULL,
@@ -42,7 +39,6 @@ CREATE TABLE doctori (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Tabel pentru medicamente (asociate cu doctori)
 CREATE TABLE medicamente (
   id INT AUTO_INCREMENT PRIMARY KEY,
   doctor_id INT NOT NULL,
@@ -55,7 +51,6 @@ CREATE TABLE medicamente (
   INDEX idx_doctor_id (doctor_id)
 );
 
--- Tabel pentru aplicări medicamente (cereri de la pacienți cu formular medical)
 CREATE TABLE aplicari_medicamente (
   id INT AUTO_INCREMENT PRIMARY KEY,
   pacient_id INT NOT NULL,
@@ -129,14 +124,17 @@ CREATE TABLE monitoring_sessions (
   INDEX idx_doctor_session (doctor_id, status)
 );
 
--- Indexuri pentru performanță
+CREATE TABLE device_assignments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  device_id VARCHAR(50) NOT NULL UNIQUE,
+  doctor_id INT NOT NULL,
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (doctor_id) REFERENCES doctori(id) ON DELETE CASCADE,
+  INDEX idx_device_id (device_id)
+);
+
 CREATE INDEX idx_admini_email ON admini(email);
 CREATE INDEX idx_pacienti_email ON pacienti(email);
 CREATE INDEX idx_pacienti_telefon ON pacienti(telefon);
 CREATE INDEX idx_doctori_email ON doctori(email);
 CREATE INDEX idx_doctori_telefon ON doctori(telefon);
-
--- Inserare cont admin (parola: newmed.ro)
--- Hash bcrypt generat pentru parola 'newmed.ro'
-INSERT INTO admini (nume, prenume, email, parola, telefon) 
-VALUES ('Admin', 'NewMed', 'admin1@newmed.ro', '$2b$10$YvQf5KZxY8PmWqxjLHqvE.GN5kR9YJ9yJxD7xKjEYNRvMQSxKJ9nG', '0700000000');

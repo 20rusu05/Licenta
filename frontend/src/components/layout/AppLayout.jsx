@@ -52,7 +52,7 @@ export default function AppLayout({ children }) {
 
       <Sidebar />
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, ml: `${drawerWidth}px` }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
         <Toolbar />
         {children}
       </Box>

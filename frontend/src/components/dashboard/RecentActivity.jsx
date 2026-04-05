@@ -101,6 +101,7 @@ export default function RecentActivity({ activities = [] }) {
                       {info.title}
                     </Typography>
                   }
+                  secondaryTypographyProps={{ component: 'div' }}
                   secondary={
                     <Box>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>

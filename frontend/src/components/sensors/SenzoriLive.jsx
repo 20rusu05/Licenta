@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Container, Typography, Grid, Card, CardContent, Chip,
   ToggleButton, ToggleButtonGroup, CircularProgress, Alert, IconButton, Button,
-  Tooltip, Paper, useTheme, Dialog, DialogTitle, DialogContent, DialogActions
+  Tooltip, Paper, useTheme, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, MenuItem, Select, FormControl, List, ListItem, ListItemButton,
+  ListItemText
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
@@ -12,6 +14,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
+import SearchIcon from '@mui/icons-material/Search';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, AreaChart, Area, ReferenceLine
@@ -30,6 +33,7 @@ const ECG_SMOOTH_WINDOW = 7;
 const ECG_TARGET_HALF_SPAN_MV = 85;
 const ECG_MAX_GAIN = 12;
 const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
+const MONITORING_STATUS_KEY = 'monitoringStatus';
 
 function normalizeEcgValue(value) {
   const numeric = Number(value);
@@ -139,26 +143,55 @@ export default function SenzoriLive() {
     temperatura: false
   });
   const [loadingControl, setLoadingControl] = useState({});
+  
+  // Pacienți și sesiuni
+  const [patients, setPatients] = useState([]);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [loadingPatients, setLoadingPatients] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [assignmentFilter, setAssignmentFilter] = useState('all');
+  const [allPatients, setAllPatients] = useState([]);
+  const [loadingAllPatients, setLoadingAllPatients] = useState(false);
+  const [assigningDevice, setAssigningDevice] = useState(false);
+  const [unassigningPatientId, setUnassigningPatientId] = useState(null);
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'info' });
+  const [confirmUnassignOpen, setConfirmUnassignOpen] = useState(false);
+  const [pendingUnassignPatientId, setPendingUnassignPatientId] = useState(null);
+  const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
+  const [pendingAssignPatientId, setPendingAssignPatientId] = useState(null);
+  const [pendingAssignPatientName, setPendingAssignPatientName] = useState('');
+  
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
   const ecgPausedRef = useRef(false);
+  const selectedPatientRef = useRef(null);
 
   useEffect(() => {
     ecgPausedRef.current = ecgPaused;
   }, [ecgPaused]);
 
+  const showToast = useCallback((message, severity = 'info') => {
+    setToast({ open: true, message, severity });
+  }, []);
+
   const handleStartSensors = async (sensorType) => {
     try {
+      if (!selectedPatient?.id) {
+        showToast('Selectează un pacient înainte de a porni senzorul', 'warning');
+        return;
+      }
       setLoadingControl(prev => ({ ...prev, [sensorType]: true }));
       const response = await api.post('/sensors/start', {
-        sensorType
+        sensorType,
+        pacient_id: selectedPatient.id
       });
       if (response.data.success) {
         setSensorsRunning(prev => ({ ...prev, [sensorType]: true }));
+        showToast(`Senzorul ${sensorType.toUpperCase()} a fost pornit`, 'success');
       }
     } catch (err) {
       console.error(`Eroare pornire ${sensorType}:`, err);
-      alert(`Eroare la pornirea senzorului ${sensorType}`);
+      showToast(`Eroare la pornirea senzorului ${sensorType}`, 'error');
     } finally {
       setLoadingControl(prev => ({ ...prev, [sensorType]: false }));
     }
@@ -172,10 +205,11 @@ export default function SenzoriLive() {
       });
       if (response.data.success) {
         setSensorsRunning(prev => ({ ...prev, [sensorType]: false }));
+        showToast(`Senzorul ${sensorType.toUpperCase()} a fost oprit`, 'success');
       }
     } catch (err) {
       console.error(`Eroare oprire ${sensorType}:`, err);
-      alert(`Eroare la oprirea senzorului ${sensorType}`);
+      showToast(`Eroare la oprirea senzorului ${sensorType}`, 'error');
     } finally {
       setLoadingControl(prev => ({ ...prev, [sensorType]: false }));
     }
@@ -190,10 +224,294 @@ export default function SenzoriLive() {
     }
   };
 
+  const loadHistoryForPatient = useCallback(async (pacientId) => {
+    if (!pacientId) return;
+
+    try {
+      const [ecgRes, pulsRes, tempRes] = await Promise.all([
+        api.get('/sensors/history/ecg', { params: { pacient_id: pacientId, limit: 300 } }),
+        api.get('/sensors/history/puls', { params: { pacient_id: pacientId, limit: 60 } }),
+        api.get('/sensors/history/temperatura', { params: { pacient_id: pacientId, limit: 60 } }),
+      ]);
+
+      const nextEcg = (ecgRes.data.readings || [])
+        .map((r) => ({
+          value: normalizeEcgValue(r.value_1),
+          leads_ok: r.value_1 > 0,
+        }))
+        .filter((r) => r.value !== null)
+        .map((r, idx) => ({
+          idx,
+          value: r.value,
+          leads_ok: r.leads_ok,
+        }))
+        .slice(-MAX_ECG_POINTS);
+
+      const nextPulse = (pulsRes.data.readings || []).map((r) => ({
+        time: new Date(r.created_at).toLocaleTimeString('ro-RO'),
+        hr: r.value_1,
+      })).slice(-MAX_VITAL_POINTS);
+
+      const nextTemp = (tempRes.data.readings || []).map((r) => ({
+        time: new Date(r.created_at).toLocaleTimeString('ro-RO'),
+        temp: r.value_1,
+      })).slice(-MAX_VITAL_POINTS);
+
+      ecgBufferRef.current = nextEcg;
+      setEcgData(nextEcg);
+      setPulseData(nextPulse);
+      setTempData(nextTemp);
+      setLatestPulse({ hr: nextPulse.length ? nextPulse[nextPulse.length - 1].hr : '--' });
+      setLatestTemp(nextTemp.length ? nextTemp[nextTemp.length - 1].temp : '--');
+    } catch (err) {
+      console.error('Eroare încărcare istoric pacient:', err);
+    }
+  }, []);
+
+  // Fetch pacienții doctorului cu sesiuni active
+  const fetchPatients = async () => {
+    try {
+      setLoadingPatients(true);
+      const response = await api.get('/sensors/doctor/patients');
+      const rawPatients = response.data.patients || [];
+
+      // Normalizează rezultatul pentru compatibilitate cu ambele variante de backend
+      // (vechi: session_id/sensor_type pe rând, nou: session_ids/sensor_types agregate).
+      const byPatientId = new Map();
+      rawPatients.forEach((row) => {
+        const key = Number(row.id);
+        if (!Number.isFinite(key)) return;
+
+        if (!byPatientId.has(key)) {
+          byPatientId.set(key, {
+            ...row,
+            id: key,
+            __sessionIds: new Set(),
+            __sensorTypes: new Set(),
+          });
+        }
+
+        const acc = byPatientId.get(key);
+
+        if (row.session_id) {
+          acc.__sessionIds.add(String(row.session_id));
+        }
+        if (row.session_ids) {
+          String(row.session_ids)
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .forEach((v) => acc.__sessionIds.add(v));
+        }
+
+        if (row.sensor_type) {
+          acc.__sensorTypes.add(String(row.sensor_type));
+        }
+        if (row.sensor_types) {
+          String(row.sensor_types)
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .forEach((v) => acc.__sensorTypes.add(v));
+        }
+
+        if (row.started_at && (!acc.started_at || new Date(row.started_at) > new Date(acc.started_at))) {
+          acc.started_at = row.started_at;
+        }
+      });
+
+      const nextPatients = Array.from(byPatientId.values())
+        .map((p) => {
+          const sessionIds = Array.from(p.__sessionIds);
+          const sensorTypes = Array.from(p.__sensorTypes);
+          return {
+            ...p,
+            session_id: sessionIds[0] ? Number(sessionIds[0]) : null,
+            session_ids: sessionIds.join(','),
+            sensor_types: sensorTypes.join(','),
+            active_sessions_count: sessionIds.length,
+          };
+        })
+        .sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0));
+
+      setPatients(nextPatients);
+
+      if (nextPatients.length === 0) {
+        setSelectedPatient(null);
+        return [];
+      }
+
+      if (selectedPatientRef.current) {
+        const refreshedSelected = nextPatients.find((p) => p.id === selectedPatientRef.current.id);
+        if (refreshedSelected) {
+          setSelectedPatient(refreshedSelected);
+          return nextPatients;
+        }
+      }
+
+      setSelectedPatient(nextPatients[0]);
+      return nextPatients;
+    } catch (err) {
+      console.error('Eroare fetch pacienți:', err);
+      return [];
+    } finally {
+      setLoadingPatients(false);
+    }
+  };
+
+  // Fetch toți pacienții pentru căutare și asignare
+  const fetchAllPatients = async (search = '') => {
+    try {
+      setLoadingAllPatients(true);
+      const response = await api.get('/sensors/doctor/all-patients', {
+        params: { search }
+      });
+      setAllPatients(response.data.patients || []);
+    } catch (err) {
+      console.error('Eroare fetch toți pacienții:', err);
+    } finally {
+      setLoadingAllPatients(false);
+    }
+  };
+
+  // Asignează dispozitiv la pacient
+  const handleAssignDevice = async (pacient_id) => {
+    const targetPatient = allPatients.find((p) => Number(p.id) === Number(pacient_id));
+    setPendingAssignPatientId(pacient_id);
+    setPendingAssignPatientName(targetPatient ? `${targetPatient.prenume} ${targetPatient.nume}` : 'pacient');
+    setConfirmAssignOpen(true);
+  };
+
+  const confirmAssignDevice = async () => {
+    if (!pendingAssignPatientId) return;
+
+    const pacient_id = pendingAssignPatientId;
+    const normalizedPacientId = Number(pacient_id);
+    if (!Number.isFinite(normalizedPacientId) || normalizedPacientId <= 0) {
+      showToast('Pacient invalid pentru asignare', 'error');
+      setConfirmAssignOpen(false);
+      setPendingAssignPatientId(null);
+      setPendingAssignPatientName('');
+      return;
+    }
+
+    try {
+      setAssigningDevice(true);
+      let response;
+      try {
+        response = await api.post('/sensors/doctor/assign-session', {
+          pacient_id: normalizedPacientId
+        });
+      } catch (firstErr) {
+        const maybeIncomplete = firstErr?.response?.status === 400
+          && String(firstErr?.response?.data?.error || '').toLowerCase().includes('date incomplete');
+
+        if (!maybeIncomplete) {
+          throw firstErr;
+        }
+
+        // Compatibilitate cu backend vechi care cere și sensor_type.
+        response = await api.post('/sensors/doctor/assign-session', {
+          pacient_id: normalizedPacientId,
+          sensor_type: 'ecg'
+        });
+      }
+      
+      if (response.data.success) {
+        const refreshedPatients = await fetchPatients();
+        await fetchAllPatients(searchQuery);
+        const newlyAssigned = refreshedPatients.find((p) => Number(p.id) === normalizedPacientId);
+        if (newlyAssigned) {
+          setSelectedPatient(newlyAssigned);
+        }
+        const patientInfo = allPatients.find((p) => Number(p.id) === normalizedPacientId)
+          || refreshedPatients.find((p) => Number(p.id) === normalizedPacientId);
+        const patientName = patientInfo ? `${patientInfo.prenume} ${patientInfo.nume}` : 'pacient';
+        showToast(`Dispozitiv asignat pacientului: ${patientName}`, 'success');
+      }
+    } catch (err) {
+      console.error('Eroare asignare:', err);
+      showToast('Eroare la asignare: ' + (err.response?.data?.error || err.message), 'error');
+    } finally {
+      setAssigningDevice(false);
+      setConfirmAssignOpen(false);
+      setPendingAssignPatientId(null);
+      setPendingAssignPatientName('');
+    }
+  };
+
+  const handleUnassignDevice = async (pacientId) => {
+    setPendingUnassignPatientId(pacientId);
+    setConfirmUnassignOpen(true);
+  };
+
+  const confirmUnassignDevice = async () => {
+    if (!pendingUnassignPatientId) return;
+
+    try {
+      setUnassigningPatientId(pendingUnassignPatientId);
+      let response;
+      try {
+        response = await api.put(`/sensors/doctor/end-patient-sessions/${pendingUnassignPatientId}`);
+      } catch (firstErr) {
+        // Compatibilitate cu backend vechi unde există doar end-session/:sessionId
+        const activeSession = patients.find((p) => Number(p.id) === Number(pendingUnassignPatientId));
+        if (!activeSession?.session_id) {
+          throw firstErr;
+        }
+        response = await api.put(`/sensors/doctor/end-session/${activeSession.session_id}`);
+      }
+      
+      if (response.data.success) {
+        await fetchPatients();
+        await fetchAllPatients(searchQuery);
+        showToast('Dispozitive deasignate pentru pacient', 'success');
+      }
+    } catch (err) {
+      console.error('Eroare deasignare:', err);
+      showToast('Eroare la deasignare: ' + (err.response?.data?.error || err.message), 'error');
+    } finally {
+      setConfirmUnassignOpen(false);
+      setPendingUnassignPatientId(null);
+      setUnassigningPatientId(null);
+    }
+  };
+
   useEffect(() => {
-    ecgPausedRef.current = ecgPaused;
+    selectedPatientRef.current = selectedPatient;
+  }, [selectedPatient]);
+
+  useEffect(() => {
+    const payload = {
+      connected,
+      selectedPatient: selectedPatient
+        ? {
+            id: selectedPatient.id,
+            name: `${selectedPatient.prenume || ''} ${selectedPatient.nume || ''}`.trim(),
+          }
+        : null,
+      updatedAt: Date.now(),
+    };
+
+    localStorage.setItem(MONITORING_STATUS_KEY, JSON.stringify(payload));
+    window.dispatchEvent(new Event('monitoring-status-changed'));
+  }, [connected, selectedPatient?.id, selectedPatient?.prenume, selectedPatient?.nume]);
+
+  useEffect(() => {
     checkSensorsRunning();
-  }, [ecgPaused]);
+    fetchPatients();
+    fetchAllPatients();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPatient?.id) {
+      handleRefresh();
+      return;
+    }
+
+    handleRefresh();
+    loadHistoryForPatient(selectedPatient.id);
+  }, [selectedPatient?.id, loadHistoryForPatient]);
 
   const appendEcgPoint = useCallback((value, leadsOk = true) => {
     if (ecgPausedRef.current) return;
@@ -239,6 +557,12 @@ export default function SenzoriLive() {
     });
 
     socket.on('sensor_update', (data) => {
+      // Filtrează datele pentru pacientul selectat
+      const selected = selectedPatientRef.current;
+      if (selected && Number(data.pacient_id) !== Number(selected.id)) {
+        return;
+      }
+
       if (data.sensor_type === 'ecg') {
         const ecgValue = normalizeEcgValue(data.value_1);
         if (ecgValue === null) return;
@@ -265,6 +589,12 @@ export default function SenzoriLive() {
     });
 
     socket.on('sensor_batch_update', (data) => {
+      // Filtrează datele pentru pacientul selectat
+      const selected = selectedPatientRef.current;
+      if (selected && data.pacient_id && Number(data.pacient_id) !== Number(selected.id)) {
+        return;
+      }
+
       if (data.sensor_type === 'ecg') {
         data.readings
           .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: r.leads_ok }))
@@ -319,9 +649,162 @@ export default function SenzoriLive() {
     setLatestTemp('--');
   };
 
+  const isPatientAssigned = (patientId) => {
+    const activeSession = patients.find((ap) => Number(ap.id) === Number(patientId));
+    return Boolean(
+      activeSession && (
+        Number(activeSession.active_sessions_count) > 0
+        || activeSession.session_id
+        || (activeSession.session_ids && String(activeSession.session_ids).length > 0)
+      )
+    );
+  };
+
+  const filteredPatients = allPatients.filter((p) => {
+    const assigned = isPatientAssigned(p.id);
+    if (assignmentFilter === 'assigned') return assigned;
+    if (assignmentFilter === 'unassigned') return !assigned;
+    return true;
+  });
+
   return (
     <AppLayout>
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: 1.5 }}>
+        {/* Secțiunea de selectare pacient și asignare dispozitiv */}
+        <Card sx={{ mb: 2, bgcolor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#f5f5f5' }}>
+          <CardContent sx={{ py: 1.5, px: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1.5 }}>
+              Gestionare Sesiuni de Monitorizare
+            </Typography>
+            
+            <Grid container spacing={1} sx={{ mb: 1.5 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControl fullWidth size="small" sx={{ minWidth: 240 }}>
+                  <Select
+                    value={selectedPatient?.id || ''}
+                    displayEmpty
+                    onChange={(e) => {
+                      const patient = patients.find((p) => Number(p.id) === Number(e.target.value));
+                      setSelectedPatient(patient);
+                    }}
+                    renderValue={(selected) => {
+                      if (!selected) {
+                        return <Typography variant="body2" color="text.secondary">Selectează pacient</Typography>;
+                      }
+                      const patient = patients.find((p) => Number(p.id) === Number(selected));
+                      if (!patient) return selected;
+                      return `${patient.prenume} ${patient.nume}`;
+                    }}
+                    disabled={patients.length === 0}
+                  >
+                    {patients.map(p => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.prenume} {p.nume}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControl fullWidth size="small" sx={{ minWidth: 220 }}>
+                  <Select
+                    value={assignmentFilter}
+                    onChange={(e) => setAssignmentFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">Toți pacienții</MenuItem>
+                    <MenuItem value="assigned">Doar pacienții asignați</MenuItem>
+                    <MenuItem value="unassigned">Doar pacienții neasignați</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Caută pacient pentru asignare/deasignare"
+              value={searchQuery}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSearchQuery(value);
+                fetchAllPatients(value);
+              }}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+              }}
+              sx={{ mb: 1.5 }}
+            />
+
+            <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', mb: 1.5 }}>
+              {filteredPatients.map((p) => {
+                const activeSession = patients.find((ap) => Number(ap.id) === Number(p.id));
+                const isAssigned = isPatientAssigned(p.id);
+
+                return (
+                  <ListItem
+                    key={p.id}
+                    disablePadding
+                    secondaryAction={
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color={isAssigned ? 'error' : 'success'}
+                        disabled={assigningDevice || Number(unassigningPatientId) === Number(p.id)}
+                        onClick={() => {
+                          if (isAssigned) {
+                            handleUnassignDevice(p.id);
+                          } else {
+                            handleAssignDevice(p.id);
+                          }
+                        }}
+                      >
+                        {isAssigned ? 'Deasignare' : 'Asignare'}
+                      </Button>
+                    }
+                  >
+                    <ListItemButton onClick={() => {
+                      if (activeSession) {
+                        setSelectedPatient(activeSession);
+                      }
+                    }}>
+                      <ListItemText
+                        primary={`${p.prenume} ${p.nume}`}
+                        secondary={p.email}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
+              {!loadingAllPatients && filteredPatients.length === 0 && (
+                <ListItem>
+                  <ListItemText
+                    primary={allPatients.length === 0 ? 'Niciun pacient găsit' : 'Niciun pacient pentru filtrul selectat'}
+                  />
+                </ListItem>
+              )}
+            </List>
+
+            {patients.length === 0 && !loadingPatients && (
+              <Alert severity="info">
+                Nu aveți sesiuni de monitorizare active. Asignați un dispozitiv unui pacient pentru a vedea datele senzorilor.
+              </Alert>
+            )}
+
+            {loadingPatients && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
+
+            {selectedPatient && (
+              <Paper sx={{ p: 2, bgcolor: 'primary.light', mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Pacient selectat:</strong> {selectedPatient.prenume} {selectedPatient.nume}
+                </Typography>
+              </Paper>
+            )}
+          </CardContent>
+        </Card>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
@@ -356,8 +839,8 @@ export default function SenzoriLive() {
           </Box>
         </Box>
 
-        <Grid container spacing={1.5} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={4}>
+        <Grid container spacing={1} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <SensorStatusCard
               icon={<MonitorHeartIcon sx={{ fontSize: 28 }} />}
               label="ECG"
@@ -370,7 +853,7 @@ export default function SenzoriLive() {
               loading={loadingControl.ecg}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <SensorStatusCard
               icon={<FavoriteIcon sx={{ fontSize: 28 }} />}
               label="Puls"
@@ -383,7 +866,7 @@ export default function SenzoriLive() {
               loading={loadingControl.puls}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <SensorStatusCard
               icon={<ThermostatIcon sx={{ fontSize: 28 }} />}
               label="Temperatură"
@@ -402,10 +885,10 @@ export default function SenzoriLive() {
           value={activeTab}
           exclusive
           onChange={(e, val) => val && setActiveTab(val)}
-          sx={{ mb: 3 }}
+          sx={{ mb: 2 }}
         >
           <ToggleButton value="all">
-            <MonitorHeartIcon sx={{ mr: 1 }} /> All
+            <MonitorHeartIcon sx={{ mr: 1 }} /> Toate
           </ToggleButton>
           <ToggleButton value="ecg">
             <MonitorHeartIcon sx={{ mr: 1 }} /> ECG
@@ -420,15 +903,15 @@ export default function SenzoriLive() {
 
         {activeTab === 'all' && (
           <>
-            <Grid container spacing={2} alignItems="stretch">
-            <Grid item xs={12} md={6} sx={{ display: 'flex' }}>
+            <Grid container spacing={1.5} alignItems="stretch">
+            <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
               <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight />
             </Grid>
-            <Grid item xs={12} md={6} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
               <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight />
             </Grid>
             </Grid>
-            <Box sx={{ mt: 2, width: '100%' }}>
+            <Box sx={{ mt: 1.5, width: '100%' }}>
               <ECGChart
                 data={ecgData}
                 theme={theme}
@@ -449,6 +932,77 @@ export default function SenzoriLive() {
         )}
         {activeTab === 'puls' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
         {activeTab === 'temperatura' && <TempChart data={tempData} latest={latestTemp} theme={theme} />}
+
+        <Dialog open={confirmAssignOpen} onClose={() => {
+          setConfirmAssignOpen(false);
+          setPendingAssignPatientId(null);
+          setPendingAssignPatientName('');
+        }}>
+          <DialogTitle>Confirmare asignare</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2">
+              Sigur vrei să asignezi dispozitivul pacientului <strong>{pendingAssignPatientName}</strong>?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => {
+              setConfirmAssignOpen(false);
+              setPendingAssignPatientId(null);
+              setPendingAssignPatientName('');
+            }}>
+              Anulează
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={confirmAssignDevice}
+              disabled={Boolean(assigningDevice)}
+            >
+              Confirmă
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={confirmUnassignOpen} onClose={() => setConfirmUnassignOpen(false)}>
+          <DialogTitle>Confirmare deasignare</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2">
+              Sigur vrei să deasignezi dispozitivul de la pacient?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => {
+              setConfirmUnassignOpen(false);
+              setPendingUnassignPatientId(null);
+            }}>
+              Anulează
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={confirmUnassignDevice}
+              disabled={Boolean(unassigningPatientId)}
+            >
+              Confirmă
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Snackbar
+          open={toast.open}
+          autoHideDuration={3200}
+          onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert
+            onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+            severity={toast.severity}
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
+            {toast.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </AppLayout>
   );
@@ -625,7 +1179,22 @@ function PulseChart({ data, latest, theme, fullHeight = false }) {
                   scale="point"
                 />
                 <YAxis domain={[40, 140]} tick={{ fontSize: 11 }} width={34} />
-                <RechartsTooltip />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.96)' : '#ffffff',
+                    border: isDark ? '1px solid rgba(148, 163, 184, 0.35)' : '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    boxShadow: isDark ? '0 10px 30px rgba(2,6,23,0.45)' : '0 10px 25px rgba(15,23,42,0.12)',
+                  }}
+                  labelStyle={{
+                    color: isDark ? '#e2e8f0' : '#334155',
+                    fontWeight: 600,
+                  }}
+                  itemStyle={{
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                  }}
+                  cursor={{ stroke: isDark ? 'rgba(148,163,184,0.35)' : 'rgba(15,23,42,0.2)', strokeWidth: 1 }}
+                />
                 <ReferenceLine y={60} stroke="#ff9800" strokeDasharray="3 3" />
                 <ReferenceLine y={100} stroke="#ff9800" strokeDasharray="3 3" />
                 <Area type="monotone" dataKey="hr" stroke="#e91e63" fill="#e91e6330" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -695,7 +1264,23 @@ function TempChart({ data, latest, theme, fullHeight = false }) {
                   scale="point"
                 />
                 <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} width={34} />
-                <RechartsTooltip formatter={(val) => [`${val}°C`, 'Temperatură']} />
+                <RechartsTooltip
+                  formatter={(val) => [`${val}°C`, 'Temperatură']}
+                  contentStyle={{
+                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.96)' : '#ffffff',
+                    border: isDark ? '1px solid rgba(148, 163, 184, 0.35)' : '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    boxShadow: isDark ? '0 10px 30px rgba(2,6,23,0.45)' : '0 10px 25px rgba(15,23,42,0.12)',
+                  }}
+                  labelStyle={{
+                    color: isDark ? '#e2e8f0' : '#334155',
+                    fontWeight: 600,
+                  }}
+                  itemStyle={{
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                  }}
+                  cursor={{ stroke: isDark ? 'rgba(148,163,184,0.35)' : 'rgba(15,23,42,0.2)', strokeWidth: 1 }}
+                />
                 <ReferenceLine y={37.2} stroke="#ff9800" strokeDasharray="3 3" label="37.2°C" />
                 <ReferenceLine y={36.0} stroke="#2196F3" strokeDasharray="3 3" label="36.0°C" />
                 <Area type="monotone" dataKey="temp" stroke="#ff9800" fill="#ff980030" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />

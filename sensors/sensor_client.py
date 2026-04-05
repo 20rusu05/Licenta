@@ -9,7 +9,11 @@ import threading
 import queue
 import requests
 import os
+import urllib3
 from urllib.parse import urlparse
+
+# Suprimă warninguri pentru self-signed certs în dev
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 try:
     import socketio

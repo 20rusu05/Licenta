@@ -8,10 +8,37 @@ import signal
 import sys
 import threading
 import argparse
+import requests
+import json
 
 from ekg import ECGSensor
 from puls import PulsOximeter
 from temperatura import TemperatureSensor
+from config import SERVER_URL, SENSOR_TLS_VERIFY, SENSOR_TLS_CA_CERT, DEVICE_ID
+
+
+def get_assigned_patient_for_device():
+    """Obține ID-ul pacientului asignat dispozitivului din backend."""
+    try:
+        verify_ssl = SENSOR_TLS_CA_CERT if SENSOR_TLS_CA_CERT else (not bool(SENSOR_TLS_VERIFY) == False)
+        response = requests.get(
+            f"{SERVER_URL}/api/sensors/device-patient/{DEVICE_ID}",
+            verify=verify_ssl,
+            timeout=5
+        )
+        if response.status_code == 200:
+            data = response.json()
+            pacient_id = data.get("pacient_id")
+            if pacient_id:
+                print(f"[MANAGER] Pacient detectat: {pacient_id} (asignat dispozitivului {DEVICE_ID})")
+                return pacient_id
+        elif response.status_code == 404:
+            print(f"[MANAGER] No patient assigned to device {DEVICE_ID}")
+        else:
+            print(f"[MANAGER] Eroare server: {response.status_code}")
+    except Exception as e:
+        print(f"[MANAGER] Eroare conectare la server: {e}")
+    return None
 
 
 class SensorManager:
@@ -94,13 +121,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemple de utilizare:
-  python main.py                          # Pornește toți senzorii
+  python main.py                          # Pornește toți senzorii (pacient nespecificat)
   python main.py --pacient 1              # Monitorizare pacient cu ID 1
+  python main.py --auto                   # Auto-detectează pacientul din backend
   python main.py --sensors ecg temperatura  # Doar ECG și temperatură
-    python main.py --sensors puls           # Doar senzorul de puls
+  python main.py --auto --sensors ecg     # Auto-detectează + doar ECG
         """
     )
     parser.add_argument("--pacient", type=int, help="ID-ul pacientului monitorizat")
+    parser.add_argument("--auto", action="store_true", help="Auto-detectează pacientul din backend")
     parser.add_argument(
         "--sensors",
         nargs="+",
@@ -109,8 +138,16 @@ Exemple de utilizare:
     )
     args = parser.parse_args()
 
+    pacient_id = args.pacient
+    
+    # Auto-detect patient if --auto flag is set
+    if args.auto and not pacient_id:
+        pacient_id = get_assigned_patient_for_device()
+        if not pacient_id:
+            print("[MANAGER] Nu s-a putut detecta pacientul. Continuez fără pacient_id.")
+
     manager = SensorManager(
-        pacient_id=args.pacient,
+        pacient_id=pacient_id,
         sensors_to_run=args.sensors
     )
 

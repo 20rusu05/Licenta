@@ -82,6 +82,7 @@ export default function AppointmentHistory({ appointments = [] }) {
                       />
                     </Box>
                   }
+                  secondaryTypographyProps={{ component: 'div' }}
                   secondary={
                     <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
                       {formatDate(apt.data_programare)}

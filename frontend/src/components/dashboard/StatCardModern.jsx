@@ -13,9 +13,10 @@ export default function StatCardModern({ icon, label, value, subtitle, trend, co
   return (
     <Paper
       sx={{
-        p: 3,
+        p: { xs: 2.5, md: 3.25 },
+        width: '100%',
         height: '100%',
-        minHeight: '180px',
+        minHeight: { xs: 190, md: 220 },
         background: gradients[color],
         color: 'white',
         position: 'relative',
@@ -50,7 +51,7 @@ export default function StatCardModern({ icon, label, value, subtitle, trend, co
           )}
         </Box>
         
-        <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
+        <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5, fontSize: { xs: '2rem', md: '2.4rem' } }}>
           {value}
         </Typography>
         

@@ -234,6 +234,11 @@ router.post("/aplicari/:id/programare", authMiddleware, async (req, res) => {
       [req.user.id, pacient_id, dataProgramare]
     );
 
+    await db.promise().query(
+      "UPDATE aplicari_medicamente SET status = 'acceptat' WHERE id = ?",
+      [aplicareId]
+    );
+
     res.json({ message: "Programare creata" });
   } catch (err) {
     console.error(err);

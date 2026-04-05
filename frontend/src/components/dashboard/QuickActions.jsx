@@ -47,7 +47,7 @@ export default function QuickActions() {
 
       <Grid container spacing={2}>
         {actions.map((action, index) => (
-          <Grid item xs={12} sm={6} key={index}>
+          <Grid size={{ xs: 12, sm: 6 }} key={index}>
             <Paper
               onClick={action.action}
               sx={{

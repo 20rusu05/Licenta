@@ -57,7 +57,7 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
+      <Container maxWidth={false} disableGutters sx={{ mt: 2, mb: 4, px: { xs: 2, md: 3 } }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
             Bun venit, {isDoctor ? `Dr. ${displayName}` : displayName}! 👋
@@ -71,7 +71,7 @@ export default function Dashboard() {
 
         {isDoctor ? (
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PeopleIcon sx={{ fontSize: 28 }} />}
                 label="Total pacienți"
@@ -80,7 +80,7 @@ export default function Dashboard() {
                 color="primary"
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<CalendarMonthIcon sx={{ fontSize: 28 }} />}
                 label="Programări astăzi"
@@ -89,7 +89,7 @@ export default function Dashboard() {
                 color="success"
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PendingActionsIcon sx={{ fontSize: 28 }} />}
                 label="Cereri în așteptare"
@@ -98,7 +98,7 @@ export default function Dashboard() {
                 color="warning"
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<MedicationIcon sx={{ fontSize: 28 }} />}
                 label="Medicamente active"
@@ -108,15 +108,15 @@ export default function Dashboard() {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <UpcomingAppointments appointments={dashboardData?.programariDeAzi || []} />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <RecentActivity activities={dashboardData?.activitateRecenta || []} />
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid size={12}>
               <AppointmentsChart 
                 data={dashboardData?.programariSaptamanala || []} 
                 allAppointments={dashboardData?.programariSaptamanaDetalii || []}
@@ -125,7 +125,7 @@ export default function Dashboard() {
           </Grid>
         ) : (
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<CalendarMonthIcon sx={{ fontSize: 28 }} />}
                 label="Total programări"
@@ -134,7 +134,7 @@ export default function Dashboard() {
                 color="primary"
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PendingActionsIcon sx={{ fontSize: 28 }} />}
                 label="Programări viitoare"
@@ -143,7 +143,7 @@ export default function Dashboard() {
                 color="success"
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<MedicationIcon sx={{ fontSize: 28 }} />}
                 label="Medicamente active"
@@ -152,7 +152,7 @@ export default function Dashboard() {
                 color="info"
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PendingActionsIcon sx={{ fontSize: 28 }} />}
                 label="Cereri în așteptare"
@@ -162,19 +162,19 @@ export default function Dashboard() {
               />
             </Grid>
 
-            <Grid item xs={12} md={8}>
+            <Grid size={{ xs: 12, md: 8 }}>
               <NextAppointmentCard appointment={dashboardData?.urmatoareaProgramare} />
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <QuickActions />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <MyMedications medications={dashboardData?.medicamentele || []} />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <AppointmentHistory appointments={dashboardData?.istoricProgramari || []} />
             </Grid>
           </Grid>

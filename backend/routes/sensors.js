@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { db } from "../db.js";
 import { applyPlausibilityFilter } from "../sensorPlausibility.js";
+import { verifyToken } from "./middleware/authMiddleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,6 +94,53 @@ router.get("/history/:sensorType", (req, res) => {
       return res.status(500).json({ error: "Eroare server" });
     }
     res.json({ readings: results.reverse() });
+  });
+});
+
+// GET /api/sensors/device-patient/:deviceId - Get currently assigned patient for a device
+router.get("/device-patient/:deviceId", (req, res) => {
+  const { deviceId } = req.params;
+
+  // First, find the doctor who owns this device
+  const getDoctorQuery = `
+    SELECT doctor_id FROM device_assignments
+    WHERE device_id = ?
+    LIMIT 1
+  `;
+
+  db.query(getDoctorQuery, [deviceId], (err, assignmentResults) => {
+    if (err) {
+      console.error("Eroare citire asignare dispozitiv:", err);
+      return res.status(500).json({ error: "Eroare server" });
+    }
+
+    if (assignmentResults.length === 0) {
+      return res.status(404).json({ error: "Device not assigned to any doctor" });
+    }
+
+    const doctorId = assignmentResults[0].doctor_id;
+
+    // Now find the currently active patient for this doctor
+    const getPatientQuery = `
+      SELECT DISTINCT pacient_id
+      FROM monitoring_sessions
+      WHERE doctor_id = ? AND status = 'activa'
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+
+    db.query(getPatientQuery, [doctorId], (patientErr, patientResults) => {
+      if (patientErr) {
+        console.error("Eroare citire pacient activ:", patientErr);
+        return res.status(500).json({ error: "Eroare server" });
+      }
+
+      if (patientResults.length === 0) {
+        return res.status(404).json({ error: "No active patient for this device" });
+      }
+
+      res.json({ pacient_id: patientResults[0].pacient_id });
+    });
   });
 });
 
@@ -422,6 +470,205 @@ router.get("/running", (req, res) => {
   res.json({ 
     running,
     pids
+  });
+});
+
+// GET /api/sensors/doctor/patients - Obține toți pacienții doctorului cu sesiuni active
+router.get("/doctor/patients", verifyToken, (req, res) => {
+  const doctorId = req.user.id;
+
+  const query = `
+    SELECT
+           p.id,
+           p.nume,
+           p.prenume,
+           p.email,
+           p.telefon,
+           GROUP_CONCAT(ms.id ORDER BY ms.started_at DESC) as session_ids,
+           GROUP_CONCAT(ms.sensor_type ORDER BY ms.sensor_type) as sensor_types,
+           COUNT(ms.id) as active_sessions_count,
+           MAX(ms.started_at) as started_at,
+           MAX(sr.created_at) as last_reading_at,
+           COALESCE(MAX(sr.device_id), 'unknown') as device_id
+    FROM monitoring_sessions ms
+    INNER JOIN pacienti p ON p.id = ms.pacient_id
+    LEFT JOIN sensor_readings sr ON p.id = sr.pacient_id AND sr.created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
+    WHERE ms.doctor_id = ? AND ms.status = 'activa'
+    GROUP BY p.id, p.nume, p.prenume, p.email, p.telefon
+    ORDER BY MAX(ms.started_at) DESC
+  `;
+
+  db.query(query, [doctorId], (err, results) => {
+    if (err) {
+      console.error("Eroare obținere pacienți doctor:", err);
+      return res.status(500).json({ error: "Eroare server" });
+    }
+    res.json({ success: true, patients: results });
+  });
+});
+
+// GET /api/sensors/doctor/all-patients - Obține TOȚI pacienții doctorului (nu doar cei cu sesiuni active)
+router.get("/doctor/all-patients", verifyToken, (req, res) => {
+  const doctorId = req.user.id;
+  const { search } = req.query;
+
+  let query = `
+    SELECT DISTINCT p.id, p.nume, p.prenume, p.email, p.telefon
+    FROM pacienti p
+    INNER JOIN programari pr ON p.id = pr.pacient_id AND pr.doctor_id = ?
+    WHERE 1=1
+  `;
+  const params = [doctorId];
+
+  if (search) {
+    query += " AND (p.nume LIKE ? OR p.prenume LIKE ? OR p.email LIKE ?)";
+    const searchTerm = `%${search}%`;
+    params.push(searchTerm, searchTerm, searchTerm);
+  }
+
+  query += " ORDER BY p.nume, p.prenume LIMIT 50";
+
+  db.query(query, params, (err, results) => {
+    if (err) {
+      console.error("Eroare obținere pacienți doctor:", err);
+      return res.status(500).json({ error: "Eroare server" });
+    }
+    res.json({ success: true, patients: results });
+  });
+});
+
+// POST /api/sensors/doctor/assign-session - Creează sesiune de monitorizare
+router.post("/doctor/assign-session", verifyToken, (req, res) => {
+  const doctorId = req.user.id;
+  const { pacient_id } = req.body;
+
+  if (!pacient_id) {
+    return res.status(400).json({ error: "Date incomplete" });
+  }
+
+  const validTypes = ["ecg", "puls", "temperatura"];
+
+  // Verifică dacă pacientul aparține doctorului (are programare cu el)
+  const checkQuery = `
+    SELECT COUNT(*) as count FROM programari 
+    WHERE pacient_id = ? AND doctor_id = ?
+  `;
+
+  db.query(checkQuery, [pacient_id, doctorId], (err, results) => {
+    if (err) {
+      console.error("Eroare verificare pacient:", err);
+      return res.status(500).json({ error: "Eroare server" });
+    }
+
+    if (results[0].count === 0) {
+      return res.status(403).json({ error: "Acest pacient nu aparține dvs." });
+    }
+
+    const existingSessionQuery = `
+      SELECT id, sensor_type FROM monitoring_sessions
+      WHERE pacient_id = ? AND doctor_id = ? AND status = 'activa'
+    `;
+
+    db.query(existingSessionQuery, [pacient_id, doctorId], (existingErr, existingRows) => {
+      if (existingErr) {
+        console.error("Eroare verificare sesiune existentă:", existingErr);
+        return res.status(500).json({ error: "Eroare server" });
+      }
+
+      const existingTypes = new Set(existingRows.map((r) => r.sensor_type));
+      const missingTypes = validTypes.filter((t) => !existingTypes.has(t));
+
+      if (missingTypes.length === 0) {
+        return res.json({
+          success: true,
+          session_ids: existingRows.map((r) => r.id),
+          already_assigned: true,
+          message: "Pacientul are deja toate sesiunile active (ecg, puls, temperatura)"
+        });
+      }
+
+      const insertValues = missingTypes.map((sensorType) => [pacient_id, doctorId, sensorType]);
+      const insertQuery = `
+        INSERT INTO monitoring_sessions (pacient_id, doctor_id, sensor_type, status)
+        VALUES ?
+      `;
+
+      db.query(insertQuery, [insertValues.map((v) => [...v, 'activa'])], (insertErr, result) => {
+        if (insertErr) {
+          console.error("Eroare creare sesiune:", insertErr);
+          return res.status(500).json({ error: "Eroare server" });
+        }
+        res.json({
+          success: true,
+          created_sessions: result.affectedRows,
+          already_assigned: false,
+          message: `S-au creat ${result.affectedRows} sesiuni noi` 
+        });
+      });
+    });
+  });
+});
+
+// PUT /api/sensors/doctor/end-patient-sessions/:pacientId - Finalizează toate sesiunile active ale pacientului la doctorul curent
+router.put("/doctor/end-patient-sessions/:pacientId", verifyToken, (req, res) => {
+  const doctorId = req.user.id;
+  const { pacientId } = req.params;
+
+  const updateQuery = `
+    UPDATE monitoring_sessions
+    SET status = 'finalizata', ended_at = NOW()
+    WHERE pacient_id = ? AND doctor_id = ? AND status = 'activa'
+  `;
+
+  db.query(updateQuery, [pacientId, doctorId], (err, result) => {
+    if (err) {
+      console.error("Eroare finalizare sesiuni pacient:", err);
+      return res.status(500).json({ error: "Eroare server" });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Nu există sesiuni active pentru acest pacient" });
+    }
+
+    res.json({ success: true, ended_sessions: result.affectedRows, message: "Sesiuni finalizate" });
+  });
+});
+
+// PUT /api/sensors/doctor/end-session/:sessionId - Finalizeaza sesiune
+router.put("/doctor/end-session/:sessionId", verifyToken, (req, res) => {
+  const doctorId = req.user.id;
+  const { sessionId } = req.params;
+
+  // Verifică că sesiunea aparține doctorului curent
+  const checkQuery = `
+    SELECT id FROM monitoring_sessions 
+    WHERE id = ? AND doctor_id = ? AND status = 'activa'
+  `;
+
+  db.query(checkQuery, [sessionId, doctorId], (err, results) => {
+    if (err) {
+      console.error("Eroare verificare sesiune:", err);
+      return res.status(500).json({ error: "Eroare server" });
+    }
+
+    if (results.length === 0) {
+      return res.status(403).json({ error: "Sesiune not found or access denied" });
+    }
+
+    // Finalizează sesiunea
+    const updateQuery = `
+      UPDATE monitoring_sessions 
+      SET status = 'finalizata', ended_at = NOW()
+      WHERE id = ?
+    `;
+
+    db.query(updateQuery, [sessionId], (err) => {
+      if (err) {
+        console.error("Eroare finalizare sesiune:", err);
+        return res.status(500).json({ error: "Eroare server" });
+      }
+      res.json({ success: true, message: "Sesiune finalizată" });
+    });
   });
 });
 
