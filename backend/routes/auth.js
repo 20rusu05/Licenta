@@ -46,7 +46,7 @@ router.post("/register", async (req, res) => {
 
     res.json({
       message: "Utilizator creat",
-      user: { id: result.insertId, nume, prenume, email, role: isDoctor ? "doctor" : "pacient" }
+      user: { id: result.insertId, nume, prenume, email, avatar_url: null, role: isDoctor ? "doctor" : "pacient" }
     });
   } catch (err) {
     console.error(err);
@@ -64,7 +64,7 @@ router.post("/login", async (req, res) => {
 
     const [admini] = await db
       .promise()
-      .query("SELECT id, nume, prenume, email, telefon, parola FROM admini WHERE email = ?", [email]);
+      .query("SELECT id, nume, prenume, email, telefon, parola, NULL AS avatar_url FROM admini WHERE email = ?", [email]);
 
     if (admini.length > 0) {
       user = admini[0];
@@ -72,7 +72,7 @@ router.post("/login", async (req, res) => {
     } else {
       const [doctori] = await db
         .promise()
-        .query("SELECT id, nume, prenume, email, telefon, parola FROM doctori WHERE email = ?", [email]);
+        .query("SELECT id, nume, prenume, email, telefon, parola, avatar_url FROM doctori WHERE email = ?", [email]);
 
       if (doctori.length > 0) {
         user = doctori[0];
@@ -80,7 +80,7 @@ router.post("/login", async (req, res) => {
       } else {
         const [pacienti] = await db
           .promise()
-          .query("SELECT id, nume, prenume, email, telefon, parola FROM pacienti WHERE email = ?", [email]);
+          .query("SELECT id, nume, prenume, email, telefon, parola, avatar_url FROM pacienti WHERE email = ?", [email]);
         if (pacienti.length > 0) {
           user = pacienti[0];
           role = "pacient";

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_ORIGIN = import.meta.env.VITE_BACKEND_URL || `https://${window.location.hostname}:3001`;
+export const BACKEND_ORIGIN = import.meta.env.VITE_BACKEND_URL || `https://${window.location.hostname}:3001`;
 
 export const api = axios.create({
   baseURL: new URL('/api', BACKEND_ORIGIN).toString(),
@@ -8,6 +8,12 @@ export const api = axios.create({
     'Content-Type': 'application/json'
   }
 });
+
+export const getBackendAssetUrl = (assetPath) => {
+  if (!assetPath) return '';
+  if (/^https?:\/\//i.test(assetPath)) return assetPath;
+  return new URL(assetPath, BACKEND_ORIGIN).toString();
+};
 
 // Attach token automatically from localStorage for every request
 api.interceptors.request.use((config) => {

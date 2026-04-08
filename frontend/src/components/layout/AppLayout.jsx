@@ -3,6 +3,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import Sidebar, { drawerWidth } from './Sidebar';
 import ThemeToggle from './ThemeToggle';
 import { useNavigate } from 'react-router-dom';
+import { getBackendAssetUrl } from '../../services/api';
 
 export default function AppLayout({ children }) {
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ export default function AppLayout({ children }) {
             sx={{ mr: 1 }}
             aria-label="profil"
           >
-            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+            <Avatar src={getBackendAssetUrl(user?.avatar_url)} sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
               {user?.nume?.[0]?.toUpperCase()}
             </Avatar>
           </IconButton>

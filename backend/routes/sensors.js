@@ -34,24 +34,39 @@ router.get("/status", (req, res) => {
   res.json({ sensors: status, count: status.length });
 });
 
-router.get("/latest/:sensorType", (req, res) => {
+router.get("/latest/:sensorType", verifyToken, (req, res) => {
   const { sensorType } = req.params;
   const limit = parseInt(req.query.limit) || 100;
+  const { pacient_id } = req.query;
+  const isPacient = req.user?.role === "pacient";
 
   const validTypes = ["ecg", "puls", "temperatura"];
   if (!validTypes.includes(sensorType)) {
     return res.status(400).json({ error: "Tip senzor invalid" });
   }
 
-  const query = `
+  let query = `
     SELECT id, sensor_type, pacient_id, value_1, value_2, device_id, created_at
     FROM sensor_readings
     WHERE sensor_type = ?
+  `;
+  const params = [sensorType];
+
+  if (isPacient) {
+    query += " AND pacient_id = ?";
+    params.push(req.user.id);
+  } else if (pacient_id) {
+    query += " AND pacient_id = ?";
+    params.push(pacient_id);
+  }
+
+  query += `
     ORDER BY created_at DESC
     LIMIT ?
   `;
+  params.push(limit);
 
-  db.query(query, [sensorType, limit], (err, results) => {
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error("Eroare citire senzori:", err);
       return res.status(500).json({ error: "Eroare server" });
@@ -61,9 +76,11 @@ router.get("/latest/:sensorType", (req, res) => {
   });
 });
 
-router.get("/history/:sensorType", (req, res) => {
+router.get("/history/:sensorType", verifyToken, (req, res) => {
   const { sensorType } = req.params;
   const { pacient_id, from, to, limit = 500 } = req.query;
+  const isPacient = req.user?.role === "pacient";
+  const effectivePacientId = isPacient ? req.user.id : pacient_id;
 
   let query = `
     SELECT id, sensor_type, pacient_id, value_1, value_2, device_id, created_at
@@ -72,9 +89,9 @@ router.get("/history/:sensorType", (req, res) => {
   `;
   const params = [sensorType];
 
-  if (pacient_id) {
+  if (effectivePacientId) {
     query += " AND pacient_id = ?";
-    params.push(pacient_id);
+    params.push(effectivePacientId);
   }
   if (from) {
     query += " AND created_at >= ?";
@@ -207,8 +224,9 @@ router.post("/reading", (req, res) => {
 });
 
 // GET /api/sensors/sessions - Sesiuni de monitorizare
-router.get("/sessions", (req, res) => {
+router.get("/sessions", verifyToken, (req, res) => {
   const { pacient_id, doctor_id, status } = req.query;
+  const isPacient = req.user?.role === "pacient";
 
   let query = `
     SELECT ms.*, 
@@ -221,7 +239,10 @@ router.get("/sessions", (req, res) => {
   `;
   const params = [];
 
-  if (pacient_id) {
+  if (isPacient) {
+    query += " AND ms.pacient_id = ?";
+    params.push(req.user.id);
+  } else if (pacient_id) {
     query += " AND ms.pacient_id = ?";
     params.push(pacient_id);
   }

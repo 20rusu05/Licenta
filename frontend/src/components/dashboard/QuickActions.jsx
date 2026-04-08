@@ -1,7 +1,7 @@
-import { Paper, Box, Typography, Button, Grid } from '@mui/material';
+import { Paper, Box, Typography, Grid } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import MedicationIcon from '@mui/icons-material/Medication';
-import HistoryIcon from '@mui/icons-material/History';
+import SensorsIcon from '@mui/icons-material/Sensors';
 import PersonIcon from '@mui/icons-material/Person';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,8 +11,8 @@ export default function QuickActions() {
   const actions = [
     {
       icon: <CalendarMonthIcon />,
-      title: 'Programare nouă',
-      description: 'Solicită o consultație',
+      title: 'Programările mele',
+      description: 'Vezi consultațiile tale',
       color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       action: () => navigate('/dashboard/programari')
     },
@@ -24,18 +24,18 @@ export default function QuickActions() {
       action: () => navigate('/dashboard/medicamente')
     },
     {
-      icon: <HistoryIcon />,
-      title: 'Istoric',
-      description: 'Programări anterioare',
+      icon: <SensorsIcon />,
+      title: 'Senzori live',
+      description: 'Datele tale în timp real',
       color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      action: () => navigate('/dashboard/programari')
+      action: () => navigate('/dashboard/senzori')
     },
     {
       icon: <PersonIcon />,
       title: 'Profil',
       description: 'Setări cont',
       color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-      action: () => {} // Disabled pentru moment
+      action: () => navigate('/dashboard/profil')
     }
   ];
 
@@ -47,17 +47,21 @@ export default function QuickActions() {
 
       <Grid container spacing={2}>
         {actions.map((action, index) => (
-          <Grid size={{ xs: 12, sm: 6 }} key={index}>
+          <Grid size={{ xs: 12, sm: 6 }} key={index} sx={{ display: 'flex' }}>
             <Paper
               onClick={action.action}
               sx={{
                 p: 2.5,
+                width: '100%',
+                minHeight: 190,
                 cursor: 'pointer',
                 transition: 'all 0.3s',
                 background: action.color,
                 color: 'white',
                 position: 'relative',
                 overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'stretch',
                 '&:hover': {
                   transform: 'translateY(-4px)',
                   boxShadow: 6

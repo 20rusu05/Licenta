@@ -1,7 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
 import authRouter from "./routes/auth.js";
@@ -19,6 +21,9 @@ import { applyPlausibilityFilter } from "./sensorPlausibility.js";
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, "uploads");
 const httpsKeyPath = process.env.HTTPS_KEY_PATH || "./certs/server.key";
 const httpsCertPath = process.env.HTTPS_CERT_PATH || "./certs/server.crt";
 
@@ -50,8 +55,13 @@ app.set("io", io);
 app.set("connectedSensors", connectedSensors);
 app.set("sensorFilterState", sensorFilterState);
 
+if (!existsSync(uploadsDir)) {
+  mkdirSync(uploadsDir, { recursive: true });
+}
+
 app.use(cors({ origin: (origin, callback) => callback(null, true), credentials: true }));
 app.use(express.json());
+app.use("/uploads", express.static(uploadsDir));
 
 app.use("/api/auth", authRouter);
 app.use("/api/medicamente", medicamenteRouter);

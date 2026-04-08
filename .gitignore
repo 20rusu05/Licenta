@@ -11,6 +11,9 @@ Thumbs.db
 # Logs
 *.log
 
+# User uploaded assets
+backend/uploads/
+
 # Python cache/venv
 **/__pycache__/
 *.py[cod]

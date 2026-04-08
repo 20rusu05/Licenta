@@ -66,25 +66,32 @@ export default function NextAppointmentCard({ appointment }) {
         }} 
         elevation={3}
       >
-        <Box sx={{ textAlign: 'center' }}>
+        <Box
+          sx={{
+            textAlign: 'center',
+            minHeight: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
           <CalendarMonthIcon sx={{ fontSize: 80, mb: 2, opacity: 0.7 }} />
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
             Nu ai programări viitoare
           </Typography>
           <Typography variant="body2" sx={{ mb: 3, opacity: 0.9 }}>
-            Programează o consultație pentru a primi îngrijire medicală
+            Medicul va crea programarea când este disponibilă o consultație.
           </Typography>
-          <Button 
-            variant="contained"
-            onClick={() => navigate('/dashboard/programari')}
-            sx={{ 
-              bgcolor: 'white', 
-              color: 'primary.main',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' }
+          <Chip
+            label="Așteaptă confirmarea medicului"
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.18)',
+              color: 'white',
+              fontWeight: 600,
+              border: '1px solid rgba(255,255,255,0.35)',
             }}
-          >
-            Programează acum
-          </Button>
+          />
         </Box>
       </Paper>
     );

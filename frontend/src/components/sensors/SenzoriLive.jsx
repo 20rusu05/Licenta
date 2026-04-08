@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Box, Container, Typography, Grid, Card, CardContent, Chip,
   ToggleButton, ToggleButtonGroup, CircularProgress, Alert, IconButton, Button,
@@ -128,6 +128,25 @@ function buildEcgDisplay(data) {
 
 export default function SenzoriLive() {
   const theme = useTheme();
+  const currentUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+  const isPacient = currentUser?.role === 'pacient';
+  const ownPatient = useMemo(() => {
+    if (!isPacient || !currentUser?.id) return null;
+    return {
+      id: Number(currentUser.id),
+      prenume: currentUser.prenume || '',
+      nume: currentUser.nume || '',
+      email: currentUser.email || '',
+      active_sessions_count: 1,
+    };
+  }, [isPacient, currentUser]);
+
   const [activeTab, setActiveTab] = useState('all');
   const [connected, setConnected] = useState(false);
   const [sensorStatus, setSensorStatus] = useState({});
@@ -499,6 +518,14 @@ export default function SenzoriLive() {
 
   useEffect(() => {
     checkSensorsRunning();
+    if (isPacient) {
+      if (ownPatient) {
+        setPatients([ownPatient]);
+        setAllPatients([ownPatient]);
+        setSelectedPatient(ownPatient);
+      }
+      return;
+    }
     fetchPatients();
     fetchAllPatients();
   }, []);
@@ -705,84 +732,96 @@ export default function SenzoriLive() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControl fullWidth size="small" sx={{ minWidth: 220 }}>
-                  <Select
-                    value={assignmentFilter}
-                    onChange={(e) => setAssignmentFilter(e.target.value)}
-                  >
-                    <MenuItem value="all">Toți pacienții</MenuItem>
-                    <MenuItem value="assigned">Doar pacienții asignați</MenuItem>
-                    <MenuItem value="unassigned">Doar pacienții neasignați</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
+              {!isPacient && (
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <FormControl fullWidth size="small" sx={{ minWidth: 220 }}>
+                    <Select
+                      value={assignmentFilter}
+                      onChange={(e) => setAssignmentFilter(e.target.value)}
+                    >
+                      <MenuItem value="all">Toți pacienții</MenuItem>
+                      <MenuItem value="assigned">Doar pacienții asignați</MenuItem>
+                      <MenuItem value="unassigned">Doar pacienții neasignați</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
             </Grid>
 
-            <TextField
-              fullWidth
-              size="small"
-              label="Caută pacient pentru asignare/deasignare"
-              value={searchQuery}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSearchQuery(value);
-                fetchAllPatients(value);
-              }}
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-              }}
-              sx={{ mb: 1.5 }}
-            />
+            {!isPacient && (
+              <>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Caută pacient pentru asignare/deasignare"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchQuery(value);
+                    fetchAllPatients(value);
+                  }}
+                  InputProps={{
+                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  }}
+                  sx={{ mb: 1.5 }}
+                />
 
-            <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', mb: 1.5 }}>
-              {filteredPatients.map((p) => {
-                const activeSession = patients.find((ap) => Number(ap.id) === Number(p.id));
-                const isAssigned = isPatientAssigned(p.id);
+                <List dense sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', mb: 1.5 }}>
+                  {filteredPatients.map((p) => {
+                    const activeSession = patients.find((ap) => Number(ap.id) === Number(p.id));
+                    const isAssigned = isPatientAssigned(p.id);
 
-                return (
-                  <ListItem
-                    key={p.id}
-                    disablePadding
-                    secondaryAction={
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color={isAssigned ? 'error' : 'success'}
-                        disabled={assigningDevice || Number(unassigningPatientId) === Number(p.id)}
-                        onClick={() => {
-                          if (isAssigned) {
-                            handleUnassignDevice(p.id);
-                          } else {
-                            handleAssignDevice(p.id);
-                          }
-                        }}
+                    return (
+                      <ListItem
+                        key={p.id}
+                        disablePadding
+                        secondaryAction={
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color={isAssigned ? 'error' : 'success'}
+                            disabled={assigningDevice || Number(unassigningPatientId) === Number(p.id)}
+                            onClick={() => {
+                              if (isAssigned) {
+                                handleUnassignDevice(p.id);
+                              } else {
+                                handleAssignDevice(p.id);
+                              }
+                            }}
+                          >
+                            {isAssigned ? 'Deasignare' : 'Asignare'}
+                          </Button>
+                        }
                       >
-                        {isAssigned ? 'Deasignare' : 'Asignare'}
-                      </Button>
-                    }
-                  >
-                    <ListItemButton onClick={() => {
-                      if (activeSession) {
-                        setSelectedPatient(activeSession);
-                      }
-                    }}>
+                        <ListItemButton onClick={() => {
+                          if (activeSession) {
+                            setSelectedPatient(activeSession);
+                          }
+                        }}>
+                          <ListItemText
+                            primary={`${p.prenume} ${p.nume}`}
+                            secondary={p.email}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
+                  {!loadingAllPatients && filteredPatients.length === 0 && (
+                    <ListItem>
                       <ListItemText
-                        primary={`${p.prenume} ${p.nume}`}
-                        secondary={p.email}
+                        primary={allPatients.length === 0 ? 'Niciun pacient găsit' : 'Niciun pacient pentru filtrul selectat'}
                       />
-                    </ListItemButton>
-                  </ListItem>
-                );
-              })}
-              {!loadingAllPatients && filteredPatients.length === 0 && (
-                <ListItem>
-                  <ListItemText
-                    primary={allPatients.length === 0 ? 'Niciun pacient găsit' : 'Niciun pacient pentru filtrul selectat'}
-                  />
-                </ListItem>
-              )}
-            </List>
+                    </ListItem>
+                  )}
+                </List>
+              </>
+            )}
+
+            {isPacient && (
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                Cont pacient: puteți vedea doar datele proprii ale senzorilor.
+              </Alert>
+            )}
 
             {patients.length === 0 && !loadingPatients && (
               <Alert severity="info">
@@ -1085,7 +1124,7 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
             onClick={onTogglePause}
             startIcon={paused ? <PlayArrowIcon /> : <PauseIcon />}
           >
-            {paused ? 'Resume' : 'Pauza'}
+            {paused ? 'Reia' : 'Pauză'}
           </Button>
         </Box>
         {data.length > 0 && (
