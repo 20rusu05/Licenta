@@ -15,6 +15,8 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import SearchIcon from '@mui/icons-material/Search';
+import HistoryIcon from '@mui/icons-material/History';
+import DownloadIcon from '@mui/icons-material/Download';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, AreaChart, Area, ReferenceLine
@@ -34,6 +36,77 @@ const ECG_TARGET_HALF_SPAN_MV = 85;
 const ECG_MAX_GAIN = 12;
 const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
+const HISTORY_PAGE_SIZE = 50;
+const HISTORY_LIMITS = {
+  ecg: 15000,
+  puls: 5000,
+  temperatura: 5000,
+};
+
+function toIsoDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function toSqlDateTime(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function getHistoryRangeBounds(range, customFrom, customTo) {
+  const now = new Date();
+
+  if (range === '24h') {
+    const from = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+    return { from: from.toISOString(), to: now.toISOString() };
+  }
+
+  if (range === '7d') {
+    const from = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+    return { from: from.toISOString(), to: now.toISOString() };
+  }
+
+  if (range === '30d') {
+    const from = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    return { from: from.toISOString(), to: now.toISOString() };
+  }
+
+  return {
+    from: toSqlDateTime(customFrom),
+    to: toSqlDateTime(customTo),
+  };
+}
+
+function escapeCsvValue(value) {
+  const normalized = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+  return normalized;
+}
+
+function downloadCsv(fileName, headers, rows) {
+  const lines = [headers.join(',')];
+  rows.forEach((row) => {
+    lines.push(row.map(escapeCsvValue).join(','));
+  });
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 function normalizeEcgValue(value) {
   const numeric = Number(value);
@@ -179,6 +252,21 @@ export default function SenzoriLive() {
   const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
   const [pendingAssignPatientId, setPendingAssignPatientId] = useState(null);
   const [pendingAssignPatientName, setPendingAssignPatientName] = useState('');
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySnapshot, setHistorySnapshot] = useState({
+    ecg: [],
+    puls: [],
+    temperatura: [],
+  });
+  const [historyVisibleCounts, setHistoryVisibleCounts] = useState({
+    ecg: HISTORY_PAGE_SIZE,
+    puls: HISTORY_PAGE_SIZE,
+    temperatura: HISTORY_PAGE_SIZE,
+  });
+  const [historyRange, setHistoryRange] = useState('7d');
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
   
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
@@ -687,6 +775,143 @@ export default function SenzoriLive() {
     );
   };
 
+  const loadDetailedHistoryForDialog = async (pacientId, range = historyRange, customFrom = historyFrom, customTo = historyTo) => {
+    if (!pacientId) return;
+
+    const bounds = getHistoryRangeBounds(range, customFrom, customTo);
+
+    if (range === 'custom') {
+      if (!bounds.from || !bounds.to) {
+        showToast('Completează intervalul personalizat (de la / până la)', 'warning');
+        return;
+      }
+      if (new Date(bounds.from) > new Date(bounds.to)) {
+        showToast('Interval invalid: data de început trebuie să fie înainte de data de sfârșit', 'warning');
+        return;
+      }
+    }
+
+    setHistoryLoading(true);
+    try {
+      const [ecgRes, pulsRes, tempRes] = await Promise.all([
+        api.get('/sensors/history/ecg', {
+          params: {
+            pacient_id: pacientId,
+            from: bounds.from,
+            to: bounds.to,
+            limit: HISTORY_LIMITS.ecg,
+          }
+        }),
+        api.get('/sensors/history/puls', {
+          params: {
+            pacient_id: pacientId,
+            from: bounds.from,
+            to: bounds.to,
+            limit: HISTORY_LIMITS.puls,
+          }
+        }),
+        api.get('/sensors/history/temperatura', {
+          params: {
+            pacient_id: pacientId,
+            from: bounds.from,
+            to: bounds.to,
+            limit: HISTORY_LIMITS.temperatura,
+          }
+        }),
+      ]);
+
+      setHistorySnapshot({
+        ecg: ecgRes.data.readings || [],
+        puls: pulsRes.data.readings || [],
+        temperatura: tempRes.data.readings || [],
+      });
+      setHistoryVisibleCounts({
+        ecg: HISTORY_PAGE_SIZE,
+        puls: HISTORY_PAGE_SIZE,
+        temperatura: HISTORY_PAGE_SIZE,
+      });
+    } catch (err) {
+      console.error('Eroare încărcare istoric detaliat:', err);
+      showToast('Nu am putut încărca istoricul pacientului', 'error');
+      setHistorySnapshot({ ecg: [], puls: [], temperatura: [] });
+      setHistoryVisibleCounts({
+        ecg: HISTORY_PAGE_SIZE,
+        puls: HISTORY_PAGE_SIZE,
+        temperatura: HISTORY_PAGE_SIZE,
+      });
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleLoadMoreHistory = (sensorType) => {
+    setHistoryVisibleCounts((prev) => ({
+      ...prev,
+      [sensorType]: prev[sensorType] + HISTORY_PAGE_SIZE,
+    }));
+  };
+
+  const handleExportSensorCsv = (sensorType) => {
+    const rows = historySnapshot[sensorType] || [];
+    if (!rows.length || !selectedPatient) {
+      showToast('Nu există date pentru export', 'warning');
+      return;
+    }
+
+    const fileSafePatient = `${selectedPatient.prenume || ''}_${selectedPatient.nume || ''}`
+      .trim()
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+
+    const csvRows = rows.map((r) => [
+      r.id,
+      r.sensor_type,
+      r.pacient_id,
+      r.value_1,
+      r.value_2,
+      r.device_id,
+      r.created_at,
+    ]);
+
+    downloadCsv(
+      `${fileSafePatient || 'pacient'}_${sensorType}_${historyRange}.csv`,
+      ['id', 'sensor_type', 'pacient_id', 'value_1', 'value_2', 'device_id', 'created_at'],
+      csvRows
+    );
+  };
+
+  const handleExportAllHistoryCsv = () => {
+    const mergedRows = ['ecg', 'puls', 'temperatura']
+      .flatMap((type) => (historySnapshot[type] || []).map((r) => ({ ...r, sensor_type: type })))
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    if (!mergedRows.length || !selectedPatient) {
+      showToast('Nu există date pentru export', 'warning');
+      return;
+    }
+
+    const fileSafePatient = `${selectedPatient.prenume || ''}_${selectedPatient.nume || ''}`
+      .trim()
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+
+    const csvRows = mergedRows.map((r) => [
+      r.id,
+      r.sensor_type,
+      r.pacient_id,
+      r.value_1,
+      r.value_2,
+      r.device_id,
+      r.created_at,
+    ]);
+
+    downloadCsv(
+      `${fileSafePatient || 'pacient'}_istoric_complet_${historyRange}.csv`,
+      ['id', 'sensor_type', 'pacient_id', 'value_1', 'value_2', 'device_id', 'created_at'],
+      csvRows
+    );
+  };
+
   const filteredPatients = allPatients.filter((p) => {
     const assigned = isPatientAssigned(p.id);
     if (assignmentFilter === 'assigned') return assigned;
@@ -840,6 +1065,20 @@ export default function SenzoriLive() {
                 <Typography variant="body2">
                   <strong>Pacient selectat:</strong> {selectedPatient.prenume} {selectedPatient.nume}
                 </Typography>
+                {!isPacient && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<HistoryIcon />}
+                    sx={{ mt: 1.25 }}
+                    onClick={async () => {
+                      setHistoryDialogOpen(true);
+                      await loadDetailedHistoryForDialog(selectedPatient.id, historyRange, historyFrom, historyTo);
+                    }}
+                  >
+                    Vezi istoricul pacientului
+                  </Button>
+                )}
               </Paper>
             )}
           </CardContent>
@@ -1024,6 +1263,202 @@ export default function SenzoriLive() {
             >
               Confirmă
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={historyDialogOpen}
+          onClose={() => setHistoryDialogOpen(false)}
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle>
+            Istoric pacient: {selectedPatient?.prenume} {selectedPatient?.nume}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Grid container spacing={1.5} sx={{ mb: 2 }}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <FormControl fullWidth size="small">
+                  <Select
+                    value={historyRange}
+                    onChange={(e) => setHistoryRange(e.target.value)}
+                  >
+                    <MenuItem value="24h">Ultimele 24 ore</MenuItem>
+                    <MenuItem value="7d">Ultimele 7 zile</MenuItem>
+                    <MenuItem value="30d">Ultimele 30 zile</MenuItem>
+                    <MenuItem value="custom">Interval personalizat</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              {historyRange === 'custom' && (
+                <>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="datetime-local"
+                      label="De la"
+                      InputLabelProps={{ shrink: true }}
+                      value={historyFrom}
+                      onChange={(e) => setHistoryFrom(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="datetime-local"
+                      label="Până la"
+                      InputLabelProps={{ shrink: true }}
+                      value={historyTo}
+                      onChange={(e) => setHistoryTo(e.target.value)}
+                    />
+                  </Grid>
+                </>
+              )}
+              <Grid size={{ xs: 12, md: historyRange === 'custom' ? 3 : 9 }} sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="contained"
+                  onClick={() => loadDetailedHistoryForDialog(selectedPatient?.id, historyRange, historyFrom, historyTo)}
+                  disabled={historyLoading || !selectedPatient?.id}
+                >
+                  Aplică filtru
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleExportAllHistoryCsv}
+                  disabled={historyLoading}
+                >
+                  Export toate datele
+                </Button>
+              </Grid>
+            </Grid>
+
+            {historyLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : (
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>ECG</Typography>
+                    <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleExportSensorCsv('ecg')}>
+                      CSV
+                    </Button>
+                  </Box>
+                  <Paper variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                    <List dense>
+                      {historySnapshot.ecg.length === 0 && (
+                        <ListItem><ListItemText primary="Fără date ECG" /></ListItem>
+                      )}
+                      {historySnapshot.ecg.slice().reverse().slice(0, historyVisibleCounts.ecg).map((r) => (
+                        <ListItem key={r.id}>
+                          <ListItemText
+                            primary={`${Number(r.value_1).toFixed(1)} mV`}
+                            secondary={new Date(r.created_at).toLocaleString('ro-RO')}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                  {historySnapshot.ecg.length > historyVisibleCounts.ecg && (
+                    <Button
+                      size="small"
+                      sx={{ mt: 1 }}
+                      onClick={() => handleLoadMoreHistory('ecg')}
+                    >
+                      Afișează încă {Math.min(HISTORY_PAGE_SIZE, historySnapshot.ecg.length - historyVisibleCounts.ecg)}
+                    </Button>
+                  )}
+                  {historySnapshot.ecg.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                      Afișate {Math.min(historyVisibleCounts.ecg, historySnapshot.ecg.length)} din {historySnapshot.ecg.length}
+                    </Typography>
+                  )}
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Puls</Typography>
+                    <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleExportSensorCsv('puls')}>
+                      CSV
+                    </Button>
+                  </Box>
+                  <Paper variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                    <List dense>
+                      {historySnapshot.puls.length === 0 && (
+                        <ListItem><ListItemText primary="Fără date puls" /></ListItem>
+                      )}
+                      {historySnapshot.puls.slice().reverse().slice(0, historyVisibleCounts.puls).map((r) => (
+                        <ListItem key={r.id}>
+                          <ListItemText
+                            primary={`${Number(r.value_1).toFixed(0)} BPM`}
+                            secondary={new Date(r.created_at).toLocaleString('ro-RO')}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                  {historySnapshot.puls.length > historyVisibleCounts.puls && (
+                    <Button
+                      size="small"
+                      sx={{ mt: 1 }}
+                      onClick={() => handleLoadMoreHistory('puls')}
+                    >
+                      Afișează încă {Math.min(HISTORY_PAGE_SIZE, historySnapshot.puls.length - historyVisibleCounts.puls)}
+                    </Button>
+                  )}
+                  {historySnapshot.puls.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                      Afișate {Math.min(historyVisibleCounts.puls, historySnapshot.puls.length)} din {historySnapshot.puls.length}
+                    </Typography>
+                  )}
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Temperatură</Typography>
+                    <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleExportSensorCsv('temperatura')}>
+                      CSV
+                    </Button>
+                  </Box>
+                  <Paper variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                    <List dense>
+                      {historySnapshot.temperatura.length === 0 && (
+                        <ListItem><ListItemText primary="Fără date temperatură" /></ListItem>
+                      )}
+                      {historySnapshot.temperatura.slice().reverse().slice(0, historyVisibleCounts.temperatura).map((r) => (
+                        <ListItem key={r.id}>
+                          <ListItemText
+                            primary={`${Number(r.value_1).toFixed(1)} °C`}
+                            secondary={new Date(r.created_at).toLocaleString('ro-RO')}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                  {historySnapshot.temperatura.length > historyVisibleCounts.temperatura && (
+                    <Button
+                      size="small"
+                      sx={{ mt: 1 }}
+                      onClick={() => handleLoadMoreHistory('temperatura')}
+                    >
+                      Afișează încă {Math.min(HISTORY_PAGE_SIZE, historySnapshot.temperatura.length - historyVisibleCounts.temperatura)}
+                    </Button>
+                  )}
+                  {historySnapshot.temperatura.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                      Afișate {Math.min(historyVisibleCounts.temperatura, historySnapshot.temperatura.length)} din {historySnapshot.temperatura.length}
+                    </Typography>
+                  )}
+                </Grid>
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setHistoryDialogOpen(false)}>Închide</Button>
           </DialogActions>
         </Dialog>
 

@@ -51,9 +51,25 @@ const io = new Server(httpsServer, {
 
 const connectedSensors = {};
 const sensorFilterState = new Map();
+const sensorDbPersistState = new Map();
+const SENSOR_DB_MIN_INTERVAL_MS = parseInt(process.env.SENSOR_DB_MIN_INTERVAL_MS || "3000", 10);
+
+function shouldPersistSensorReading({ sensorType, pacientId, deviceId, timestampMs }) {
+  const key = `${sensorType || "unknown"}|${pacientId || "no-patient"}|${deviceId || "unknown"}`;
+  const lastPersistedAt = sensorDbPersistState.get(key) || 0;
+  if (timestampMs - lastPersistedAt < SENSOR_DB_MIN_INTERVAL_MS) {
+    return false;
+  }
+
+  sensorDbPersistState.set(key, timestampMs);
+  return true;
+}
+
 app.set("io", io);
 app.set("connectedSensors", connectedSensors);
 app.set("sensorFilterState", sensorFilterState);
+app.set("sensorDbPersistState", sensorDbPersistState);
+app.set("sensorDbMinIntervalMs", SENSOR_DB_MIN_INTERVAL_MS);
 
 if (!existsSync(uploadsDir)) {
   mkdirSync(uploadsDir, { recursive: true });
@@ -95,6 +111,7 @@ io.on("connection", (socket) => {
 
   socket.on("sensor_data", (data) => {
     const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp } = data;
+    const readingTimestampMs = typeof timestamp === "number" ? timestamp * 1000 : Date.now();
 
     const filtered = applyPlausibilityFilter({
       sensorType: sensor_type,
@@ -102,7 +119,7 @@ io.on("connection", (socket) => {
       value2: value_2,
       deviceId: device_id,
       pacientId: pacient_id,
-      timestampMs: typeof timestamp === "number" ? timestamp * 1000 : Date.now(),
+      timestampMs: readingTimestampMs,
       stateMap: sensorFilterState,
     });
 
@@ -118,13 +135,20 @@ io.on("connection", (socket) => {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }
 
-    const query = `
-      INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    db.query(query, [sensor_type, pacient_id || null, filteredValue1, filteredValue2 || null, device_id || "unknown"], (err) => {
-      if (err) console.error("[DB] Eroare salvare citire:", err.message);
-    });
+    if (shouldPersistSensorReading({
+      sensorType: sensor_type,
+      pacientId: pacient_id,
+      deviceId: device_id,
+      timestampMs: readingTimestampMs,
+    })) {
+      const query = `
+        INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      db.query(query, [sensor_type, pacient_id || null, filteredValue1, filteredValue2 || null, device_id || "unknown"], (err) => {
+        if (err) console.error("[DB] Eroare salvare citire:", err.message);
+      });
+    }
 
     io.to(`sensor_${sensor_type}`).emit("sensor_update", {
       sensor_type,
@@ -149,21 +173,30 @@ io.on("connection", (socket) => {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }
 
-    const values = readings.map((r) => [
-      sensor_type,
-      pacient_id || null,
-      r.value,
-      null,
-      device_id || "unknown",
-    ]);
+    const values = readings
+      .filter((r) => shouldPersistSensorReading({
+        sensorType: sensor_type,
+        pacientId: pacient_id,
+        deviceId: device_id,
+        timestampMs: typeof r.timestamp === "number" ? r.timestamp * 1000 : Date.now(),
+      }))
+      .map((r) => [
+        sensor_type,
+        pacient_id || null,
+        r.value,
+        null,
+        device_id || "unknown",
+      ]);
 
-    const query = `
-      INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
-      VALUES ?
-    `;
-    db.query(query, [values], (err) => {
-      if (err) console.error("[DB] Eroare salvare batch:", err.message);
-    });
+    if (values.length > 0) {
+      const query = `
+        INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
+        VALUES ?
+      `;
+      db.query(query, [values], (err) => {
+        if (err) console.error("[DB] Eroare salvare batch:", err.message);
+      });
+    }
 
     io.to(`sensor_${sensor_type}`).emit("sensor_batch_update", {
       sensor_type,

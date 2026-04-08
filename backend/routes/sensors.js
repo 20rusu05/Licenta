@@ -1,5 +1,5 @@
 import express from "express";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,12 +12,61 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+function parseDateParam(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return null;
+
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
+}
+
 // Obiect global pentru a ține referințe la procesele de senzori
 const sensorProcesses = {
   ecg: null,
   puls: null,
   temperatura: null,
 };
+
+const sensorProcessPacients = {
+  ecg: null,
+  puls: null,
+  temperatura: null,
+};
+
+const sensorProcessStartupErrors = {
+  ecg: null,
+  puls: null,
+  temperatura: null,
+};
+
+function getOsSensorPids(sensorType) {
+  try {
+    const output = execSync(
+      `ps -eo pid,args | grep -E "[p]ython(3)? .*main.py.*--sensors[[:space:]]+${sensorType}(\\s|$)" | awk '{print $1}'`,
+      { encoding: "utf8" }
+    );
+    return output
+      .split("\n")
+      .map((line) => parseInt(line.trim(), 10))
+      .filter((pid) => Number.isInteger(pid) && pid > 0);
+  } catch (_err) {
+    return [];
+  }
+}
+
+function killOsSensorPids(pids) {
+  let killed = 0;
+  pids.forEach((pid) => {
+    try {
+      process.kill(pid);
+      killed += 1;
+    } catch (_err) {
+      // ignore processes that already exited
+    }
+  });
+  return killed;
+}
 
 router.get("/status", (req, res) => {
   const io = req.app.get("io");
@@ -82,6 +131,25 @@ router.get("/history/:sensorType", verifyToken, (req, res) => {
   const isPacient = req.user?.role === "pacient";
   const effectivePacientId = isPacient ? req.user.id : pacient_id;
 
+  const validTypes = ["ecg", "puls", "temperatura"];
+  if (!validTypes.includes(sensorType)) {
+    return res.status(400).json({ error: "Tip senzor invalid" });
+  }
+
+  const parsedFrom = from ? parseDateParam(from) : null;
+  const parsedTo = to ? parseDateParam(to) : null;
+
+  if (from && !parsedFrom) {
+    return res.status(400).json({ error: "Parametrul 'from' nu este o dată validă" });
+  }
+  if (to && !parsedTo) {
+    return res.status(400).json({ error: "Parametrul 'to' nu este o dată validă" });
+  }
+
+  if (parsedFrom && parsedTo && new Date(parsedFrom) > new Date(parsedTo)) {
+    return res.status(400).json({ error: "Interval invalid: 'from' trebuie să fie înainte de 'to'" });
+  }
+
   let query = `
     SELECT id, sensor_type, pacient_id, value_1, value_2, device_id, created_at
     FROM sensor_readings
@@ -93,17 +161,17 @@ router.get("/history/:sensorType", verifyToken, (req, res) => {
     query += " AND pacient_id = ?";
     params.push(effectivePacientId);
   }
-  if (from) {
+  if (parsedFrom) {
     query += " AND created_at >= ?";
-    params.push(from);
+    params.push(parsedFrom);
   }
-  if (to) {
+  if (parsedTo) {
     query += " AND created_at <= ?";
-    params.push(to);
+    params.push(parsedTo);
   }
 
   query += " ORDER BY created_at DESC LIMIT ?";
-  params.push(parseInt(limit));
+  params.push(parseInt(limit, 10));
 
   db.query(query, params, (err, results) => {
     if (err) {
@@ -184,6 +252,43 @@ router.post("/reading", (req, res) => {
     return res.status(400).json({ error: "Valoare senzor invalida" });
   }
 
+  const sensorDbPersistState = req.app.get("sensorDbPersistState") || new Map();
+  const sensorDbMinIntervalMs = parseInt(req.app.get("sensorDbMinIntervalMs") || 3000, 10);
+  const readingTimestampMs = typeof timestamp === "number" ? timestamp * 1000 : Date.now();
+  const throttleKey = `${sensor_type || "unknown"}|${pacient_id || "no-patient"}|${device_id || "unknown"}`;
+  const lastPersistedAt = sensorDbPersistState.get(throttleKey) || 0;
+  const shouldPersist = readingTimestampMs - lastPersistedAt >= sensorDbMinIntervalMs;
+
+  if (shouldPersist) {
+    sensorDbPersistState.set(throttleKey, readingTimestampMs);
+  }
+
+  const emitLiveUpdate = () => {
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`sensor_${sensor_type}`).emit("sensor_update", {
+        sensor_type,
+        value_1: filtered.value1,
+        value_2: filtered.value2,
+        device_id,
+        pacient_id,
+        timestamp: new Date().toISOString(),
+        filtered: filtered.filtered,
+        filter_reason: filtered.reason,
+      });
+    }
+  };
+
+  if (!shouldPersist) {
+    emitLiveUpdate();
+    return res.json({
+      success: true,
+      persisted: false,
+      filtered: filtered.filtered,
+      filter_reason: filtered.reason,
+    });
+  }
+
   const query = `
     INSERT INTO sensor_readings (sensor_type, pacient_id, value_1, value_2, device_id)
     VALUES (?, ?, ?, ?, ?)
@@ -198,24 +303,12 @@ router.post("/reading", (req, res) => {
         return res.status(500).json({ error: "Eroare server" });
       }
 
-      // Broadcast via Socket.IO
-      const io = req.app.get("io");
-      if (io) {
-        io.to(`sensor_${sensor_type}`).emit("sensor_update", {
-          sensor_type,
-          value_1: filtered.value1,
-          value_2: filtered.value2,
-          device_id,
-          pacient_id,
-          timestamp: new Date().toISOString(),
-          filtered: filtered.filtered,
-          filter_reason: filtered.reason,
-        });
-      }
+      emitLiveUpdate();
 
       res.json({
         success: true,
         id: result.insertId,
+        persisted: true,
         filtered: filtered.filtered,
         filter_reason: filtered.reason,
       });
@@ -332,6 +425,7 @@ router.delete("/cleanup", (req, res) => {
 // POST /api/sensors/start - Pornește un senzor specific
 router.post("/start", (req, res) => {
   const { sensorType, pacient_id } = req.body;
+  const normalizedPacientId = pacient_id ? parseInt(pacient_id, 10) : null;
 
   // Validează tipul senzorului
   const validTypes = ["ecg", "puls", "temperatura"];
@@ -342,14 +436,39 @@ router.post("/start", (req, res) => {
     });
   }
 
-  // Dacă procesul deja rulează, returnează succes
+  // Curăță procesele orfane rămase după restarturi backend.
+  const orphanPids = getOsSensorPids(sensorType);
+  if (orphanPids.length > 0) {
+    killOsSensorPids(orphanPids);
+  }
+
+  // Dacă procesul deja rulează pe același pacient, returnează succes
   if (sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed) {
-    return res.json({ 
-      success: true, 
-      message: `Senzorul '${sensorType}' este deja în execuție`,
-      running: true,
-      sensorType
-    });
+    if (sensorProcessPacients[sensorType] === normalizedPacientId) {
+      return res.json({
+        success: true,
+        message: `Senzorul '${sensorType}' este deja în execuție`,
+        running: true,
+        sensorType,
+        pacient_id: sensorProcessPacients[sensorType],
+      });
+    }
+
+    // Dacă rulează pe alt pacient, îl repornim cu noul pacient selectat.
+    try {
+      process.kill(-sensorProcesses[sensorType].pid);
+      sensorProcesses[sensorType] = null;
+      sensorProcessPacients[sensorType] = null;
+    } catch (killErr) {
+      console.error(`[${sensorType}] Eroare restart (kill):`, killErr);
+      return res.status(500).json({
+        success: false,
+        message: `Senzorul '${sensorType}' rulează deja și nu a putut fi repornit`,
+        sensorType,
+      });
+    }
+
+    // Continuăm aceeași cerere și pornim imediat procesul nou pe pacientul selectat.
   }
 
   try {
@@ -359,8 +478,8 @@ router.post("/start", (req, res) => {
     
     // Construiește argumentele pentru main.py
     const args = [];
-    if (pacient_id) {
-      args.push("--pacient", String(pacient_id));
+    if (normalizedPacientId) {
+      args.push("--pacient", String(normalizedPacientId));
     }
     // Pornește doar senzorul specific
     args.push("--sensors", sensorType);
@@ -373,6 +492,41 @@ router.post("/start", (req, res) => {
     });
 
     sensorProcesses[sensorType] = process;
+    sensorProcessPacients[sensorType] = normalizedPacientId;
+    sensorProcessStartupErrors[sensorType] = null;
+
+    const startupErrors = [];
+    let hasResponded = false;
+
+    const finishSuccessResponse = () => {
+      if (hasResponded) return;
+      hasResponded = true;
+
+      res.json({
+        success: true,
+        message: `Senzorul '${sensorType}' a fost pornit`,
+        running: true,
+        sensorType,
+        pacient_id: normalizedPacientId,
+        pid: process.pid,
+      });
+    };
+
+    const finishErrorResponse = (message, error) => {
+      if (hasResponded) return;
+      hasResponded = true;
+
+      res.status(500).json({
+        success: false,
+        message,
+        sensorType,
+        error,
+      });
+    };
+
+    const startupTimer = setTimeout(() => {
+      finishSuccessResponse();
+    }, 1200);
 
     // Logare output
     process.stdout.on("data", (data) => {
@@ -380,25 +534,38 @@ router.post("/start", (req, res) => {
     });
 
     process.stderr.on("data", (data) => {
-      console.error(`[${sensorType.toUpperCase()} ERROR] ${data.toString()}`);
+      const chunk = data.toString();
+      if (startupErrors.length < 10) {
+        startupErrors.push(chunk.trim());
+      }
+      console.error(`[${sensorType.toUpperCase()} ERROR] ${chunk}`);
     });
 
     process.on("error", (err) => {
       console.error(`[${sensorType}] Eroare start proces:`, err);
+      clearTimeout(startupTimer);
       sensorProcesses[sensorType] = null;
+      sensorProcessPacients[sensorType] = null;
+      sensorProcessStartupErrors[sensorType] = err.message;
+      finishErrorResponse("Eroare pornire senzor", err.message);
     });
 
-    process.on("exit", (code) => {
-      console.log(`[${sensorType}] Proces oprit cu cod ${code}`);
-      sensorProcesses[sensorType] = null;
-    });
+    process.on("exit", (code, signal) => {
+      clearTimeout(startupTimer);
+      console.log(`[${sensorType}] Proces oprit cu cod ${code}, signal ${signal}`);
 
-    res.json({ 
-      success: true, 
-      message: `Senzorul '${sensorType}' a fost pornit`,
-      running: true,
-      sensorType,
-      pid: process.pid 
+      const startupDetails = startupErrors.filter(Boolean).join(" | ").slice(0, 350);
+      sensorProcessStartupErrors[sensorType] = startupDetails || `Proces oprit (code=${code}, signal=${signal || "none"})`;
+
+      sensorProcesses[sensorType] = null;
+      sensorProcessPacients[sensorType] = null;
+
+      if (!hasResponded) {
+        finishErrorResponse(
+          `Senzorul '${sensorType}' s-a oprit imediat după pornire`,
+          sensorProcessStartupErrors[sensorType]
+        );
+      }
     });
   } catch (err) {
     console.error(`[${sensorType}] Eroare pornire:`, err);
@@ -424,24 +591,35 @@ router.post("/stop", (req, res) => {
     });
   }
 
-  if (!sensorProcesses[sensorType] || sensorProcesses[sensorType].killed) {
-    return res.json({ 
-      success: true, 
+  const osPids = getOsSensorPids(sensorType);
+  const hasTracked = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
+
+  if (!hasTracked && osPids.length === 0) {
+    return res.json({
+      success: true,
       message: `Senzorul '${sensorType}' nu este în execuție`,
       running: false,
-      sensorType
+      sensorType,
     });
   }
 
   try {
-    // Trimite SIGTERM pentru a opri procesul în mod corect
-    process.kill(-sensorProcesses[sensorType].pid);
+    if (hasTracked) {
+      // Trimite SIGTERM pentru procesul gestionat direct de backend.
+      process.kill(-sensorProcesses[sensorType].pid);
+    }
+
+    const killedOrphans = killOsSensorPids(osPids);
+
+    sensorProcessPacients[sensorType] = null;
+    sensorProcessStartupErrors[sensorType] = null;
     
     res.json({ 
       success: true, 
       message: `Comanda de oprire a senzorului '${sensorType}' a fost trimisă`,
       running: false,
-      sensorType
+      sensorType,
+      killed_orphan_processes: killedOrphans,
     });
   } catch (err) {
     console.error(`[${sensorType}] Eroare oprire:`, err);
@@ -467,11 +645,16 @@ router.get("/running/:sensorType", (req, res) => {
     });
   }
 
-  const running = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
+  const trackedRunning = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
+  const osPids = getOsSensorPids(sensorType);
+  const running = Boolean(trackedRunning || osPids.length > 0);
   res.json({ 
     running,
     sensorType,
-    pid: running ? sensorProcesses[sensorType].pid : null 
+    pid: trackedRunning ? sensorProcesses[sensorType].pid : null,
+    os_pids: osPids,
+    pacient_id: trackedRunning ? sensorProcessPacients[sensorType] : null,
+    startup_error: running ? null : sensorProcessStartupErrors[sensorType],
   });
 });
 
@@ -482,15 +665,21 @@ router.get("/running", (req, res) => {
   
   Object.keys(sensorProcesses).forEach(sensorType => {
     const isRunning = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
-    running[sensorType] = isRunning;
+    const osPids = getOsSensorPids(sensorType);
+    running[sensorType] = Boolean(isRunning || osPids.length > 0);
     if (isRunning) {
       pids[sensorType] = sensorProcesses[sensorType].pid;
+    }
+    if (osPids.length > 0) {
+      pids[`${sensorType}_os`] = osPids;
     }
   });
 
   res.json({ 
     running,
-    pids
+    pids,
+    pacients: sensorProcessPacients,
+    startup_errors: sensorProcessStartupErrors,
   });
 });
 
