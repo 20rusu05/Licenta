@@ -40,17 +40,22 @@ export default function ResetPassword() {
   return (
     <Box sx={{
       minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      px: 2,
+      py: 4,
       background: (theme) => theme.palette.mode === 'dark'
         ? 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.15), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.12), transparent)'
         : 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.10), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.08), transparent)'
     }}>
-    <Container component="main" maxWidth="xs">
-      <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography component="h1" variant="h4" sx={{ mb: 4, color: 'primary.main', fontWeight: 600 }}>
+    <Container component="main" maxWidth="xs" sx={{ m: 0 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+        <Typography component="h1" variant="h4" sx={{ mb: 3, color: 'primary.main', fontWeight: 600, textAlign: 'center' }}>
           Resetare parola
         </Typography>
 
-        <Paper elevation={0} sx={{ p: 4, width: '100%', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <Paper elevation={0} sx={{ p: 4, width: '100%', borderRadius: 2, border: '1px solid', borderColor: 'divider', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 20px 50px rgba(2,6,23,0.35)' : '0 20px 40px rgba(15,23,42,0.10)' }}>
           {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
