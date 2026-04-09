@@ -2,16 +2,38 @@ import { Box, AppBar, Toolbar, Typography, IconButton, Avatar } from '@mui/mater
 import LogoutIcon from '@mui/icons-material/Logout';
 import Sidebar, { drawerWidth } from './Sidebar';
 import ThemeToggle from './ThemeToggle';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getBackendAssetUrl } from '../../services/api';
+
+function readAuthUser() {
+  try {
+    const rawUser = sessionStorage.getItem('user');
+    return rawUser ? JSON.parse(rawUser) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function AppLayout({ children }) {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user'));
+  const location = useLocation();
+  const [user, setUser] = useState(() => readAuthUser());
+  const hideSidebar = location.pathname === '/dashboard/admin';
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setUser(readAuthUser());
+    };
+
+    window.addEventListener('auth-changed', handleAuthChange);
+    return () => window.removeEventListener('auth-changed', handleAuthChange);
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    window.dispatchEvent(new Event('storage'));
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    window.dispatchEvent(new Event('auth-changed'));
     setTimeout(() => navigate('/login'), 100);
   };
 
@@ -51,9 +73,17 @@ export default function AppLayout({ children }) {
         </Toolbar>
       </AppBar>
 
-      <Sidebar />
+      {!hideSidebar && <Sidebar />}
 
-      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          p: hideSidebar ? 3 : 0,
+          width: hideSidebar ? '100%' : `calc(100% - ${drawerWidth}px)`,
+          bgcolor: hideSidebar ? 'background.default' : 'transparent',
+        }}
+      >
         <Toolbar />
         {children}
       </Box>

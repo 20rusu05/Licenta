@@ -37,7 +37,7 @@ import AppLayout from "../layout/AppLayout";
 const API_URL = "/programari";
 
 export default function Programari() {
-  const storedUser = localStorage.getItem("user");
+  const storedUser = sessionStorage.getItem("user");
   if (!storedUser) return null;
   const user = JSON.parse(storedUser);
 

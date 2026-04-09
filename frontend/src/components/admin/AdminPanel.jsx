@@ -23,7 +23,9 @@ import {
   Card,
   CardContent,
   IconButton,
-  Tooltip
+  Tooltip,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PeopleIcon from '@mui/icons-material/People';
@@ -31,6 +33,8 @@ import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import MedicationIcon from '@mui/icons-material/Medication';
 import InfoIcon from '@mui/icons-material/Info';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import AppLayout from '../layout/AppLayout';
 import { api } from '../../services/api';
 
@@ -43,6 +47,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -108,6 +113,32 @@ export default function AdminPanel() {
     });
   };
 
+  const normalizeText = (value) => {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  };
+
+  const filterUsers = (items) => {
+    const normalizedQuery = normalizeText(searchQuery).trim();
+
+    if (!normalizedQuery) {
+      return items;
+    }
+
+    return items.filter((user) => {
+      const searchableText = [user.id, user.nume, user.prenume, user.email, user.telefon]
+        .map(normalizeText)
+        .join(' ');
+
+      return searchableText.includes(normalizedQuery);
+    });
+  };
+
+  const filteredDoctors = filterUsers(users.doctori);
+  const filteredPatients = filterUsers(users.pacienti);
+
   const StatCard = ({ title, value, icon, color }) => (
     <Card sx={{ height: '100%' }}>
       <CardContent>
@@ -154,7 +185,9 @@ export default function AdminPanel() {
             <TableRow>
               <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                 <Typography color="text.secondary">
-                  Nu există {role === 'doctor' ? 'doctori' : 'pacienți'} înregistrați
+                  {searchQuery.trim()
+                    ? 'Nu s-au găsit rezultate pentru căutarea introdusă'
+                    : `Nu există ${role === 'doctor' ? 'doctori' : 'pacienți'} înregistrați`}
                 </Typography>
               </TableCell>
             </TableRow>
@@ -202,6 +235,35 @@ export default function AdminPanel() {
         <Typography variant="h4" sx={{ mb: 3, fontWeight: 600 }}>
           Panou Administrare
         </Typography>
+
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <TextField
+            fullWidth
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Caută după nume, prenume, email, telefon sau ID"
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="șterge căutarea"
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            }}
+          />
+        </Paper>
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -258,13 +320,13 @@ export default function AdminPanel() {
             onChange={(e, newValue) => setActiveTab(newValue)}
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab label={`Doctori (${users.doctori.length})`} />
-            <Tab label={`Pacienți (${users.pacienti.length})`} />
+            <Tab label={`Doctori (${filteredDoctors.length}/${users.doctori.length})`} />
+            <Tab label={`Pacienți (${filteredPatients.length}/${users.pacienti.length})`} />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
-            {activeTab === 0 && <UsersTable users={users.doctori} role="doctor" />}
-            {activeTab === 1 && <UsersTable users={users.pacienti} role="pacient" />}
+            {activeTab === 0 && <UsersTable users={filteredDoctors} role="doctor" />}
+            {activeTab === 1 && <UsersTable users={filteredPatients} role="pacient" />}
           </Box>
         </Paper>
 
@@ -280,7 +342,7 @@ export default function AdminPanel() {
               <strong>{deleteDialog.user?.nume} {deleteDialog.user?.prenume}</strong>?
               <br /><br />
               <Typography color="error" variant="body2">
-                ⚠️ Atenție: Aceasta va șterge permanent:
+                Atenție: Aceasta va șterge permanent:
               </Typography>
               <Typography variant="body2" component="ul" sx={{ mt: 1, pl: 2 }}>
                 {deleteDialog.role === 'doctor' ? (
@@ -346,13 +408,13 @@ export default function AdminPanel() {
                 <Box sx={{ mt: 1 }}>
                   {detailsDialog.user.role === 'doctor' ? (
                     <>
-                      <Typography>📋 <strong>Medicamente create:</strong> {detailsDialog.data?.medicamente || 0}</Typography>
-                      <Typography>📅 <strong>Programări:</strong> {detailsDialog.data?.programari || 0}</Typography>
+                      <Typography><strong>Medicamente create:</strong> {detailsDialog.data?.medicamente || 0}</Typography>
+                      <Typography><strong>Programări:</strong> {detailsDialog.data?.programari || 0}</Typography>
                     </>
                   ) : (
                     <>
-                      <Typography>💊 <strong>Aplicări medicamente:</strong> {detailsDialog.data?.aplicari_medicamente || 0}</Typography>
-                      <Typography>📅 <strong>Programări:</strong> {detailsDialog.data?.programari || 0}</Typography>
+                      <Typography><strong>Aplicări medicamente:</strong> {detailsDialog.data?.aplicari_medicamente || 0}</Typography>
+                      <Typography><strong>Programări:</strong> {detailsDialog.data?.programari || 0}</Typography>
                     </>
                   )}
                 </Box>

@@ -203,7 +203,7 @@ export default function SenzoriLive() {
   const theme = useTheme();
   const currentUser = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem('user') || '{}');
+      return JSON.parse(sessionStorage.getItem('user') || '{}');
     } catch {
       return {};
     }
@@ -600,7 +600,8 @@ export default function SenzoriLive() {
       updatedAt: Date.now(),
     };
 
-    localStorage.setItem(MONITORING_STATUS_KEY, JSON.stringify(payload));
+    sessionStorage.setItem(MONITORING_STATUS_KEY, JSON.stringify(payload));
+    localStorage.removeItem(MONITORING_STATUS_KEY);
     window.dispatchEvent(new Event('monitoring-status-changed'));
   }, [connected, selectedPatient?.id, selectedPatient?.prenume, selectedPatient?.nume]);
 

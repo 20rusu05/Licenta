@@ -89,10 +89,10 @@ export default function Medicamente() {
 
   const [aplicantiPages, setAplicantiPages] = useState({});
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(sessionStorage.getItem("user") || 'null');
   const isDoctor = user?.role === "doctor";
   // `api` will attach Authorization header automatically via interceptor
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
 const reload = async (specificMedicamentId = null, customAplicantiPage = null) => {

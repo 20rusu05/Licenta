@@ -7,14 +7,15 @@ export const ThemeModeContext = createContext({
 
 export function ThemeModeProvider({ children }) {
   const [mode, setMode] = useState(() => {
-    const saved = localStorage.getItem('themeMode');
-    if (saved === 'light' || saved === 'dark') return saved;
+    const sessionSaved = sessionStorage.getItem('themeMode');
+    if (sessionSaved === 'light' || sessionSaved === 'dark') return sessionSaved;
+
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     return prefersDark ? 'dark' : 'light';
   });
 
   useEffect(() => {
-    localStorage.setItem('themeMode', mode);
+    sessionStorage.setItem('themeMode', mode);
     document.documentElement.setAttribute('data-theme', mode);
   }, [mode]);
 

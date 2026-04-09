@@ -15,10 +15,10 @@ export const getBackendAssetUrl = (assetPath) => {
   return new URL(assetPath, BACKEND_ORIGIN).toString();
 };
 
-// Attach token automatically from localStorage for every request
+// Attach token automatically from sessionStorage for every request
 api.interceptors.request.use((config) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
@@ -35,8 +35,9 @@ api.interceptors.response.use(
   (err) => {
     if (err.response && err.response.status === 401) {
       try {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        window.dispatchEvent(new Event('auth-changed'));
       } catch (e) {}
       // navigate to login only if not already on login/register/forgot-password pages
       if (typeof window !== 'undefined') {

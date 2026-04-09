@@ -14,12 +14,18 @@ export default function ForgotPassword() {
     e.preventDefault();
     setMessage('');
     setError('');
+
+    if (!email.trim()) {
+      setError('Completează adresa de email.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await api.post('/forgot-password', { email });
-      setMessage(res.data.message || 'Verifica-ti emailul pentru instructiuni.');
+      setMessage(res.data.message || 'Verifică-ți emailul pentru instrucțiuni.');
     } catch (err) {
-      setError(err.response?.data?.error || 'A aparut o eroare.');
+      setError(err.response?.data?.error || 'A apărut o eroare.');
     } finally {
       setLoading(false);
     }
@@ -28,26 +34,32 @@ export default function ForgotPassword() {
   return (
     <Box sx={{
       minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      px: 2,
+      py: 4,
       background: (theme) => theme.palette.mode === 'dark'
         ? 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.15), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.12), transparent)'
         : 'radial-gradient(1200px 600px at -10% -10%, rgba(33,150,243,0.10), transparent), radial-gradient(800px 500px at 110% 10%, rgba(38,166,154,0.08), transparent)'
     }}>
-    <Container component="main" maxWidth="xs">
+    <Container component="main" maxWidth="xs" sx={{ m: 0 }}>
       <Box
         sx={{
-          marginTop: 8,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          width: '100%',
         }}
       >
         <Typography
           component="h1"
           variant="h4"
           sx={{
-            mb: 4,
+            mb: 3,
             color: 'primary.main',
             fontWeight: 600,
+            textAlign: 'center',
           }}
         >
           Recuperare parola
@@ -62,16 +74,19 @@ export default function ForgotPassword() {
             border: '1px solid',
             borderColor: 'divider',
             bgcolor: 'background.paper',
+            boxShadow: (theme) => theme.palette.mode === 'dark'
+              ? '0 20px 50px rgba(2,6,23,0.35)'
+              : '0 20px 40px rgba(15,23,42,0.10)',
           }}
         >
           <Typography variant="body1" sx={{ mb: 3 }}>
-            Introdu adresa de email asociata contului tau. Iti vom trimite un link pentru resetarea parolei.
+            Introdu adresa de email asociată contului tău. Îți vom trimite un link pentru resetarea parolei.
           </Typography>
 
           {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          <Box component="form" onSubmit={handleSubmit}>
+          <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               margin="normal"
               required
@@ -100,7 +115,7 @@ export default function ForgotPassword() {
                 variant="body2"
                 onClick={() => navigate('/login')}
               >
-                Inapoi la autentificare
+                Înapoi la autentificare
               </Link>
             </Box>
           </Box>

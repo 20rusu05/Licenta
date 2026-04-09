@@ -14,6 +14,11 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!password.trim() || !confirm.trim()) {
+      setError('Completează ambele câmpuri pentru parolă.');
+      return;
+    }
+
     if (password !== confirm) {
       setError('Parolele nu coincid.');
       return;
@@ -23,7 +28,7 @@ export default function ResetPassword() {
     setMessage('');
     try {
       const res = await api.post('/reset-password', { token, newPassword: password });
-      setMessage(res.data.message || 'Parola a fost resetata cu succes.');
+      setMessage(res.data.message || 'Parola a fost resetată cu succes.');
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Eroare la resetarea parolei.');
@@ -49,12 +54,12 @@ export default function ResetPassword() {
           {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          <Box component="form" onSubmit={handleSubmit}>
+          <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               margin="normal"
               required
               fullWidth
-              label="Parola noua"
+              label="Parola nouă"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -63,14 +68,14 @@ export default function ResetPassword() {
               margin="normal"
               required
               fullWidth
-              label="Confirma parola"
+              label="Confirmă parola"
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
             />
 
             <Button type="submit" fullWidth variant="contained" sx={{ mt: 3 }} disabled={loading}>
-              {loading ? 'Se reseteaza...' : 'Reseteaza parola'}
+              {loading ? 'Se resetează...' : 'Resetează parola'}
             </Button>
           </Box>
         </Paper>

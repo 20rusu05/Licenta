@@ -25,19 +25,25 @@ export default function Login() {
     setLoading(true);
     setError('');
 
+    if (!formData.email.trim() || !formData.parola.trim()) {
+      setError('Completează adresa de email și parola.');
+      setLoading(false);
+      return;
+    }
+
     try {
       // apel backend login
       const response = await api.post('/auth/login', formData);
 
-      // salvăm user și token în localStorage
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      localStorage.setItem('token', response.data.token);
+      // salvăm user și token în sessionStorage ca să rămână per-tab
+      sessionStorage.setItem('user', JSON.stringify(response.data.user));
+      sessionStorage.setItem('token', response.data.token);
 
       console.log('Token salvat:', response.data.token);
       console.log('User salvat:', response.data.user);
 
-      // emitem eveniment storage pentru a notifica componentele
-      window.dispatchEvent(new Event('storage'));
+      // emitem eveniment local pentru a notifica componentele din același tab
+      window.dispatchEvent(new Event('auth-changed'));
 
       // redirect către dashboard
       navigate('/dashboard');
@@ -80,7 +86,7 @@ export default function Login() {
 
             {error && <Alert severity="error" sx={{ width: '100%', mb: 2, borderRadius: 1 }}>{error}</Alert>}
 
-            <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+            <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
               <TextField
                 margin="normal"
                 required

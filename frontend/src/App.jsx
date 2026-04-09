@@ -15,26 +15,57 @@ import TermsAndConditions from './components/auth/TermsAndConditions';
 import AdminPanel from './components/admin/AdminPanel';
 import SenzoriLive from './components/sensors/SenzoriLive';
 
+function migrateLegacyAuthToSessionStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const sessionUser = sessionStorage.getItem('user');
+  const sessionToken = sessionStorage.getItem('token');
+  if (sessionUser || sessionToken) {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    return sessionUser;
+  }
+
+  const legacyUser = localStorage.getItem('user');
+  const legacyToken = localStorage.getItem('token');
+
+  if (legacyUser) {
+    sessionStorage.setItem('user', legacyUser);
+    localStorage.removeItem('user');
+  }
+
+  if (legacyToken) {
+    sessionStorage.setItem('token', legacyToken);
+    localStorage.removeItem('token');
+  }
+
+  return sessionStorage.getItem('user');
+}
+
+function readAuthUser() {
+  try {
+    const rawUser = migrateLegacyAuthToSessionStorage();
+    return rawUser ? JSON.parse(rawUser) : null;
+  } catch {
+    return null;
+  }
+}
+
 function App() {
-  const [user, setUser] = useState(() => {
-    const storedUser = localStorage.getItem('user')
-    return storedUser ? JSON.parse(storedUser) : null
-  })
+  const [user, setUser] = useState(() => readAuthUser())
 
   useEffect(() => {
-    const handleStorageChange = () => {
-      const updatedUser = localStorage.getItem('user')
-      console.log('Storage changed, new user:', updatedUser)
-      setUser(updatedUser ? JSON.parse(updatedUser) : null)
-    }
+	  const handleAuthChange = () => {
+	    setUser(readAuthUser())
+	  }
 
-window.addEventListener('storage', handleStorageChange)
-    document.addEventListener('storage', handleStorageChange)
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      document.removeEventListener('storage', handleStorageChange)
-    }
+    window.addEventListener('auth-changed', handleAuthChange)
+
+	    return () => {
+	      window.removeEventListener('auth-changed', handleAuthChange)
+	    }
   }, [])
 
   return (

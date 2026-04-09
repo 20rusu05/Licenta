@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { TextField, Button, Box, Typography, Container, Alert, Paper, Link, Checkbox, FormControlLabel } from '@mui/material';
+import { TextField, Button, Box, Typography, Container, Alert, Paper, Link, Checkbox, FormControlLabel, IconButton, InputAdornment } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -14,6 +16,9 @@ export default function Register() {
     parola: '',
     telefon: ''
   });
+  const [confirmParola, setConfirmParola] = useState('');
+  const [showParola, setShowParola] = useState(false);
+  const [showConfirmParola, setShowConfirmParola] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -33,6 +38,22 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!formData.nume.trim() || !formData.prenume.trim() || !formData.email.trim() || !formData.parola.trim() || !formData.telefon.trim()) {
+      setError('Completează toate câmpurile obligatorii.');
+      return;
+    }
+
+    if (!confirmParola.trim()) {
+      setError('Confirmă parola înainte de a crea contul.');
+      return;
+    }
+
+    if (formData.parola !== confirmParola) {
+      setError('Parolele nu coincid.');
+      return;
+    }
+
     
     if (!acceptedTerms) {
       setError("Trebuie să acceptați termenii și condițiile pentru a crea un cont.");
@@ -132,6 +153,7 @@ export default function Register() {
           <Box 
             component="form" 
             onSubmit={handleSubmit} 
+            noValidate
             sx={{ mt: 1 }}
           >
           <TextField
@@ -178,11 +200,50 @@ export default function Register() {
             fullWidth
             name="parola"
             label="Parola"
-            type="password"
+            type={showParola ? 'text' : 'password'}
             id="parola"
             autoComplete="new-password"
             value={formData.parola}
             onChange={handleChange}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label={showParola ? 'Ascunde parola' : 'Afișează parola'}
+                    onClick={() => setShowParola((prev) => !prev)}
+                    edge="end"
+                  >
+                    {showParola ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            name="confirmParola"
+            label="Confirmă parola"
+            type={showConfirmParola ? 'text' : 'password'}
+            id="confirmParola"
+            autoComplete="new-password"
+            value={confirmParola}
+            onChange={(e) => setConfirmParola(e.target.value)}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label={showConfirmParola ? 'Ascunde confirmarea parolei' : 'Afișează confirmarea parolei'}
+                    onClick={() => setShowConfirmParola((prev) => !prev)}
+                    edge="end"
+                  >
+                    {showConfirmParola ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
             sx={{ mb: 2 }}
           />
           <TextField

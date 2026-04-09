@@ -46,7 +46,7 @@ export default function Profil() {
   });
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = sessionStorage.getItem('user');
     if (storedUser) {
       const userData = JSON.parse(storedUser);
       setUser(userData);
@@ -96,7 +96,7 @@ export default function Profil() {
       await api.put(`/pacienti/${user.id}`, formData);
 
       const updatedUser = { ...user, ...formData };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      sessionStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
 
       setEditMode(false);
@@ -136,9 +136,9 @@ export default function Profil() {
       });
 
       const updatedUser = { ...user, avatar_url: response.data.avatar_url };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      sessionStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
-      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('auth-changed'));
 
       setSuccess('Poza de profil a fost actualizată cu succes!');
     } catch (err) {

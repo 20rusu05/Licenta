@@ -16,7 +16,7 @@ import AppointmentHistory from './dashboard/AppointmentHistory';
 import { api } from '../services/api';
 
 export default function Dashboard() {
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = JSON.parse(sessionStorage.getItem('user') || 'null');
   
   if (user?.role === 'admin') {
     window.location.href = '/dashboard/admin';
