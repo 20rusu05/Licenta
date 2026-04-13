@@ -38,6 +38,8 @@ export default function Sidebar() {
   });
   const [runningSensors, setRunningSensors] = useState({ ecg: false, puls: false, temperatura: false });
   const [actionLoading, setActionLoading] = useState({ startAll: false, stopAll: false });
+  const [patientHasAssignment, setPatientHasAssignment] = useState(false);
+  const [assignmentLoaded, setAssignmentLoaded] = useState(false);
 
   useEffect(() => {
     const handleAuthChange = () => {
@@ -118,7 +120,34 @@ export default function Sidebar() {
     return () => clearInterval(intervalId);
   }, [refreshRunningSensors]);
 
+  useEffect(() => {
+    const loadPatientAssignment = async () => {
+      if (user?.role !== 'pacient') {
+        setPatientHasAssignment(true);
+        setAssignmentLoaded(true);
+        return;
+      }
+
+      try {
+        const response = await api.get('/sensors/sessions', { params: { status: 'activa' } });
+        const sessions = response?.data?.sessions || [];
+        setPatientHasAssignment(sessions.length > 0);
+      } catch {
+        setPatientHasAssignment(false);
+      } finally {
+        setAssignmentLoaded(true);
+      }
+    };
+
+    loadPatientAssignment();
+  }, [user?.role]);
+
   const handleStartAllSensors = async () => {
+    if (user?.role === 'pacient' && assignmentLoaded && !patientHasAssignment) {
+      navigate('/dashboard/senzori');
+      return;
+    }
+
     if (!monitoringInfo.patientId) {
       navigate('/dashboard/senzori');
       return;
@@ -407,7 +436,12 @@ export default function Sidebar() {
                   fullWidth
                   startIcon={actionLoading.startAll ? <CircularProgress size={13} color="inherit" /> : <PlayArrowIcon />}
                   onClick={handleStartAllSensors}
-                  disabled={actionLoading.startAll || actionLoading.stopAll || !monitoringInfo.patientId}
+                  disabled={
+                    actionLoading.startAll
+                    || actionLoading.stopAll
+                    || !monitoringInfo.patientId
+                    || (user?.role === 'pacient' && assignmentLoaded && !patientHasAssignment)
+                  }
                   sx={{ textTransform: 'none', fontWeight: 700 }}
                 >
                   Start all
@@ -429,6 +463,11 @@ export default function Sidebar() {
               {!monitoringInfo.patientId && (
                 <Typography variant="caption" sx={{ mt: 0.8, color: 'text.secondary', display: 'block' }}>
                   Pentru Start all, selectează mai întâi un pacient în pagina Senzori Live.
+                </Typography>
+              )}
+              {user?.role === 'pacient' && assignmentLoaded && !patientHasAssignment && (
+                <Typography variant="caption" sx={{ mt: 0.8, color: 'text.secondary', display: 'block' }}>
+                  Nu poți porni senzorii până când doctorul nu îți asignează un dispozitiv activ.
                 </Typography>
               )}
             </Box>

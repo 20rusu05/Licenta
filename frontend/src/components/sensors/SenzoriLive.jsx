@@ -234,12 +234,24 @@ export default function SenzoriLive() {
     puls: false,
     temperatura: false
   });
+  const [sessionSensorsEnabled, setSessionSensorsEnabled] = useState({
+    ecg: false,
+    puls: false,
+    temperatura: false,
+  });
+  const [sessionSensorStartAt, setSessionSensorStartAt] = useState({
+    ecg: null,
+    puls: null,
+    temperatura: null,
+  });
   const [loadingControl, setLoadingControl] = useState({});
   
   // Pacienți și sesiuni
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [loadingPatients, setLoadingPatients] = useState(false);
+  const [patientHasAssignment, setPatientHasAssignment] = useState(false);
+  const [patientAssignmentLoaded, setPatientAssignmentLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [allPatients, setAllPatients] = useState([]);
@@ -272,17 +284,71 @@ export default function SenzoriLive() {
   const ecgBufferRef = useRef([]);
   const ecgPausedRef = useRef(false);
   const selectedPatientRef = useRef(null);
+  const sessionSensorsEnabledRef = useRef({ ecg: false, puls: false, temperatura: false });
+  const sessionSensorStartAtRef = useRef({ ecg: null, puls: null, temperatura: null });
 
   useEffect(() => {
     ecgPausedRef.current = ecgPaused;
   }, [ecgPaused]);
 
+  useEffect(() => {
+    sessionSensorsEnabledRef.current = sessionSensorsEnabled;
+  }, [sessionSensorsEnabled]);
+
+  useEffect(() => {
+    sessionSensorStartAtRef.current = sessionSensorStartAt;
+  }, [sessionSensorStartAt]);
+
   const showToast = useCallback((message, severity = 'info') => {
     setToast({ open: true, message, severity });
   }, []);
 
+  const clearSensorData = useCallback((sensorType) => {
+    if (sensorType === 'ecg') {
+      ecgBufferRef.current = [];
+      setEcgData([]);
+      return;
+    }
+
+    if (sensorType === 'puls') {
+      setPulseData([]);
+      setLatestPulse({ hr: '--' });
+      return;
+    }
+
+    if (sensorType === 'temperatura') {
+      setTempData([]);
+      setLatestTemp('--');
+    }
+  }, []);
+
+  const beginCurrentSessionForSensor = useCallback((sensorType) => {
+    const now = Date.now();
+    clearSensorData(sensorType);
+    setSessionSensorsEnabled((prev) => ({ ...prev, [sensorType]: true }));
+    setSessionSensorStartAt((prev) => ({ ...prev, [sensorType]: now }));
+  }, [clearSensorData]);
+
+  const isReadingAllowedForCurrentSession = useCallback((sensorType, readingTimestamp) => {
+    const enabled = Boolean(sessionSensorsEnabledRef.current?.[sensorType]);
+    if (!enabled) return false;
+
+    const startedAt = sessionSensorStartAtRef.current?.[sensorType];
+    if (!startedAt) return false;
+
+    if (!readingTimestamp) return true;
+
+    const readingTime = new Date(readingTimestamp).getTime();
+    if (!Number.isFinite(readingTime)) return true;
+    return readingTime >= startedAt;
+  }, []);
+
   const handleStartSensors = async (sensorType) => {
     try {
+      if (isPacient && !patientHasAssignment) {
+        showToast('Nu puteți porni senzorii până când medicul nu vă asignează dispozitivul', 'warning');
+        return;
+      }
       if (!selectedPatient?.id) {
         showToast('Selectează un pacient înainte de a porni senzorul', 'warning');
         return;
@@ -293,6 +359,7 @@ export default function SenzoriLive() {
         pacient_id: selectedPatient.id
       });
       if (response.data.success) {
+        beginCurrentSessionForSensor(sensorType);
         setSensorsRunning(prev => ({ ...prev, [sensorType]: true }));
         showToast(`Senzorul ${sensorType.toUpperCase()} a fost pornit`, 'success');
       }
@@ -311,6 +378,8 @@ export default function SenzoriLive() {
         sensorType
       });
       if (response.data.success) {
+        setSessionSensorsEnabled((prev) => ({ ...prev, [sensorType]: false }));
+        setSessionSensorStartAt((prev) => ({ ...prev, [sensorType]: null }));
         setSensorsRunning(prev => ({ ...prev, [sensorType]: false }));
         showToast(`Senzorul ${sensorType.toUpperCase()} a fost oprit`, 'success');
       }
@@ -608,11 +677,44 @@ export default function SenzoriLive() {
   useEffect(() => {
     checkSensorsRunning();
     if (isPacient) {
-      if (ownPatient) {
-        setPatients([ownPatient]);
-        setAllPatients([ownPatient]);
-        setSelectedPatient(ownPatient);
-      }
+      const loadPatientAssignment = async () => {
+        try {
+          const response = await api.get('/sensors/sessions', {
+            params: { status: 'activa' }
+          });
+          const sessions = response.data.sessions || [];
+          const hasAssignment = sessions.length > 0;
+          setPatientHasAssignment(hasAssignment);
+
+          if (ownPatient) {
+            const patientWithAssignment = {
+              ...ownPatient,
+              active_sessions_count: hasAssignment ? sessions.length : 0,
+              sensor_types: sessions.map((s) => s.sensor_type).filter(Boolean).join(','),
+            };
+            setPatients([patientWithAssignment]);
+            setAllPatients([patientWithAssignment]);
+            setSelectedPatient(patientWithAssignment);
+          }
+        } catch (err) {
+          console.error('Eroare verificare asignare pacient:', err);
+          setPatientHasAssignment(false);
+          if (ownPatient) {
+            const fallbackPatient = {
+              ...ownPatient,
+              active_sessions_count: 0,
+              sensor_types: '',
+            };
+            setPatients([fallbackPatient]);
+            setAllPatients([fallbackPatient]);
+            setSelectedPatient(fallbackPatient);
+          }
+        } finally {
+          setPatientAssignmentLoaded(true);
+        }
+      };
+
+      loadPatientAssignment();
       return;
     }
     fetchPatients();
@@ -622,12 +724,15 @@ export default function SenzoriLive() {
   useEffect(() => {
     if (!selectedPatient?.id) {
       handleRefresh();
+      setSessionSensorsEnabled({ ecg: false, puls: false, temperatura: false });
+      setSessionSensorStartAt({ ecg: null, puls: null, temperatura: null });
       return;
     }
 
     handleRefresh();
-    loadHistoryForPatient(selectedPatient.id);
-  }, [selectedPatient?.id, loadHistoryForPatient]);
+    setSessionSensorsEnabled({ ecg: false, puls: false, temperatura: false });
+    setSessionSensorStartAt({ ecg: null, puls: null, temperatura: null });
+  }, [selectedPatient?.id]);
 
   const appendEcgPoint = useCallback((value, leadsOk = true) => {
     if (ecgPausedRef.current) return;
@@ -679,6 +784,10 @@ export default function SenzoriLive() {
         return;
       }
 
+      if (!isReadingAllowedForCurrentSession(data.sensor_type, data.timestamp)) {
+        return;
+      }
+
       if (data.sensor_type === 'ecg') {
         const ecgValue = normalizeEcgValue(data.value_1);
         if (ecgValue === null) return;
@@ -713,13 +822,16 @@ export default function SenzoriLive() {
 
       if (data.sensor_type === 'ecg') {
         data.readings
+          .filter((r) => isReadingAllowedForCurrentSession('ecg', r.timestamp || data.timestamp))
           .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: r.leads_ok }))
           .filter((r) => r.value !== null)
           .forEach((r) => appendEcgPoint(r.value, r.leads_ok));
       } else if (data.sensor_type === 'puls') {
         setPulseData(prev => {
           const next = [...prev];
-          data.readings.forEach(r => {
+          data.readings
+            .filter((r) => isReadingAllowedForCurrentSession('puls', r.timestamp || data.timestamp))
+            .forEach(r => {
             next.push({
               time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
               hr: r.value_1,
@@ -727,13 +839,16 @@ export default function SenzoriLive() {
           });
           return next.slice(-MAX_VITAL_POINTS);
         });
-        if (data.readings.length > 0) {
-          setLatestPulse({ hr: data.readings[data.readings.length - 1].value_1 });
+        const allowedReadings = data.readings.filter((r) => isReadingAllowedForCurrentSession('puls', r.timestamp || data.timestamp));
+        if (allowedReadings.length > 0) {
+          setLatestPulse({ hr: allowedReadings[allowedReadings.length - 1].value_1 });
         }
       } else if (data.sensor_type === 'temperatura') {
         setTempData(prev => {
           const next = [...prev];
-          data.readings.forEach(r => {
+          data.readings
+            .filter((r) => isReadingAllowedForCurrentSession('temperatura', r.timestamp || data.timestamp))
+            .forEach(r => {
             next.push({
               time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
               temp: r.value_1,
@@ -741,8 +856,9 @@ export default function SenzoriLive() {
           });
           return next.slice(-MAX_VITAL_POINTS);
         });
-        if (data.readings.length > 0) {
-          setLatestTemp(data.readings[data.readings.length - 1].value_1);
+        const allowedReadings = data.readings.filter((r) => isReadingAllowedForCurrentSession('temperatura', r.timestamp || data.timestamp));
+        if (allowedReadings.length > 0) {
+          setLatestTemp(allowedReadings[allowedReadings.length - 1].value_1);
         }
       }
     });
@@ -752,7 +868,7 @@ export default function SenzoriLive() {
       socket.emit('unsubscribe_sensor', 'temperatura');
       socket.disconnect();
     };
-  }, [appendEcgPoint]);
+  }, [appendEcgPoint, isReadingAllowedForCurrentSession]);
 
   const isSensorOnline = (type) => Boolean(sensorStatus[type]?.online || sensorsRunning[type]);
 
@@ -1045,7 +1161,9 @@ export default function SenzoriLive() {
 
             {isPacient && (
               <Alert severity="info" sx={{ mb: 1.5 }}>
-                Cont pacient: puteți vedea doar datele proprii ale senzorilor.
+                {patientAssignmentLoaded && !patientHasAssignment
+                  ? 'Cont pacient: momentan nu aveți un dispozitiv asignat de medic. Pornirea senzorilor este blocată.'
+                  : 'Cont pacient: puteți vedea doar datele proprii ale senzorilor.'}
               </Alert>
             )}
 
@@ -1130,6 +1248,7 @@ export default function SenzoriLive() {
               onStop={handleStopSensors}
               running={sensorsRunning.ecg}
               loading={loadingControl.ecg}
+              disabled={isPacient && patientAssignmentLoaded && !patientHasAssignment}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
@@ -1143,6 +1262,7 @@ export default function SenzoriLive() {
               onStop={handleStopSensors}
               running={sensorsRunning.puls}
               loading={loadingControl.puls}
+              disabled={isPacient && patientAssignmentLoaded && !patientHasAssignment}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
@@ -1156,6 +1276,7 @@ export default function SenzoriLive() {
               onStop={handleStopSensors}
               running={sensorsRunning.temperatura}
               loading={loadingControl.temperatura}
+              disabled={isPacient && patientAssignmentLoaded && !patientHasAssignment}
             />
           </Grid>
         </Grid>
@@ -1483,7 +1604,7 @@ export default function SenzoriLive() {
   );
 }
 
-function SensorStatusCard({ icon, label, online, color, extra, sensorType, onStart, onStop, running, loading }) {
+function SensorStatusCard({ icon, label, online, color, extra, sensorType, onStart, onStop, running, loading, disabled = false }) {
   return (
     <Card sx={{
       borderLeft: `4px solid ${online ? color : '#9e9e9e'}`,
@@ -1518,7 +1639,7 @@ function SensorStatusCard({ icon, label, online, color, extra, sensorType, onSta
               color="error"
               startIcon={loading ? <CircularProgress size={16} /> : <StopIcon />}
               onClick={() => onStop(sensorType)}
-              disabled={loading}
+              disabled={loading || disabled}
             >
               Stop
             </Button>
@@ -1530,7 +1651,7 @@ function SensorStatusCard({ icon, label, online, color, extra, sensorType, onSta
               color="success"
               startIcon={loading ? <CircularProgress size={16} /> : <PlayArrowIcon />}
               onClick={() => onStart(sensorType)}
-              disabled={loading}
+              disabled={loading || disabled}
             >
               Start
             </Button>

@@ -40,6 +40,28 @@ const sensorProcessStartupErrors = {
   temperatura: null,
 };
 
+async function hasActiveMonitoringSession({ pacientId, sensorType, doctorId = null }) {
+  const baseQuery = `
+    SELECT id
+    FROM monitoring_sessions
+    WHERE pacient_id = ?
+      AND sensor_type = ?
+      AND status = 'activa'
+  `;
+  const params = [pacientId, sensorType];
+
+  const query = doctorId
+    ? `${baseQuery} AND doctor_id = ? LIMIT 1`
+    : `${baseQuery} LIMIT 1`;
+
+  if (doctorId) {
+    params.push(doctorId);
+  }
+
+  const [rows] = await db.promise().query(query, params);
+  return rows.length > 0;
+}
+
 function getOsSensorPids(sensorType) {
   try {
     const output = execSync(
@@ -423,9 +445,11 @@ router.delete("/cleanup", (req, res) => {
 });
 
 // POST /api/sensors/start - Pornește un senzor specific
-router.post("/start", (req, res) => {
+router.post("/start", verifyToken, async (req, res) => {
   const { sensorType, pacient_id } = req.body;
   const normalizedPacientId = pacient_id ? parseInt(pacient_id, 10) : null;
+  const userRole = req.user?.role;
+  const userId = req.user?.id ? Number(req.user.id) : null;
 
   // Validează tipul senzorului
   const validTypes = ["ecg", "puls", "temperatura"];
@@ -433,6 +457,57 @@ router.post("/start", (req, res) => {
     return res.status(400).json({ 
       success: false, 
       message: "Tip senzor invalid" 
+    });
+  }
+
+  try {
+    if (userRole === "pacient") {
+      if (normalizedPacientId && normalizedPacientId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "Nu puteți porni senzori pentru alt pacient",
+        });
+      }
+
+      const hasAssignment = await hasActiveMonitoringSession({
+        pacientId: userId,
+        sensorType,
+      });
+
+      if (!hasAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: "Senzor indisponibil: medicul nu v-a asignat un dispozitiv activ",
+        });
+      }
+    }
+
+    if (userRole === "doctor") {
+      if (!normalizedPacientId) {
+        return res.status(400).json({
+          success: false,
+          message: "Selectați un pacient înainte de a porni senzorul",
+        });
+      }
+
+      const hasAssignment = await hasActiveMonitoringSession({
+        pacientId: normalizedPacientId,
+        sensorType,
+        doctorId: userId,
+      });
+
+      if (!hasAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: "Nu aveți o asignare activă pentru acest pacient și senzor",
+        });
+      }
+    }
+  } catch (authErr) {
+    console.error("Eroare validare acces senzor:", authErr);
+    return res.status(500).json({
+      success: false,
+      message: "Eroare la validarea accesului la senzor",
     });
   }
 
@@ -579,8 +654,10 @@ router.post("/start", (req, res) => {
 });
 
 // POST /api/sensors/stop - Oprește un senzor specific
-router.post("/stop", (req, res) => {
+router.post("/stop", verifyToken, (req, res) => {
   const { sensorType } = req.body;
+  const userRole = req.user?.role;
+  const userId = req.user?.id ? Number(req.user.id) : null;
 
   // Validează tipul senzorului
   const validTypes = ["ecg", "puls", "temperatura"];
@@ -589,6 +666,19 @@ router.post("/stop", (req, res) => {
       success: false, 
       message: "Tip senzor invalid" 
     });
+  }
+
+  if (userRole === "pacient") {
+    const runningForPacient = sensorProcessPacients[sensorType]
+      ? Number(sensorProcessPacients[sensorType])
+      : null;
+
+    if (!runningForPacient || runningForPacient !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "Nu puteți opri acest senzor",
+      });
+    }
   }
 
   const osPids = getOsSensorPids(sensorType);
