@@ -34,26 +34,30 @@ router.get("/", verifyToken, async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
   const filter = req.query.filter || 'toate';
+  const search = String(req.query.search || '').trim();
 
   try {
-    let query, countQuery, countsQuery, params, userIdCol;
+    let query, countQuery, countsQuery;
+    let listParams = [];
+    let countParams = [];
+    let countsParams = [];
 
-    userIdCol = role === "doctor" ? "doctor_id" : "pacient_id";
-
-    countsQuery = `
-      SELECT 
-        COUNT(*) AS toate,
-        COALESCE(SUM(CASE WHEN data_programare IS NOT NULL AND data_programare > NOW() AND status != 'completata' THEN 1 ELSE 0 END), 0) AS viitoare,
-        COALESCE(SUM(CASE WHEN data_programare IS NOT NULL AND data_programare <= NOW() AND status != 'completata' THEN 1 ELSE 0 END), 0) AS trecute,
-        COALESCE(SUM(CASE WHEN status = 'completata' THEN 1 ELSE 0 END), 0) AS completate
-      FROM programari
-      WHERE ${userIdCol} = ?
-    `;
+    const searchLike = `%${search}%`;
 
     if (role === "doctor") {
       let whereClause = "p.doctor_id = ?";
-      
-      // Adaugă filtru pentru data și status
+      let countsWhereClause = "p.doctor_id = ?";
+      const searchClause = search
+        ? ` AND (
+              u.nume LIKE ?
+              OR u.prenume LIKE ?
+              OR u.email LIKE ?
+              OR DATE_FORMAT(p.data_programare, '%d.%m.%Y') LIKE ?
+              OR DATE_FORMAT(p.data_programare, '%d.%m.%Y, %H:%i') LIKE ?
+              OR DATE_FORMAT(p.data_programare, '%Y-%m-%d') LIKE ?
+            )`
+        : "";
+
       if (filter === 'viitoare') {
         whereClause += " AND p.data_programare > NOW() AND p.status != 'completata'";
       } else if (filter === 'trecute') {
@@ -61,6 +65,9 @@ router.get("/", verifyToken, async (req, res) => {
       } else if (filter === 'completate') {
         whereClause += " AND p.status = 'completata'";
       }
+
+      whereClause += searchClause;
+      countsWhereClause += searchClause;
 
       query = `
         SELECT p.id, p.data_programare, p.status, p.pacient_id, u.nume AS pacient_nume, u.email AS pacient_email
@@ -74,13 +81,42 @@ router.get("/", verifyToken, async (req, res) => {
       countQuery = `
         SELECT COUNT(*) AS total
         FROM programari p
+        JOIN pacienti u ON p.pacient_id = u.id
         WHERE ${whereClause}
       `;
 
-      params = [userId, limit, offset];
+      countsQuery = `
+        SELECT 
+          COUNT(*) AS toate,
+          COALESCE(SUM(CASE WHEN p.data_programare IS NOT NULL AND p.data_programare > NOW() AND p.status != 'completata' THEN 1 ELSE 0 END), 0) AS viitoare,
+          COALESCE(SUM(CASE WHEN p.data_programare IS NOT NULL AND p.data_programare <= NOW() AND p.status != 'completata' THEN 1 ELSE 0 END), 0) AS trecute,
+          COALESCE(SUM(CASE WHEN p.status = 'completata' THEN 1 ELSE 0 END), 0) AS completate
+        FROM programari p
+        JOIN pacienti u ON p.pacient_id = u.id
+        WHERE ${countsWhereClause}
+      `;
+
+      const searchParams = search
+        ? [searchLike, searchLike, searchLike, searchLike, searchLike, searchLike]
+        : [];
+
+      countParams = [userId, ...searchParams];
+      countsParams = [userId, ...searchParams];
+      listParams = [userId, ...searchParams, limit, offset];
     } else {
       let whereClause = "p.pacient_id = ?";
-      
+      let countsWhereClause = "p.pacient_id = ?";
+      const searchClause = search
+        ? ` AND (
+              d.nume LIKE ?
+              OR d.prenume LIKE ?
+              OR d.email LIKE ?
+              OR DATE_FORMAT(p.data_programare, '%d.%m.%Y') LIKE ?
+              OR DATE_FORMAT(p.data_programare, '%d.%m.%Y, %H:%i') LIKE ?
+              OR DATE_FORMAT(p.data_programare, '%Y-%m-%d') LIKE ?
+            )`
+        : "";
+
       if (filter === 'viitoare') {
         whereClause += " AND p.data_programare > NOW() AND p.status != 'completata'";
       } else if (filter === 'trecute') {
@@ -88,6 +124,9 @@ router.get("/", verifyToken, async (req, res) => {
       } else if (filter === 'completate') {
         whereClause += " AND p.status = 'completata'";
       }
+
+      whereClause += searchClause;
+      countsWhereClause += searchClause;
 
       query = `
         SELECT p.id, p.data_programare, p.status, p.doctor_id, d.nume AS medic_nume, d.email AS medic_email
@@ -101,17 +140,35 @@ router.get("/", verifyToken, async (req, res) => {
       countQuery = `
         SELECT COUNT(*) AS total
         FROM programari p
+        JOIN doctori d ON p.doctor_id = d.id
         WHERE ${whereClause}
       `;
 
-      params = [userId, limit, offset];
+      countsQuery = `
+        SELECT 
+          COUNT(*) AS toate,
+          COALESCE(SUM(CASE WHEN p.data_programare IS NOT NULL AND p.data_programare > NOW() AND p.status != 'completata' THEN 1 ELSE 0 END), 0) AS viitoare,
+          COALESCE(SUM(CASE WHEN p.data_programare IS NOT NULL AND p.data_programare <= NOW() AND p.status != 'completata' THEN 1 ELSE 0 END), 0) AS trecute,
+          COALESCE(SUM(CASE WHEN p.status = 'completata' THEN 1 ELSE 0 END), 0) AS completate
+        FROM programari p
+        JOIN doctori d ON p.doctor_id = d.id
+        WHERE ${countsWhereClause}
+      `;
+
+      const searchParams = search
+        ? [searchLike, searchLike, searchLike, searchLike, searchLike, searchLike]
+        : [];
+
+      countParams = [userId, ...searchParams];
+      countsParams = [userId, ...searchParams];
+      listParams = [userId, ...searchParams, limit, offset];
     }
 
-    const [[countsRow]] = await db.promise().query(countsQuery, [userId]);
-    const [[countRow]] = await db.promise().query(countQuery, [userId]);
+    const [[countsRow]] = await db.promise().query(countsQuery, countsParams);
+    const [[countRow]] = await db.promise().query(countQuery, countParams);
     const total = countRow.total;
 
-    const [rows] = await db.promise().query(query, params);
+    const [rows] = await db.promise().query(query, listParams);
 
     res.json({
       data: rows,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { api } from '../../services/api';
 import {
   Container,
@@ -54,27 +54,32 @@ export default function Programari() {
   const [programareToDelete, setProgramareToDelete] = useState(null);
   const [filter, setFilter] = useState('toate');
   const [counts, setCounts] = useState({ toate: 0, viitoare: 0, trecute: 0, completate: 0 });
+  const [searchInput, setSearchInput] = useState('');
+  const debounceRef = useRef(null);
 
 
-  const reload = async () => {
+  const reload = useCallback(async (pageNum = 1, searchTerm = '') => {
   setLoading(true);
   try {
-    const res = await api.get(`${API_URL}?page=${currentPage}&limit=10&filter=${filter}`);
+    const encodedSearch = encodeURIComponent(searchTerm.trim());
+    const res = await api.get(`${API_URL}?page=${pageNum}&limit=10&filter=${filter}&search=${encodedSearch}`);
     console.log('Programari response:', res.data);
     setProgramari(res.data.data || []);
     setTotalPages(res.data.total_pages || 1);
     setCounts(res.data.counts || { toate: 0, viitoare: 0, trecute: 0, completate: 0 });
+    setCurrentPage(pageNum);
   } catch (err) {
     console.error('Eroare la fetch programari:', err);
   } finally {
     setLoading(false);
   }
-};
+}, [filter]);
 
 
+  // Reload când se schimbă pagina sau filtrul (dar nu pe searchInput, pe care le handle debounce-ul)
   useEffect(() => {
-  reload();
-}, [currentPage, filter]);
+    reload(currentPage, searchInput);
+  }, [currentPage, filter, reload]);
 
 
   const openCalendar = (programare) => {
@@ -180,6 +185,27 @@ export default function Programari() {
     }
   };
 
+  const handleSearchInputChange = (e) => {
+    setSearchInput(e.target.value);
+  };
+
+  // Debounce search input - apelează reload cu pagina 1 și search curent
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(() => {
+      reload(1, searchInput);
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [searchInput, reload]);
+
   const getStatusChip = (dataOra, status) => {
     if (status === 'completata') {
       return <Chip size="small" label="Completată" color="info" />;
@@ -206,14 +232,22 @@ export default function Programari() {
   return (
     <AppLayout>
       <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <EventIcon sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               Programările mele
             </Typography>
           </Box>
-          
+
+          <TextField
+            size="small"
+            placeholder={user.role === 'doctor' ? 'Caută după pacient, email sau dată...' : 'Caută după doctor, email sau dată...'}
+            value={searchInput}
+            onChange={handleSearchInputChange}
+            sx={{ width: { xs: '100%', md: 420 } }}
+          />
+
           <ToggleButtonGroup
             value={filter}
             exclusive
