@@ -93,6 +93,45 @@ CREATE TABLE programari (
     INDEX idx_data_programare (data_programare),
     INDEX idx_status (status)
 );
+
+  CREATE TABLE conversatii (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id INT NOT NULL,
+    pacient_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (doctor_id) REFERENCES doctori(id) ON DELETE CASCADE,
+    FOREIGN KEY (pacient_id) REFERENCES pacienti(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_doctor_pacient (doctor_id, pacient_id),
+    INDEX idx_conversatii_doctor (doctor_id),
+    INDEX idx_conversatii_pacient (pacient_id),
+    INDEX idx_conversatii_updated_at (updated_at)
+  );
+
+  CREATE TABLE mesaje (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversatie_id INT NOT NULL,
+    sender_role ENUM('doctor', 'pacient') NOT NULL,
+    sender_id INT NOT NULL,
+    continut TEXT NOT NULL,
+    is_read TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversatie_id) REFERENCES conversatii(id) ON DELETE CASCADE,
+    INDEX idx_mesaje_conversatie (conversatie_id, created_at),
+    INDEX idx_mesaje_unread (conversatie_id, is_read)
+  );
+
+  CREATE TABLE conversatii_sterse (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversatie_id INT NOT NULL,
+    user_role ENUM('doctor', 'pacient') NOT NULL,
+    user_id INT NOT NULL,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversatie_id) REFERENCES conversatii(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_conversation_user (conversatie_id, user_role, user_id),
+    INDEX idx_conversation_deleted (conversatie_id),
+    INDEX idx_user_deleted (user_role, user_id)
+  );
 	
 -- Tabel pentru datele senzorilor Raspberry Pi
 CREATE TABLE sensor_readings (

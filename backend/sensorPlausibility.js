@@ -29,6 +29,36 @@ export function applyPlausibilityFilter({
   timestampMs,
   stateMap,
 }) {
+  if (sensorType === "temperatura") {
+    const numericTemp = asNumber(value1);
+    if (numericTemp === null) {
+      return {
+        value1: null,
+        value2,
+        filtered: true,
+        reason: "invalid-number",
+      };
+    }
+
+    // DS18B20 may report 85.0°C right after power-up or -127°C on bus faults.
+    // Keep the accepted range wide enough for ambient testing, but reject obvious sensor errors.
+    if (numericTemp === 85 || numericTemp === -127 || numericTemp < 5 || numericTemp > 45) {
+      return {
+        value1: null,
+        value2,
+        filtered: true,
+        reason: numericTemp === 85 ? "power-on-default" : "out-of-range",
+      };
+    }
+
+    return {
+      value1: Math.round(numericTemp * 10) / 10,
+      value2,
+      filtered: false,
+      reason: "ok",
+    };
+  }
+
   if (sensorType !== "puls") {
     return {
       value1,

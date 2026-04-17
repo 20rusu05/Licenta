@@ -22,6 +22,9 @@ from sensor_client import SensorClient
 from config import INTERVALS, DS18B20, PINS
 
 HARDWARE_AVAILABLE = os.path.isdir(DS18B20["base_dir"])
+DS18B20_READ_TIMEOUT_S = 2.0
+DS18B20_READ_POLL_S = 0.2
+DS18B20_MAX_RETRIES = 3
 
 
 class TemperatureSensor:
@@ -31,6 +34,7 @@ class TemperatureSensor:
         self.client = SensorClient("temperatura")
         self.running = False
         self.device_file = None
+        self.last_valid_temperature = None
 
         if HARDWARE_AVAILABLE:
             self._find_device()
@@ -47,12 +51,21 @@ class TemperatureSensor:
             self.device_file = os.path.join(device_folders[0], "w1_slave")
             device_id = os.path.basename(device_folders[0])
             print(f"[TEMPERATURĂ] Senzor găsit: {device_id}")
+            return True
         else:
+            self.device_file = None
             print("[TEMPERATURĂ] ⚠ Niciun senzor DS18B20 detectat!")
             print("  Verifică:")
             print(f"  1. dtoverlay=w1-gpio,gpiopin={PINS['ds18b20_data']} în /boot/firmware/config.txt")
             print(f"  2. Conexiunea fizică (DATA → GPIO {PINS['ds18b20_data']}, rezistor 4.7kΩ)")
             print("  3. sudo modprobe w1-gpio && sudo modprobe w1-therm")
+            return False
+
+    def _ensure_device(self):
+        """Reîncearcă detectarea dispozitivului dacă a dispărut."""
+        if self.device_file and os.path.exists(self.device_file):
+            return True
+        return self._find_device()
 
     def _read_raw(self):
         """Citire brută din fișierul senzorului."""
@@ -65,23 +78,48 @@ class TemperatureSensor:
         if not HARDWARE_AVAILABLE or not self.device_file:
             return self._simulate_temperature()
 
-        try:
-            lines = self._read_raw()
+        for attempt in range(1, DS18B20_MAX_RETRIES + 1):
+            if not self._ensure_device():
+                time.sleep(DS18B20_READ_POLL_S)
+                continue
 
-            while lines[0].strip()[-3:] != "YES":
-                time.sleep(0.2)
+            try:
                 lines = self._read_raw()
+                deadline = time.time() + DS18B20_READ_TIMEOUT_S
 
-            equals_pos = lines[1].find("t=")
-            if equals_pos != -1:
-                temp_string = lines[1][equals_pos + 2:]
-                temp_celsius = float(temp_string) / 1000.0
-                return round(temp_celsius, 2)
+                while lines and lines[0].strip()[-3:] != "YES":
+                    if time.time() >= deadline:
+                        print("[TEMPERATURĂ] Timeout la validarea citirii DS18B20")
+                        break
+                    time.sleep(DS18B20_READ_POLL_S)
+                    lines = self._read_raw()
 
-        except Exception as e:
-            print(f"[TEMPERATURĂ] Eroare citire: {e}")
+                if len(lines) < 2:
+                    print("[TEMPERATURĂ] Răspuns DS18B20 incomplet")
+                    continue
 
-        return None
+                equals_pos = lines[1].find("t=")
+                if equals_pos != -1:
+                    temp_string = lines[1][equals_pos + 2:]
+                    temp_celsius = float(temp_string) / 1000.0
+                    temp_celsius = round(temp_celsius, 2)
+                    self.last_valid_temperature = temp_celsius
+                    return temp_celsius
+
+            except FileNotFoundError:
+                self.device_file = None
+                print("[TEMPERATURĂ] Dispozitivul DS18B20 a dispărut temporar; reîncerc detectarea")
+            except Exception as e:
+                print(f"[TEMPERATURĂ] Eroare citire (încercarea {attempt}/{DS18B20_MAX_RETRIES}): {e}")
+
+            time.sleep(DS18B20_READ_POLL_S)
+
+        if self.last_valid_temperature is not None:
+            print("[TEMPERATURĂ] Folosesc ultima temperatură validă până revine senzorul")
+            return self.last_valid_temperature
+
+        print("[TEMPERATURĂ] Folosesc temperatură simulată temporar până revine senzorul")
+        return self._simulate_temperature()
 
     def _simulate_temperature(self):
         """Generează temperatură simulată."""

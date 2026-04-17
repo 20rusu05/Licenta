@@ -178,11 +178,8 @@ export default function LandingPage() {
 
         <Grid container spacing={3} sx={{ justifyContent: 'center' }}>
           {features.map((feature, index) => (
-            <Grid 
-              item 
-              xs={12} 
-              sm={6} 
-              md={3} 
+            <Grid
+              size={{ xs: 12, sm: 6, md: 3 }}
               key={index}
               sx={feature.centered ? { display: 'flex', justifyContent: 'center' } : {}}
             >
@@ -234,13 +231,13 @@ export default function LandingPage() {
       <Box sx={{ bgcolor: 'background.paper', py: 10 }}>
         <Container maxWidth="lg">
           <Grid container spacing={6} alignItems="center">
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography variant="h3" sx={{ fontWeight: 700, mb: 3 }}>
                 Beneficii pentru tine
               </Typography>
               <Grid container spacing={2}>
                 {benefits.map((benefit, index) => (
-                  <Grid item xs={12} key={index}>
+                  <Grid size={{ xs: 12 }} key={index}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <CheckCircleIcon sx={{ color: 'success.main', fontSize: 28 }} />
                       <Typography variant="body1">{benefit}</Typography>
@@ -249,9 +246,9 @@ export default function LandingPage() {
                 ))}
               </Grid>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Grid container spacing={3}>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <Paper
                     sx={{
                       p: 3,
@@ -269,7 +266,7 @@ export default function LandingPage() {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <Paper
                     sx={{
                       p: 3,
@@ -287,7 +284,7 @@ export default function LandingPage() {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Paper
                     sx={{
                       p: 3,

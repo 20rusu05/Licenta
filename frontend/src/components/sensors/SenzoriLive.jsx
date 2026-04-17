@@ -36,6 +36,8 @@ const ECG_TARGET_HALF_SPAN_MV = 85;
 const ECG_MAX_GAIN = 12;
 const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
+const SENSORS_CONTROL_EVENT = 'sensors-control-action';
+const SENSOR_READING_CLOCK_SKEW_TOLERANCE_MS = 10 * 60 * 1000;
 const HISTORY_PAGE_SIZE = 50;
 const HISTORY_LIMITS = {
   ecg: 15000,
@@ -115,6 +117,17 @@ function normalizeEcgValue(value) {
 
   const clamped = Math.max(0, Math.min(3300, numeric));
   return ECG_INVERT_DISPLAY ? (3300 - clamped) : clamped;
+}
+
+function normalizeTemperatureValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+
+  // DS18B20 can briefly report 85.0°C on power-up or during bus glitches.
+  // Keep only obvious sensor errors out of the chart; low ambient values are still valid.
+  if (numeric === 85 || numeric === -127 || numeric < 5 || numeric > 45) return null;
+
+  return Math.round(numeric * 10) / 10;
 }
 
 function median(values) {
@@ -286,6 +299,7 @@ export default function SenzoriLive() {
   const selectedPatientRef = useRef(null);
   const sessionSensorsEnabledRef = useRef({ ecg: false, puls: false, temperatura: false });
   const sessionSensorStartAtRef = useRef({ ecg: null, puls: null, temperatura: null });
+  const sensorsRunningRef = useRef({ ecg: false, puls: false, temperatura: false });
 
   useEffect(() => {
     ecgPausedRef.current = ecgPaused;
@@ -299,48 +313,33 @@ export default function SenzoriLive() {
     sessionSensorStartAtRef.current = sessionSensorStartAt;
   }, [sessionSensorStartAt]);
 
+  useEffect(() => {
+    sensorsRunningRef.current = sensorsRunning;
+  }, [sensorsRunning]);
+
   const showToast = useCallback((message, severity = 'info') => {
     setToast({ open: true, message, severity });
   }, []);
 
-  const clearSensorData = useCallback((sensorType) => {
-    if (sensorType === 'ecg') {
-      ecgBufferRef.current = [];
-      setEcgData([]);
-      return;
-    }
-
-    if (sensorType === 'puls') {
-      setPulseData([]);
-      setLatestPulse({ hr: '--' });
-      return;
-    }
-
-    if (sensorType === 'temperatura') {
-      setTempData([]);
-      setLatestTemp('--');
-    }
-  }, []);
-
   const beginCurrentSessionForSensor = useCallback((sensorType) => {
     const now = Date.now();
-    clearSensorData(sensorType);
     setSessionSensorsEnabled((prev) => ({ ...prev, [sensorType]: true }));
     setSessionSensorStartAt((prev) => ({ ...prev, [sensorType]: now }));
-  }, [clearSensorData]);
+  }, []);
 
   const isReadingAllowedForCurrentSession = useCallback((sensorType, readingTimestamp) => {
     const enabled = Boolean(sessionSensorsEnabledRef.current?.[sensorType]);
-    if (!enabled) return false;
+    const running = Boolean(sensorsRunningRef.current?.[sensorType]);
+    if (!enabled && !running) return false;
 
     const startedAt = sessionSensorStartAtRef.current?.[sensorType];
-    if (!startedAt) return false;
+    if (!startedAt) return true;
 
     if (!readingTimestamp) return true;
 
     const readingTime = new Date(readingTimestamp).getTime();
     if (!Number.isFinite(readingTime)) return true;
-    return readingTime >= startedAt;
+    return readingTime + SENSOR_READING_CLOCK_SKEW_TOLERANCE_MS >= startedAt;
   }, []);
 
   const handleStartSensors = async (sensorType) => {
@@ -380,6 +379,13 @@ export default function SenzoriLive() {
       if (response.data.success) {
         setSessionSensorsEnabled((prev) => ({ ...prev, [sensorType]: false }));
         setSessionSensorStartAt((prev) => ({ ...prev, [sensorType]: null }));
+        setSensorStatus((prev) => ({
+          ...prev,
+          [sensorType]: {
+            ...(prev[sensorType] || {}),
+            online: false,
+          },
+        }));
         setSensorsRunning(prev => ({ ...prev, [sensorType]: false }));
         showToast(`Senzorul ${sensorType.toUpperCase()} a fost oprit`, 'success');
       }
@@ -391,14 +397,25 @@ export default function SenzoriLive() {
     }
   };
 
-  const checkSensorsRunning = async () => {
+  const checkSensorsRunning = useCallback(async () => {
     try {
       const response = await api.get('/sensors/running');
-      setSensorsRunning(response.data.running);
+      const nextRunning = response?.data?.running || { ecg: false, puls: false, temperatura: false };
+      setSensorsRunning(nextRunning);
+      setSessionSensorsEnabled((prev) => ({
+        ecg: Boolean(nextRunning.ecg),
+        puls: Boolean(nextRunning.puls),
+        temperatura: Boolean(nextRunning.temperatura),
+      }));
+      setSessionSensorStartAt((prev) => ({
+        ecg: nextRunning.ecg ? (prev.ecg || Date.now()) : null,
+        puls: nextRunning.puls ? (prev.puls || Date.now()) : null,
+        temperatura: nextRunning.temperatura ? (prev.temperatura || Date.now()) : null,
+      }));
     } catch (err) {
       console.error('Eroare verificare status:', err);
     }
-  };
+  }, []);
 
   const loadHistoryForPatient = useCallback(async (pacientId) => {
     if (!pacientId) return;
@@ -430,8 +447,8 @@ export default function SenzoriLive() {
 
       const nextTemp = (tempRes.data.readings || []).map((r) => ({
         time: new Date(r.created_at).toLocaleTimeString('ro-RO'),
-        temp: r.value_1,
-      })).slice(-MAX_VITAL_POINTS);
+        temp: normalizeTemperatureValue(r.value_1),
+      })).filter((r) => r.temp !== null).slice(-MAX_VITAL_POINTS);
 
       ecgBufferRef.current = nextEcg;
       setEcgData(nextEcg);
@@ -722,6 +739,96 @@ export default function SenzoriLive() {
   }, []);
 
   useEffect(() => {
+    const intervalId = setInterval(() => {
+      checkSensorsRunning();
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [checkSensorsRunning]);
+
+  useEffect(() => {
+    const handleSensorsControlAction = (event) => {
+      const detail = event?.detail || {};
+      const action = detail.action;
+      const sensorTypes = Array.isArray(detail.sensorTypes) && detail.sensorTypes.length
+        ? detail.sensorTypes
+        : ['ecg', 'puls', 'temperatura'];
+
+      if (!action || !selectedPatientRef.current?.id) return;
+
+      const actionPacientId = Number(detail.pacientId);
+      const selectedId = Number(selectedPatientRef.current.id);
+      if (Number.isFinite(actionPacientId) && actionPacientId > 0 && actionPacientId !== selectedId) {
+        return;
+      }
+
+      if (action === 'start') {
+        const startedAt = Date.now();
+        setSessionSensorsEnabled((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => { next[type] = true; });
+          return next;
+        });
+        setSessionSensorStartAt((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => { next[type] = startedAt; });
+          return next;
+        });
+        setSensorsRunning((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => { next[type] = true; });
+          return next;
+        });
+        setSensorStatus((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => {
+            next[type] = {
+              ...(next[type] || {}),
+              online: true,
+            };
+          });
+          return next;
+        });
+      }
+
+      if (action === 'stop') {
+        setSessionSensorsEnabled((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => { next[type] = false; });
+          return next;
+        });
+        setSessionSensorStartAt((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => { next[type] = null; });
+          return next;
+        });
+        setSensorStatus((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => {
+            next[type] = {
+              ...(next[type] || {}),
+              online: false,
+            };
+          });
+          return next;
+        });
+        setSensorsRunning((prev) => {
+          const next = { ...prev };
+          sensorTypes.forEach((type) => { next[type] = false; });
+          return next;
+        });
+      }
+
+      checkSensorsRunning();
+    };
+
+    window.addEventListener(SENSORS_CONTROL_EVENT, handleSensorsControlAction);
+    return () => {
+      window.removeEventListener(SENSORS_CONTROL_EVENT, handleSensorsControlAction);
+    };
+  }, [checkSensorsRunning]);
+
+  useEffect(() => {
     if (!selectedPatient?.id) {
       handleRefresh();
       setSessionSensorsEnabled({ ecg: false, puls: false, temperatura: false });
@@ -802,11 +909,13 @@ export default function SenzoriLive() {
           return next.slice(-MAX_VITAL_POINTS);
         });
       } else if (data.sensor_type === 'temperatura') {
-        setLatestTemp(data.value_1);
+        const tempValue = normalizeTemperatureValue(data.value_1);
+        if (tempValue === null) return;
+        setLatestTemp(tempValue);
         setTempData(prev => {
           const next = [...prev, {
             time: new Date(data.timestamp).toLocaleTimeString('ro-RO'),
-            temp: data.value_1,
+            temp: tempValue,
           }];
           return next.slice(-MAX_VITAL_POINTS);
         });
@@ -848,17 +957,26 @@ export default function SenzoriLive() {
           const next = [...prev];
           data.readings
             .filter((r) => isReadingAllowedForCurrentSession('temperatura', r.timestamp || data.timestamp))
+            .map((r) => ({
+              timestamp: r.timestamp,
+              temp: normalizeTemperatureValue(r.value_1),
+            }))
+            .filter((r) => r.temp !== null)
             .forEach(r => {
             next.push({
               time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
-              temp: r.value_1,
+              temp: r.temp,
             });
           });
           return next.slice(-MAX_VITAL_POINTS);
         });
         const allowedReadings = data.readings.filter((r) => isReadingAllowedForCurrentSession('temperatura', r.timestamp || data.timestamp));
-        if (allowedReadings.length > 0) {
-          setLatestTemp(allowedReadings[allowedReadings.length - 1].value_1);
+        const lastValidTemp = [...allowedReadings]
+          .map((r) => normalizeTemperatureValue(r.value_1))
+          .filter((temp) => temp !== null)
+          .pop();
+        if (lastValidTemp !== undefined) {
+          setLatestTemp(lastValidTemp);
         }
       }
     });
@@ -1301,37 +1419,41 @@ export default function SenzoriLive() {
           </ToggleButton>
         </ToggleButtonGroup>
 
-        {activeTab === 'all' && (
-          <>
-            <Grid container spacing={1.5} alignItems="stretch">
+        <Box sx={{ display: activeTab === 'all' ? 'block' : 'none' }}>
+          <Grid container spacing={1.5} alignItems="stretch">
             <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
               <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
               <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight />
             </Grid>
-            </Grid>
-            <Box sx={{ mt: 1.5, width: '100%' }}>
-              <ECGChart
-                data={ecgData}
-                theme={theme}
-                paused={ecgPaused}
-                onTogglePause={() => setEcgPaused((prev) => !prev)}
-              />
-            </Box>
-          </>
-        )}
+          </Grid>
+          <Box sx={{ mt: 1.5, width: '100%' }}>
+            <ECGChart
+              data={ecgData}
+              theme={theme}
+              paused={ecgPaused}
+              onTogglePause={() => setEcgPaused((prev) => !prev)}
+            />
+          </Box>
+        </Box>
 
-        {activeTab === 'ecg' && (
+        <Box sx={{ display: activeTab === 'ecg' ? 'block' : 'none' }}>
           <ECGChart
             data={ecgData}
             theme={theme}
             paused={ecgPaused}
             onTogglePause={() => setEcgPaused((prev) => !prev)}
           />
-        )}
-        {activeTab === 'puls' && <PulseChart data={pulseData} latest={latestPulse} theme={theme} />}
-        {activeTab === 'temperatura' && <TempChart data={tempData} latest={latestTemp} theme={theme} />}
+        </Box>
+
+        <Box sx={{ display: activeTab === 'puls' ? 'block' : 'none' }}>
+          <PulseChart data={pulseData} latest={latestPulse} theme={theme} />
+        </Box>
+
+        <Box sx={{ display: activeTab === 'temperatura' ? 'block' : 'none' }}>
+          <TempChart data={tempData} latest={latestTemp} theme={theme} />
+        </Box>
 
         <Dialog open={confirmAssignOpen} onClose={() => {
           setConfirmAssignOpen(false);

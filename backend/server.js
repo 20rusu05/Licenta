@@ -15,6 +15,7 @@ import forgotPasswordRouter from "./routes/forgot-password.js";
 import resetPasswordRouter from "./routes/reset-password.js";
 import adminRouter from "./routes/admin.js";
 import sensorsRouter from "./routes/sensors.js";
+import messagesRouter from "./routes/messages.js";
 import { db } from "./db.js";
 import { applyPlausibilityFilter } from "./sensorPlausibility.js";
 
@@ -86,6 +87,7 @@ app.use("/api/pacienti", pacientiRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/sensors", sensorsRouter);
+app.use("/api/messages", messagesRouter);
 app.use("/api", forgotPasswordRouter);
 app.use("/api", resetPasswordRouter);
 

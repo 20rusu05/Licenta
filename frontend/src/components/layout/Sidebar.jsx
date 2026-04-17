@@ -11,11 +11,13 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
+import ChatIcon from '@mui/icons-material/Chat';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../services/api';
 
 const drawerWidth = 240;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
+const SENSORS_CONTROL_EVENT = 'sensors-control-action';
 
 export default function Sidebar() {
   const theme = useTheme();
@@ -64,6 +66,7 @@ export default function Sidebar() {
       { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
       { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
       { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
+      { label: 'Mesaje', icon: <ChatIcon />, path: '/dashboard/mesaje' },
     ];
     base.push({ label: 'Senzori Live', icon: <SensorsIcon />, path: '/dashboard/senzori' });
     if (user?.role === 'doctor') {
@@ -155,7 +158,7 @@ export default function Sidebar() {
 
     setActionLoading((prev) => ({ ...prev, startAll: true }));
     try {
-      await Promise.all(
+      await Promise.allSettled(
         ['ecg', 'puls', 'temperatura'].map((sensorType) =>
           api.post('/sensors/start', {
             sensorType,
@@ -164,6 +167,16 @@ export default function Sidebar() {
         )
       );
       await refreshRunningSensors();
+      window.dispatchEvent(new CustomEvent(SENSORS_CONTROL_EVENT, {
+        detail: {
+          action: 'start',
+          sensorTypes: ['ecg', 'puls', 'temperatura'],
+          pacientId: monitoringInfo.patientId,
+          at: Date.now(),
+        },
+      }));
+    } catch (err) {
+      console.error('Eroare Start all senzori:', err);
     } finally {
       setActionLoading((prev) => ({ ...prev, startAll: false }));
     }
@@ -172,12 +185,22 @@ export default function Sidebar() {
   const handleStopAllSensors = async () => {
     setActionLoading((prev) => ({ ...prev, stopAll: true }));
     try {
-      await Promise.all(
+      await Promise.allSettled(
         ['ecg', 'puls', 'temperatura'].map((sensorType) =>
           api.post('/sensors/stop', { sensorType })
         )
       );
       await refreshRunningSensors();
+      window.dispatchEvent(new CustomEvent(SENSORS_CONTROL_EVENT, {
+        detail: {
+          action: 'stop',
+          sensorTypes: ['ecg', 'puls', 'temperatura'],
+          pacientId: monitoringInfo.patientId,
+          at: Date.now(),
+        },
+      }));
+    } catch (err) {
+      console.error('Eroare Stop all senzori:', err);
     } finally {
       setActionLoading((prev) => ({ ...prev, stopAll: false }));
     }
