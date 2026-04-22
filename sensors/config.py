@@ -37,7 +37,7 @@ SENSOR_TLS_CA_CERT = os.getenv("SENSOR_TLS_CA_CERT", "").strip()
 DEVICE_ID = "rpi5-01"
 
 INTERVALS = {
-    "ecg": 0.01,
+    "ecg": 0.005,
     "puls": 1.0,
     "temperatura": 2.0,
 }
@@ -53,12 +53,18 @@ ECG_INPUT = {
     "lead_disconnect_confirm_s": 0.45,  # Cat timp trebuie sa ramana OFF ca sa il marcam deconectat
     "lead_reconnect_confirm_s": 0.15,   # Cat timp trebuie sa ramana ON ca sa il marcam reconectat
     "filter_enabled": True,
-    "hum_suppress_50hz": True,
-    "hum_sample_rate_target": 100.0,
+    "hum_suppress_50hz": False,
+    "hum_sample_rate_target": 200.0,
     "hum_sample_rate_tolerance": 0.25,
-    "highpass_alpha": 0.985,
-    "lowpass_alpha": 0.35,
-    "baseline_alpha": 0.01,
+    "highpass_alpha": 0.992,
+    "lowpass_alpha": 0.24,
+    "baseline_alpha": 0.004,
+    "median_window_size": 5,
+    "notch_enabled": True,
+    "notch_freq_hz": 50.0,
+    "notch_r": 0.97,
+    "max_step_mv": 65.0,
+    "reconnect_settle_samples": 20,
 }
 
 PINS = {

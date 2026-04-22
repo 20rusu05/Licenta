@@ -26,15 +26,25 @@ import AppLayout from '../layout/AppLayout';
 import { api } from '../../services/api';
 
 const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || `https://${window.location.hostname}:3001`;
-const MAX_ECG_POINTS = 300;
+const MAX_ECG_POINTS = 1500;
 const MAX_VITAL_POINTS = 60;
 const ECG_INVERT_DISPLAY = false;
 const ECG_LEADOFF_THRESHOLD = 1;
 const ECG_SHOW_AC_ONLY = true;
-const ECG_SMOOTH_WINDOW = 7;
-const ECG_TARGET_HALF_SPAN_MV = 85;
-const ECG_MAX_GAIN = 12;
+const ECG_BASELINE_SEC = 0.8;
+const ECG_POST_SMOOTH_SEC = 0.02;
+const ECG_TARGET_HALF_SPAN_MV = 55;
+const ECG_MAX_GAIN = 4;
 const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
+const ECG_SPIKE_MAX_STEP = 180;
+const ECG_DEFAULT_SAMPLE_RATE_HZ = 250;
+const ECG_NOTCH_FREQ_HZ = 50;
+const ECG_DISPLAY_WINDOW_SEC = 6;
+const ECG_GRID_MAJOR_TIME_SEC = 0.2;
+const ECG_GRID_MINOR_TIME_SEC = 0.04;
+const ECG_MIN_SAMPLE_INTERVAL_MS = Math.round(1000 / ECG_DEFAULT_SAMPLE_RATE_HZ);
+const ECG_LOCK_Y_DOMAIN = true;
+const ECG_FIXED_Y_LIMIT_MV = 150;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
 const SENSORS_CONTROL_EVENT = 'sensors-control-action';
 const SENSOR_READING_CLOCK_SKEW_TOLERANCE_MS = 10 * 60 * 1000;
@@ -50,6 +60,15 @@ function toIsoDate(value) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
   return date.toISOString();
+}
+
+function toTimestampMs(value) {
+  if (!value) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : Math.round(value * 1000);
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function toSqlDateTime(value) {
@@ -139,6 +158,124 @@ function median(values) {
     : sorted[mid];
 }
 
+function quantile(values, q) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const pos = (sorted.length - 1) * Math.max(0, Math.min(1, q));
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  if (sorted[base + 1] !== undefined) {
+    return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+  }
+  return sorted[base];
+}
+
+function robustClipSeries(values) {
+  if (!values.length) return values;
+  const med = median(values);
+  const absDeviations = values.map((v) => Math.abs(v - med));
+  const mad = median(absDeviations);
+
+  // Convert MAD to a robust sigma estimate; keep a minimum for very flat windows.
+  const robustSigma = Math.max(1.5, mad * 1.4826);
+  const limit = robustSigma * 4.5;
+  const min = med - limit;
+  const max = med + limit;
+
+  return values.map((v) => Math.max(min, Math.min(max, v)));
+}
+
+function percentileClipSeries(values, lowQ = 0.005, highQ = 0.995) {
+  if (!values.length) return values;
+  const low = quantile(values, lowQ);
+  const high = quantile(values, highQ);
+  return values.map((v) => Math.max(low, Math.min(high, v)));
+}
+
+function toOddWindowBySeconds(sampleRateHz, seconds, minSize = 3, maxSize = 401) {
+  const raw = Math.round(sampleRateHz * Math.max(0, seconds));
+  const bounded = Math.max(minSize, Math.min(maxSize, raw));
+  return bounded % 2 === 0 ? bounded + 1 : bounded;
+}
+
+function medianFilter3(values) {
+  if (values.length < 3) return values;
+  const out = [...values];
+  for (let i = 1; i < values.length - 1; i += 1) {
+    const a = values[i - 1];
+    const b = values[i];
+    const c = values[i + 1];
+    out[i] = median([a, b, c]);
+  }
+  return out;
+}
+
+function estimateSamplingRateHz(data) {
+  const ts = data
+    .map((p) => toTimestampMs(p.ts))
+    .filter((v) => Number.isFinite(v));
+
+  if (ts.length < 6) return ECG_DEFAULT_SAMPLE_RATE_HZ;
+
+  const diffs = [];
+  for (let i = 1; i < ts.length; i += 1) {
+    const dt = ts[i] - ts[i - 1];
+    if (dt > 0 && dt < 1000) diffs.push(dt);
+  }
+
+  if (!diffs.length) return ECG_DEFAULT_SAMPLE_RATE_HZ;
+  const dtMs = median(diffs);
+  const hz = 1000 / dtMs;
+  if (!Number.isFinite(hz)) return ECG_DEFAULT_SAMPLE_RATE_HZ;
+  return Math.max(80, Math.min(500, hz));
+}
+
+function applyNotchFilter(values, sampleRateHz, notchHz = ECG_NOTCH_FREQ_HZ) {
+  if (!values.length || sampleRateHz < (notchHz * 2.2)) return values;
+
+  const w0 = (2 * Math.PI * notchHz) / sampleRateHz;
+  const cosW0 = Math.cos(w0);
+  const r = 0.985;
+
+  const b0 = 1;
+  const b1 = -2 * cosW0;
+  const b2 = 1;
+  const a1 = -2 * r * cosW0;
+  const a2 = r * r;
+
+  const out = new Array(values.length);
+  let x1 = 0;
+  let x2 = 0;
+  let y1 = 0;
+  let y2 = 0;
+
+  for (let i = 0; i < values.length; i += 1) {
+    const x0 = values[i];
+    const y0 = (b0 * x0) + (b1 * x1) + (b2 * x2) - (a1 * y1) - (a2 * y2);
+    out[i] = y0;
+
+    x2 = x1;
+    x1 = x0;
+    y2 = y1;
+    y1 = y0;
+  }
+
+  return out;
+}
+
+function makeSteps(start, end, step) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(step) || step <= 0) {
+    return [];
+  }
+
+  const out = [];
+  const first = Math.ceil(start / step) * step;
+  for (let v = first; v <= end + 1e-9; v += step) {
+    out.push(Math.round(v * 1000) / 1000);
+  }
+  return out;
+}
+
 function smoothSeries(values, windowSize) {
   const w = Math.max(1, windowSize | 0);
   if (w === 1 || values.length <= 2) return values;
@@ -152,6 +289,34 @@ function smoothSeries(values, windowSize) {
     out.push(chunk.reduce((acc, v) => acc + v, 0) / chunk.length);
   }
   return out;
+}
+
+function stabilizeDisplaySeries(points, sampleRateHz) {
+  if (!points.length) return points;
+  const sorted = [...points].sort((a, b) => a.xSec - b.xSec);
+  const values = sorted.map((p) => p.value);
+
+  // Display-only denoise to reduce visual jitter while preserving backend/raw samples.
+  const deSpiked = medianFilter3(values);
+  const visualWindow = toOddWindowBySeconds(sampleRateHz, 0.03, 3, 11);
+  const smoothed = smoothSeries(deSpiked, visualWindow);
+
+  const diffs = [];
+  for (let i = 1; i < smoothed.length; i += 1) {
+    diffs.push(Math.abs(smoothed[i] - smoothed[i - 1]));
+  }
+  const adaptiveStep = Math.max(6, Math.min(26, quantile(diffs, 0.92) * 1.8 || 12));
+
+  const limited = [...smoothed];
+  for (let i = 1; i < limited.length; i += 1) {
+    const delta = limited[i] - limited[i - 1];
+    if (Math.abs(delta) > adaptiveStep) {
+      limited[i] = limited[i - 1] + (Math.sign(delta) * adaptiveStep);
+    }
+  }
+
+  const center = median(limited);
+  return sorted.map((p, i) => ({ ...p, value: limited[i] - center }));
 }
 
 function buildEcgDisplay(data) {
@@ -168,47 +333,93 @@ function buildEcgDisplay(data) {
   }
 
   if (!ECG_SHOW_AC_ONLY) {
+    const sampleRateHz = estimateSamplingRateHz(data);
+    const rawChart = data.map((p, i) => ({
+      ...p,
+      xSec: -((data.length - 1 - i) / sampleRateHz),
+    })).filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC);
+
     return {
-      chartData: data,
+      chartData: stabilizeDisplaySeries(rawChart, sampleRateHz),
       yDomain: [0, 3300],
+      xDomain: [-ECG_DISPLAY_WINDOW_SEC, 0],
+      sampleRateHz,
       yLabel: 'mV',
       baseline: 1650,
       quality: 'RAW',
       gain: 1,
       halfSpan: 1650,
+      majorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MAJOR_TIME_SEC),
+      minorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MINOR_TIME_SEC),
+      majorHorizontals: makeSteps(0, 3300, 330),
+      minorHorizontals: makeSteps(0, 3300, 66),
     };
   }
 
+  const sampleRateHz = estimateSamplingRateHz(data);
   const rawValues = data.map((p) => p.value);
-  const baseline = median(rawValues);
-  const acValues = rawValues.map((v) => v - baseline);
-  const smoothed = smoothSeries(acValues, ECG_SMOOTH_WINDOW);
+  const clipped = percentileClipSeries(rawValues, 0.005, 0.995);
+  const baselineWindow = toOddWindowBySeconds(sampleRateHz, ECG_BASELINE_SEC, 11, 801);
+  const baselineTrend = smoothSeries(clipped, baselineWindow);
+  const detrended = clipped.map((v, i) => v - baselineTrend[i]);
+  const notchFiltered = applyNotchFilter(detrended, sampleRateHz);
+  const postWindow = toOddWindowBySeconds(sampleRateHz, ECG_POST_SMOOTH_SEC, 1, 9);
+  const deSpiked = medianFilter3(notchFiltered);
+  const smoothed = smoothSeries(deSpiked, postWindow);
 
-  const halfSpan = Math.max(...smoothed.map((v) => Math.abs(v)), 0);
-  const computedGain = halfSpan > 0
-    ? Math.min(ECG_MAX_GAIN, Math.max(1, ECG_TARGET_HALF_SPAN_MV / halfSpan))
+  // Keep baseline locked near zero regardless of slow drift.
+  const center = median(smoothed);
+  const zeroCentered = smoothed.map((v) => v - center);
+
+  const absPre = zeroCentered.map((v) => Math.abs(v));
+  const preLimit = Math.max(20, quantile(absPre, 0.98));
+  const clippedCentered = zeroCentered.map((v) => Math.max(-preLimit, Math.min(preLimit, v)));
+
+  const absValues = clippedCentered.map((v) => Math.abs(v));
+  const robustHalfSpan = quantile(absValues, 0.9);
+  const peakHalfSpan = Math.max(...absValues, 0);
+  const computedGain = robustHalfSpan > 0
+    ? Math.min(ECG_MAX_GAIN, Math.max(1, ECG_TARGET_HALF_SPAN_MV / robustHalfSpan))
     : 1;
 
-  const quality = halfSpan < ECG_MIN_USEFUL_HALF_SPAN_MV ? 'Semnal slab' : 'Semnal util';
-  const amplified = smoothed.map((v) => v * computedGain);
+  const quality = robustHalfSpan < ECG_MIN_USEFUL_HALF_SPAN_MV ? 'Semnal slab' : 'Semnal util';
+  const amplified = clippedCentered.map((v) => v * computedGain);
 
-  const chartData = data.map((p, i) => ({
+  const withTime = data.map((p, i) => ({
     ...p,
+    xSec: Number.isFinite(toTimestampMs(p.ts))
+      ? ((toTimestampMs(p.ts) - (toTimestampMs(data[data.length - 1]?.ts) || toTimestampMs(p.ts))) / 1000)
+      : -((data.length - 1 - i) / sampleRateHz),
     value: amplified[i],
   }));
 
-  const absMax = Math.max(20, ...amplified.map((v) => Math.abs(v)));
-  const margin = Math.max(8, Math.round(absMax * 0.15));
-  const limit = Math.round(absMax + margin);
+  const chartData = stabilizeDisplaySeries(
+    withTime.filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC && p.xSec <= 0),
+    sampleRateHz
+  );
+
+  const displayHalfSpan = Math.max(20, Math.min(130, peakHalfSpan * computedGain * 1.1));
+  const margin = Math.max(8, Math.round(displayHalfSpan * 0.15));
+  const dynamicLimit = Math.round(displayHalfSpan + margin);
+  const limit = ECG_LOCK_Y_DOMAIN ? ECG_FIXED_Y_LIMIT_MV : dynamicLimit;
+  const ySpan = limit * 2;
+  const majorY = ySpan / 8;
+  const minorY = majorY / 5;
 
   return {
     chartData,
     yDomain: [-limit, limit],
+    xDomain: [-ECG_DISPLAY_WINDOW_SEC, 0],
+    sampleRateHz,
     yLabel: 'mV (AC)',
     baseline: 0,
     quality,
     gain: computedGain,
-    halfSpan,
+    halfSpan: robustHalfSpan,
+    majorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MAJOR_TIME_SEC),
+    minorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MINOR_TIME_SEC),
+    majorHorizontals: makeSteps(-limit, limit, majorY),
+    minorHorizontals: makeSteps(-limit, limit, minorY),
   };
 }
 
@@ -295,6 +506,7 @@ export default function SenzoriLive() {
   
   const socketRef = useRef(null);
   const ecgBufferRef = useRef([]);
+  const ecgSampleIndexRef = useRef(0);
   const ecgPausedRef = useRef(false);
   const selectedPatientRef = useRef(null);
   const sessionSensorsEnabledRef = useRef({ ecg: false, puls: false, temperatura: false });
@@ -331,6 +543,10 @@ export default function SenzoriLive() {
     const enabled = Boolean(sessionSensorsEnabledRef.current?.[sensorType]);
     const running = Boolean(sensorsRunningRef.current?.[sensorType]);
     if (!enabled && !running) return false;
+
+    // ECG packets can carry device timestamps with drift/low precision.
+    // Gate ECG only by current session state to avoid intermittent chart freeze.
+    if (sensorType === 'ecg') return true;
 
     const startedAt = sessionSensorStartAtRef.current?.[sensorType];
     if (!startedAt) return true;
@@ -431,12 +647,14 @@ export default function SenzoriLive() {
         .map((r) => ({
           value: normalizeEcgValue(r.value_1),
           leads_ok: r.value_1 > 0,
+          ts: toTimestampMs(r.created_at),
         }))
         .filter((r) => r.value !== null)
         .map((r, idx) => ({
           idx,
           value: r.value,
           leads_ok: r.leads_ok,
+          ts: r.ts,
         }))
         .slice(-MAX_ECG_POINTS);
 
@@ -451,6 +669,7 @@ export default function SenzoriLive() {
       })).filter((r) => r.temp !== null).slice(-MAX_VITAL_POINTS);
 
       ecgBufferRef.current = nextEcg;
+      ecgSampleIndexRef.current = nextEcg.length ? (nextEcg[nextEcg.length - 1].idx + 1) : 0;
       setEcgData(nextEcg);
       setPulseData(nextPulse);
       setTempData(nextTemp);
@@ -841,14 +1060,35 @@ export default function SenzoriLive() {
     setSessionSensorStartAt({ ecg: null, puls: null, temperatura: null });
   }, [selectedPatient?.id]);
 
-  const appendEcgPoint = useCallback((value, leadsOk = true) => {
+  const appendEcgPoint = useCallback((value, leadsOk = true, timestamp = null) => {
     if (ecgPausedRef.current) return;
+    if (!leadsOk) return;
+
+    const prevPoint = ecgBufferRef.current[ecgBufferRef.current.length - 1];
+    let safeValue = value;
+    if (prevPoint && Number.isFinite(prevPoint.value)) {
+      const delta = value - prevPoint.value;
+      if (Math.abs(delta) > ECG_SPIKE_MAX_STEP) {
+        safeValue = prevPoint.value + (Math.sign(delta) * ECG_SPIKE_MAX_STEP);
+      }
+    }
+
+    const prevTs = toTimestampMs(prevPoint?.ts);
+    let plotTs = toTimestampMs(timestamp);
+    if (!Number.isFinite(plotTs)) {
+      plotTs = Number.isFinite(prevTs) ? (prevTs + ECG_MIN_SAMPLE_INTERVAL_MS) : Date.now();
+    } else if (Number.isFinite(prevTs) && plotTs <= prevTs) {
+      // Ensure strictly increasing timestamps for stable X-axis progression.
+      plotTs = prevTs + ECG_MIN_SAMPLE_INTERVAL_MS;
+    }
 
     const nextPoint = {
-      idx: ecgBufferRef.current.length,
-      value,
+      idx: ecgSampleIndexRef.current,
+      value: safeValue,
       leads_ok: leadsOk,
+      ts: plotTs,
     };
+    ecgSampleIndexRef.current += 1;
     ecgBufferRef.current = [...ecgBufferRef.current, nextPoint].slice(-MAX_ECG_POINTS);
     setEcgData([...ecgBufferRef.current]);
   }, []);
@@ -896,9 +1136,10 @@ export default function SenzoriLive() {
       }
 
       if (data.sensor_type === 'ecg') {
+        if (data.leads_ok === false) return;
         const ecgValue = normalizeEcgValue(data.value_1);
         if (ecgValue === null) return;
-        appendEcgPoint(ecgValue, data.value_1 > 0);
+        appendEcgPoint(ecgValue, true, data.timestamp);
       } else if (data.sensor_type === 'puls') {
         setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
@@ -932,9 +1173,10 @@ export default function SenzoriLive() {
       if (data.sensor_type === 'ecg') {
         data.readings
           .filter((r) => isReadingAllowedForCurrentSession('ecg', r.timestamp || data.timestamp))
-          .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: r.leads_ok }))
+          .filter((r) => r.leads_ok !== false)
+          .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: true, ts: r.timestamp || data.timestamp }))
           .filter((r) => r.value !== null)
-          .forEach((r) => appendEcgPoint(r.value, r.leads_ok));
+          .forEach((r) => appendEcgPoint(r.value, r.leads_ok, r.ts));
       } else if (data.sensor_type === 'puls') {
         setPulseData(prev => {
           const next = [...prev];
@@ -995,6 +1237,7 @@ export default function SenzoriLive() {
     setPulseData([]);
     setTempData([]);
     ecgBufferRef.current = [];
+    ecgSampleIndexRef.current = 0;
     setLatestPulse({ hr: '--' });
     setLatestTemp('--');
   };
@@ -1836,16 +2079,36 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={display.chartData} margin={{ top: 10, right: 8, left: 0, bottom: 10 }}>
               <CartesianGrid
-                strokeDasharray="3 3"
-                stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'}
+                stroke={isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)'}
+                horizontalPoints={display.minorHorizontals}
+                verticalPoints={display.minorVerticals}
               />
-              <XAxis dataKey="idx" tick={false} />
+              <CartesianGrid
+                stroke={isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.12)'}
+                horizontalPoints={display.majorHorizontals}
+                verticalPoints={display.majorVerticals}
+              />
+              <XAxis
+                type="number"
+                dataKey="xSec"
+                domain={display.xDomain}
+                ticks={display.majorVerticals}
+                tickFormatter={(v) => `${Math.abs(v).toFixed(1)}s`}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 11 }}
+                axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.2)' }}
+              />
               <YAxis
                 domain={display.yDomain}
                 label={{ value: display.yLabel, angle: -90, position: 'insideLeft' }}
+                width={64}
+                tickFormatter={(value) => Number(value).toFixed(1)}
                 tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
               />
-              <ReferenceLine y={display.baseline} stroke="#666" strokeDasharray="5 5" label="Baseline" />
+              <RechartsTooltip
+                formatter={(val) => [`${Number(val).toFixed(2)} mV`, 'Semnal']}
+                labelFormatter={(label) => `t-${Math.abs(Number(label)).toFixed(3)} s`}
+              />
+              <ReferenceLine y={display.baseline} stroke="#667" strokeDasharray="5 5" label="Baseline" />
               <Line
                 type="monotone"
                 dataKey="value"

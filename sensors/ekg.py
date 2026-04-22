@@ -15,6 +15,7 @@ Conexiuni hardware uzuale:
 import time
 import signal
 import sys
+import math
 
 try:
     import RPi.GPIO as GPIO
@@ -84,13 +85,32 @@ class ECGSensor:
         self.highpass_alpha = float(ECG_INPUT.get("highpass_alpha", 0.985))
         self.lowpass_alpha = float(ECG_INPUT.get("lowpass_alpha", 0.35))
         self.baseline_alpha = float(ECG_INPUT.get("baseline_alpha", 0.01))
+        self.median_window_size = max(1, int(ECG_INPUT.get("median_window_size", 5)))
+        self.notch_enabled = bool(ECG_INPUT.get("notch_enabled", True))
+        self.notch_freq_hz = float(ECG_INPUT.get("notch_freq_hz", 50.0))
+        self.notch_r = float(ECG_INPUT.get("notch_r", 0.97))
+        self.max_step_mv = float(ECG_INPUT.get("max_step_mv", 70.0))
+        self.reconnect_settle_samples = max(0, int(ECG_INPUT.get("reconnect_settle_samples", 20)))
+        self._reconnect_skip_remaining = 0
         self._baseline_mv = None
         self._hp_prev_input = 0.0
         self._hp_prev_output = 0.0
         self._lp_prev_output = 0.0
         self._hum_prev_input = 0.0
+        self._median_buffer_mv = []
+        self._last_filtered_mv = None
+        self._notch_x1 = 0.0
+        self._notch_x2 = 0.0
+        self._notch_y1 = 0.0
+        self._notch_y2 = 0.0
+        self._notch_b0 = 1.0
+        self._notch_b1 = 0.0
+        self._notch_b2 = 0.0
+        self._notch_a1 = 0.0
+        self._notch_a2 = 0.0
         self.adc_max_value = 1023.0
         self.hardware_available = HARDWARE_AVAILABLE
+        self._update_notch_coeffs()
 
         if self.hardware_available:
             GPIO.setmode(GPIO.BCM)
@@ -236,10 +256,37 @@ class ECGSensor:
         self._hp_prev_output = 0.0
         self._lp_prev_output = 0.0
         self._hum_prev_input = 0.0
+        self._median_buffer_mv = []
+        self._last_filtered_mv = None
+        self._notch_x1 = 0.0
+        self._notch_x2 = 0.0
+        self._notch_y1 = 0.0
+        self._notch_y2 = 0.0
+
+    def _update_notch_coeffs(self):
+        fs = max(20.0, float(self.sample_rate_hz))
+        f0 = max(1.0, min(self.notch_freq_hz, (fs * 0.45)))
+        r = max(0.85, min(0.999, self.notch_r))
+
+        w0 = (2.0 * math.pi * f0) / fs
+        c = math.cos(w0)
+
+        self._notch_b0 = 1.0
+        self._notch_b1 = -2.0 * c
+        self._notch_b2 = 1.0
+        self._notch_a1 = -2.0 * r * c
+        self._notch_a2 = r * r
 
     def _filter_ecg_mv(self, raw_mv):
         if not self.filter_enabled:
             return max(0.0, min(3300.0, raw_mv))
+
+        # Reject impulsive ADC glitches before shaping the ECG band.
+        self._median_buffer_mv.append(raw_mv)
+        if len(self._median_buffer_mv) > self.median_window_size:
+            self._median_buffer_mv = self._median_buffer_mv[-self.median_window_size:]
+        sorted_buf = sorted(self._median_buffer_mv)
+        raw_mv = sorted_buf[len(sorted_buf) // 2]
 
         if self._baseline_mv is None:
             self._baseline_mv = raw_mv
@@ -260,8 +307,34 @@ class ECGSensor:
         self._hp_prev_input = centered
         self._hp_prev_output = highpassed
 
+        if self.notch_enabled:
+            x0 = highpassed
+            y0 = (
+                (self._notch_b0 * x0)
+                + (self._notch_b1 * self._notch_x1)
+                + (self._notch_b2 * self._notch_x2)
+                - (self._notch_a1 * self._notch_y1)
+                - (self._notch_a2 * self._notch_y2)
+            )
+
+            self._notch_x2 = self._notch_x1
+            self._notch_x1 = x0
+            self._notch_y2 = self._notch_y1
+            self._notch_y1 = y0
+            highpassed = y0
+
         lowpassed = self._lp_prev_output + (self.lowpass_alpha * (highpassed - self._lp_prev_output))
         self._lp_prev_output = lowpassed
+
+        # Slew limiter to cut rare spikes while preserving ECG morphology.
+        if self._last_filtered_mv is not None and self.max_step_mv > 0:
+            delta = lowpassed - self._last_filtered_mv
+            if delta > self.max_step_mv:
+                lowpassed = self._last_filtered_mv + self.max_step_mv
+            elif delta < -self.max_step_mv:
+                lowpassed = self._last_filtered_mv - self.max_step_mv
+
+        self._last_filtered_mv = lowpassed
 
         filtered_mv = self._baseline_mv + lowpassed
         return max(0.0, min(3300.0, filtered_mv))
@@ -322,6 +395,14 @@ class ECGSensor:
                 leads_ok, lo_plus, lo_minus = self.check_leads()
 
                 if leads_ok:
+                    if self.last_leads_state is False:
+                        self._reset_filter_state()
+                        self._reconnect_skip_remaining = self.reconnect_settle_samples
+                        print(
+                            f"[ECG] Electrozi reconectati (LO+={lo_plus}, LO-={lo_minus}) - "
+                            f"stabilizare {self._reconnect_skip_remaining} esantioane"
+                        )
+
                     value = self.read_adc(self.ecg_channel)
                     raw_mv = (value / self.adc_max_value) * 3300.0
                     voltage_mv = self._filter_ecg_mv(raw_mv)
@@ -330,6 +411,12 @@ class ECGSensor:
                     self.last_value_mv = voltage_mv
                     self.samples_since_log += 1
                     self.total_samples += 1
+
+                    if self._reconnect_skip_remaining > 0:
+                        self._reconnect_skip_remaining -= 1
+                        self.last_leads_state = True
+                        time.sleep(INTERVALS["ecg"])
+                        continue
 
                     self.batch.append({
                         "value": voltage_mv,
@@ -342,8 +429,6 @@ class ECGSensor:
                         self.batch = []
                         self.total_batches_sent += 1
 
-                    if self.last_leads_state is False:
-                        print(f"[ECG] Electrozi reconectati (LO+={lo_plus}, LO-={lo_minus})")
                     self.last_leads_state = True
                 else:
                     now = time.time()
