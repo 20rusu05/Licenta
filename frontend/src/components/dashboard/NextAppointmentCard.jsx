@@ -6,10 +6,20 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useLanguage } from '../../LanguageContext';
 
 export default function NextAppointmentCard({ appointment }) {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const statusLabels = {
+    programata: isEnglish ? 'Scheduled' : 'Programată',
+    confirmata: isEnglish ? 'Confirmed' : 'Confirmată',
+    completata: isEnglish ? 'Completed' : 'Completată',
+    anulata: isEnglish ? 'Cancelled' : 'Anulată',
+  };
 
   const handleOpenDialog = () => {
     setDialogOpen(true);
@@ -20,7 +30,7 @@ export default function NextAppointmentCard({ appointment }) {
   };
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('ro-RO', { 
+    return date.toLocaleDateString(locale, { 
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
@@ -30,7 +40,7 @@ export default function NextAppointmentCard({ appointment }) {
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   };
 
   const getDaysUntil = (dateString) => {
@@ -39,10 +49,10 @@ export default function NextAppointmentCard({ appointment }) {
     const diffTime = date - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays === 0) return 'Astăzi';
-    if (diffDays === 1) return 'Mâine';
-    if (diffDays < 7) return `În ${diffDays} zile`;
-    return `În ${Math.floor(diffDays / 7)} săptămâni`;
+    if (diffDays === 0) return isEnglish ? 'Today' : 'Astăzi';
+    if (diffDays === 1) return isEnglish ? 'Tomorrow' : 'Mâine';
+    if (diffDays < 7) return isEnglish ? `In ${diffDays} days` : `În ${diffDays} zile`;
+    return isEnglish ? `In ${Math.floor(diffDays / 7)} weeks` : `În ${Math.floor(diffDays / 7)} săptămâni`;
   };
 
   const getStatusColor = (status) => {
@@ -78,13 +88,13 @@ export default function NextAppointmentCard({ appointment }) {
         >
           <CalendarMonthIcon sx={{ fontSize: 80, mb: 2, opacity: 0.7 }} />
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-            Nu ai programări viitoare
+            {isEnglish ? 'You do not have upcoming appointments' : 'Nu ai programări viitoare'}
           </Typography>
           <Typography variant="body2" sx={{ mb: 3, opacity: 0.9 }}>
-            Medicul va crea programarea când este disponibilă o consultație.
+            {isEnglish ? 'Your doctor will create the appointment when a consultation slot becomes available.' : 'Medicul va crea programarea când este disponibilă o consultație.'}
           </Typography>
           <Chip
-            label="Așteaptă confirmarea medicului"
+            label={isEnglish ? 'Waiting for doctor confirmation' : 'Așteaptă confirmarea medicului'}
             sx={{
               bgcolor: 'rgba(255,255,255,0.18)',
               color: 'white',
@@ -125,11 +135,11 @@ export default function NextAppointmentCard({ appointment }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <EventAvailableIcon sx={{ fontSize: 28 }} />
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Următoarea programare
+              {isEnglish ? 'Next appointment' : 'Următoarea programare'}
             </Typography>
           </Box>
           <Chip 
-            label={appointment.status} 
+            label={statusLabels[appointment.status] || appointment.status} 
             size="small"
             sx={{ 
               bgcolor: 'rgba(255,255,255,0.2)',
@@ -181,7 +191,7 @@ export default function NextAppointmentCard({ appointment }) {
             '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' }
           }}
         >
-          Vezi detalii
+          {isEnglish ? 'View details' : 'Vezi detalii'}
         </Button>
       </Box>
 
@@ -202,7 +212,7 @@ export default function NextAppointmentCard({ appointment }) {
         }}>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-              Detalii programare
+              {isEnglish ? 'Appointment details' : 'Detalii programare'}
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.9 }}>
               {getDaysUntil(appointment.data_programare)}

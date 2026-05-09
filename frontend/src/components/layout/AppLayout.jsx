@@ -2,9 +2,11 @@ import { Box, AppBar, Toolbar, Typography, IconButton, Avatar } from '@mui/mater
 import LogoutIcon from '@mui/icons-material/Logout';
 import Sidebar, { drawerWidth } from './Sidebar';
 import ThemeToggle from './ThemeToggle';
+import LanguageToggle from './LanguageToggle';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getBackendAssetUrl } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 function readAuthUser() {
   try {
@@ -18,6 +20,7 @@ function readAuthUser() {
 export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const [user, setUser] = useState(() => readAuthUser());
   const hideSidebar = location.pathname === '/dashboard/admin';
 
@@ -52,8 +55,9 @@ export default function AppLayout({ children }) {
       >
         <Toolbar>
           <Typography variant="h6" noWrap sx={{ flexGrow: 1, fontWeight: 700, color: 'primary.main' }}>
-            NewMed
+            {t('brand.name')}
           </Typography>
+          <LanguageToggle />
           <ThemeToggle />
           <Typography variant="subtitle1" sx={{ ml: 1, mr: 1 }}>
             {user?.nume}
@@ -67,7 +71,7 @@ export default function AppLayout({ children }) {
               {user?.nume?.[0]?.toUpperCase()}
             </Avatar>
           </IconButton>
-          <IconButton color="primary" onClick={handleLogout} aria-label="logout">
+          <IconButton color="primary" onClick={handleLogout} aria-label={t('common.logout')}>
             <LogoutIcon />
           </IconButton>
         </Toolbar>

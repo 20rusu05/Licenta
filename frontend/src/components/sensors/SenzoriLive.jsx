@@ -23,28 +23,30 @@ import {
 } from 'recharts';
 import { io } from 'socket.io-client';
 import AppLayout from '../layout/AppLayout';
-import { api } from '../../services/api';
+import { api, BACKEND_ORIGIN } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
-const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || `https://${window.location.hostname}:3001`;
+const SOCKET_URL = BACKEND_ORIGIN;
 const MAX_ECG_POINTS = 1500;
 const MAX_VITAL_POINTS = 60;
 const ECG_INVERT_DISPLAY = false;
 const ECG_LEADOFF_THRESHOLD = 1;
 const ECG_SHOW_AC_ONLY = true;
-const ECG_BASELINE_SEC = 0.8;
-const ECG_POST_SMOOTH_SEC = 0.02;
-const ECG_TARGET_HALF_SPAN_MV = 55;
-const ECG_MAX_GAIN = 4;
+const ECG_BASELINE_SEC = 1.2;
+const ECG_POST_SMOOTH_SEC = 0.03;
+const ECG_TARGET_HALF_SPAN_MV = 10;
+const ECG_MAX_GAIN = 1.2;
+const ECG_MIN_GAIN = 0.2;
 const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
-const ECG_SPIKE_MAX_STEP = 180;
+const ECG_SPIKE_MAX_STEP = 18;
 const ECG_DEFAULT_SAMPLE_RATE_HZ = 250;
 const ECG_NOTCH_FREQ_HZ = 50;
 const ECG_DISPLAY_WINDOW_SEC = 6;
-const ECG_GRID_MAJOR_TIME_SEC = 0.2;
+const ECG_GRID_MAJOR_TIME_SEC = 0.5;
 const ECG_GRID_MINOR_TIME_SEC = 0.04;
 const ECG_MIN_SAMPLE_INTERVAL_MS = Math.round(1000 / ECG_DEFAULT_SAMPLE_RATE_HZ);
 const ECG_LOCK_Y_DOMAIN = true;
-const ECG_FIXED_Y_LIMIT_MV = 150;
+const ECG_FIXED_Y_LIMIT_MV = 90;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
 const SENSORS_CONTROL_EVENT = 'sensors-control-action';
 const SENSOR_READING_CLOCK_SKEW_TOLERANCE_MS = 10 * 60 * 1000;
@@ -291,32 +293,23 @@ function smoothSeries(values, windowSize) {
   return out;
 }
 
-function stabilizeDisplaySeries(points, sampleRateHz) {
-  if (!points.length) return points;
-  const sorted = [...points].sort((a, b) => a.xSec - b.xSec);
-  const values = sorted.map((p) => p.value);
-
-  // Display-only denoise to reduce visual jitter while preserving backend/raw samples.
-  const deSpiked = medianFilter3(values);
-  const visualWindow = toOddWindowBySeconds(sampleRateHz, 0.03, 3, 11);
-  const smoothed = smoothSeries(deSpiked, visualWindow);
-
-  const diffs = [];
-  for (let i = 1; i < smoothed.length; i += 1) {
-    diffs.push(Math.abs(smoothed[i] - smoothed[i - 1]));
-  }
-  const adaptiveStep = Math.max(6, Math.min(26, quantile(diffs, 0.92) * 1.8 || 12));
-
-  const limited = [...smoothed];
-  for (let i = 1; i < limited.length; i += 1) {
-    const delta = limited[i] - limited[i - 1];
-    if (Math.abs(delta) > adaptiveStep) {
-      limited[i] = limited[i - 1] + (Math.sign(delta) * adaptiveStep);
+function limitSeriesSlope(values, maxStep) {
+  if (!values.length || !Number.isFinite(maxStep) || maxStep <= 0) return values;
+  const out = [...values];
+  for (let i = 1; i < out.length; i += 1) {
+    const delta = out[i] - out[i - 1];
+    if (delta > maxStep) {
+      out[i] = out[i - 1] + maxStep;
+    } else if (delta < -maxStep) {
+      out[i] = out[i - 1] - maxStep;
     }
   }
+  return out;
+}
 
-  const center = median(limited);
-  return sorted.map((p, i) => ({ ...p, value: limited[i] - center }));
+function clampSymmetric(value, limit) {
+  if (!Number.isFinite(value) || !Number.isFinite(limit) || limit <= 0) return value;
+  return Math.max(-limit, Math.min(limit, value));
 }
 
 function buildEcgDisplay(data) {
@@ -340,7 +333,7 @@ function buildEcgDisplay(data) {
     })).filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC);
 
     return {
-      chartData: stabilizeDisplaySeries(rawChart, sampleRateHz),
+      chartData: rawChart,
       yDomain: [0, 3300],
       xDomain: [-ECG_DISPLAY_WINDOW_SEC, 0],
       sampleRateHz,
@@ -358,7 +351,7 @@ function buildEcgDisplay(data) {
 
   const sampleRateHz = estimateSamplingRateHz(data);
   const rawValues = data.map((p) => p.value);
-  const clipped = percentileClipSeries(rawValues, 0.005, 0.995);
+  const clipped = percentileClipSeries(rawValues, 0.01, 0.99);
   const baselineWindow = toOddWindowBySeconds(sampleRateHz, ECG_BASELINE_SEC, 11, 801);
   const baselineTrend = smoothSeries(clipped, baselineWindow);
   const detrended = clipped.map((v, i) => v - baselineTrend[i]);
@@ -367,23 +360,28 @@ function buildEcgDisplay(data) {
   const deSpiked = medianFilter3(notchFiltered);
   const smoothed = smoothSeries(deSpiked, postWindow);
 
+  const spikeLimited = limitSeriesSlope(smoothed, ECG_SPIKE_MAX_STEP);
+
   // Keep baseline locked near zero regardless of slow drift.
-  const center = median(smoothed);
-  const zeroCentered = smoothed.map((v) => v - center);
+  const center = median(spikeLimited);
+  const zeroCentered = spikeLimited.map((v) => v - center);
 
   const absPre = zeroCentered.map((v) => Math.abs(v));
-  const preLimit = Math.max(20, quantile(absPre, 0.98));
+  const preLimit = Math.max(22, quantile(absPre, 0.985));
   const clippedCentered = zeroCentered.map((v) => Math.max(-preLimit, Math.min(preLimit, v)));
 
   const absValues = clippedCentered.map((v) => Math.abs(v));
-  const robustHalfSpan = quantile(absValues, 0.9);
+  const robustHalfSpan = quantile(absValues, 0.92);
   const peakHalfSpan = Math.max(...absValues, 0);
   const computedGain = robustHalfSpan > 0
-    ? Math.min(ECG_MAX_GAIN, Math.max(1, ECG_TARGET_HALF_SPAN_MV / robustHalfSpan))
+    ? Math.min(ECG_MAX_GAIN, Math.max(ECG_MIN_GAIN, ECG_TARGET_HALF_SPAN_MV / robustHalfSpan))
     : 1;
 
   const quality = robustHalfSpan < ECG_MIN_USEFUL_HALF_SPAN_MV ? 'Semnal slab' : 'Semnal util';
-  const amplified = clippedCentered.map((v) => v * computedGain);
+  const displayLimit = ECG_FIXED_Y_LIMIT_MV;
+  const amplifiedRaw = clippedCentered.map((v) => v * computedGain);
+  const amplifiedCenter = median(amplifiedRaw);
+  const amplified = amplifiedRaw.map((v) => clampSymmetric(v - amplifiedCenter, displayLimit));
 
   const withTime = data.map((p, i) => ({
     ...p,
@@ -393,15 +391,14 @@ function buildEcgDisplay(data) {
     value: amplified[i],
   }));
 
-  const chartData = stabilizeDisplaySeries(
-    withTime.filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC && p.xSec <= 0),
-    sampleRateHz
-  );
+  const chartData = withTime
+    .filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC && p.xSec <= 0)
+    .sort((a, b) => a.xSec - b.xSec);
 
   const displayHalfSpan = Math.max(20, Math.min(130, peakHalfSpan * computedGain * 1.1));
   const margin = Math.max(8, Math.round(displayHalfSpan * 0.15));
   const dynamicLimit = Math.round(displayHalfSpan + margin);
-  const limit = ECG_LOCK_Y_DOMAIN ? ECG_FIXED_Y_LIMIT_MV : dynamicLimit;
+  const limit = ECG_LOCK_Y_DOMAIN ? displayLimit : dynamicLimit;
   const ySpan = limit * 2;
   const majorY = ySpan / 8;
   const minorY = majorY / 5;
@@ -447,6 +444,8 @@ export default function SenzoriLive() {
   const [activeTab, setActiveTab] = useState('all');
   const [connected, setConnected] = useState(false);
   const [sensorStatus, setSensorStatus] = useState({});
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const [ecgData, setEcgData] = useState([]);
   const [ecgPaused, setEcgPaused] = useState(false);
   const [pulseData, setPulseData] = useState([]);
@@ -659,12 +658,12 @@ export default function SenzoriLive() {
         .slice(-MAX_ECG_POINTS);
 
       const nextPulse = (pulsRes.data.readings || []).map((r) => ({
-        time: new Date(r.created_at).toLocaleTimeString('ro-RO'),
+        time: new Date(r.created_at).toLocaleTimeString(locale),
         hr: r.value_1,
       })).slice(-MAX_VITAL_POINTS);
 
       const nextTemp = (tempRes.data.readings || []).map((r) => ({
-        time: new Date(r.created_at).toLocaleTimeString('ro-RO'),
+        time: new Date(r.created_at).toLocaleTimeString(locale),
         temp: normalizeTemperatureValue(r.value_1),
       })).filter((r) => r.temp !== null).slice(-MAX_VITAL_POINTS);
 
@@ -1095,9 +1094,11 @@ export default function SenzoriLive() {
 
   useEffect(() => {
     const socket = io(SOCKET_URL, {
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 2000,
+      timeout: 10000,
     });
     socketRef.current = socket;
 
@@ -1144,7 +1145,7 @@ export default function SenzoriLive() {
         setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
           const next = [...prev, {
-            time: new Date(data.timestamp).toLocaleTimeString('ro-RO'),
+            time: new Date(data.timestamp).toLocaleTimeString(locale),
             hr: data.value_1,
           }];
           return next.slice(-MAX_VITAL_POINTS);
@@ -1155,7 +1156,7 @@ export default function SenzoriLive() {
         setLatestTemp(tempValue);
         setTempData(prev => {
           const next = [...prev, {
-            time: new Date(data.timestamp).toLocaleTimeString('ro-RO'),
+            time: new Date(data.timestamp).toLocaleTimeString(locale),
             temp: tempValue,
           }];
           return next.slice(-MAX_VITAL_POINTS);
@@ -1184,7 +1185,7 @@ export default function SenzoriLive() {
             .filter((r) => isReadingAllowedForCurrentSession('puls', r.timestamp || data.timestamp))
             .forEach(r => {
             next.push({
-              time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
+              time: new Date(r.timestamp).toLocaleTimeString(locale),
               hr: r.value_1,
             });
           });
@@ -1206,7 +1207,7 @@ export default function SenzoriLive() {
             .filter((r) => r.temp !== null)
             .forEach(r => {
             next.push({
-              time: new Date(r.timestamp).toLocaleTimeString('ro-RO'),
+              time: new Date(r.timestamp).toLocaleTimeString(locale),
               temp: r.temp,
             });
           });
@@ -1404,7 +1405,7 @@ export default function SenzoriLive() {
         <Card sx={{ mb: 2, bgcolor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#f5f5f5' }}>
           <CardContent sx={{ py: 1.5, px: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1.5 }}>
-              Gestionare Sesiuni de Monitorizare
+              {isEnglish ? 'Monitoring session management' : 'Gestionare Sesiuni de Monitorizare'}
             </Typography>
             
             <Grid container spacing={1} sx={{ mb: 1.5 }}>
@@ -1419,7 +1420,7 @@ export default function SenzoriLive() {
                     }}
                     renderValue={(selected) => {
                       if (!selected) {
-                        return <Typography variant="body2" color="text.secondary">Selectează pacient</Typography>;
+                        return <Typography variant="body2" color="text.secondary">{isEnglish ? 'Select patient' : 'Selectează pacient'}</Typography>;
                       }
                       const patient = patients.find((p) => Number(p.id) === Number(selected));
                       if (!patient) return selected;
@@ -1442,9 +1443,9 @@ export default function SenzoriLive() {
                       value={assignmentFilter}
                       onChange={(e) => setAssignmentFilter(e.target.value)}
                     >
-                      <MenuItem value="all">Toți pacienții</MenuItem>
-                      <MenuItem value="assigned">Doar pacienții asignați</MenuItem>
-                      <MenuItem value="unassigned">Doar pacienții neasignați</MenuItem>
+                      <MenuItem value="all">{isEnglish ? 'All patients' : 'Toți pacienții'}</MenuItem>
+                      <MenuItem value="assigned">{isEnglish ? 'Assigned patients only' : 'Doar pacienții asignați'}</MenuItem>
+                      <MenuItem value="unassigned">{isEnglish ? 'Unassigned patients only' : 'Doar pacienții neasignați'}</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1456,7 +1457,7 @@ export default function SenzoriLive() {
                 <TextField
                   fullWidth
                   size="small"
-                  label="Caută pacient pentru asignare/deasignare"
+                  label={isEnglish ? 'Search patient to assign/unassign' : 'Caută pacient pentru asignare/deasignare'}
                   value={searchQuery}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -1492,7 +1493,7 @@ export default function SenzoriLive() {
                               }
                             }}
                           >
-                            {isAssigned ? 'Deasignare' : 'Asignare'}
+                            {isAssigned ? (isEnglish ? 'Unassign' : 'Deasignare') : (isEnglish ? 'Assign' : 'Asignare')}
                           </Button>
                         }
                       >
@@ -1512,7 +1513,7 @@ export default function SenzoriLive() {
                   {!loadingAllPatients && filteredPatients.length === 0 && (
                     <ListItem>
                       <ListItemText
-                        primary={allPatients.length === 0 ? 'Niciun pacient găsit' : 'Niciun pacient pentru filtrul selectat'}
+                        primary={allPatients.length === 0 ? (isEnglish ? 'No patient found' : 'Niciun pacient găsit') : (isEnglish ? 'No patient for the selected filter' : 'Niciun pacient pentru filtrul selectat')}
                       />
                     </ListItem>
                   )}
@@ -1523,14 +1524,14 @@ export default function SenzoriLive() {
             {isPacient && (
               <Alert severity="info" sx={{ mb: 1.5 }}>
                 {patientAssignmentLoaded && !patientHasAssignment
-                  ? 'Cont pacient: momentan nu aveți un dispozitiv asignat de medic. Pornirea senzorilor este blocată.'
-                  : 'Cont pacient: puteți vedea doar datele proprii ale senzorilor.'}
+                  ? (isEnglish ? 'Patient account: you do not currently have a device assigned by the doctor. Sensor start is blocked.' : 'Cont pacient: momentan nu aveți un dispozitiv asignat de medic. Pornirea senzorilor este blocată.')
+                  : (isEnglish ? 'Patient account: you can only see your own sensor data.' : 'Cont pacient: puteți vedea doar datele proprii ale senzorilor.')}
               </Alert>
             )}
 
             {patients.length === 0 && !loadingPatients && (
               <Alert severity="info">
-                Nu aveți sesiuni de monitorizare active. Asignați un dispozitiv unui pacient pentru a vedea datele senzorilor.
+                {isEnglish ? 'You have no active monitoring sessions. Assign a device to a patient to see sensor data.' : 'Nu aveți sesiuni de monitorizare active. Asignați un dispozitiv unui pacient pentru a vedea datele senzorilor.'}
               </Alert>
             )}
 
@@ -1543,7 +1544,7 @@ export default function SenzoriLive() {
             {selectedPatient && (
               <Paper sx={{ p: 2, bgcolor: 'primary.light', mt: 2 }}>
                 <Typography variant="body2">
-                  <strong>Pacient selectat:</strong> {selectedPatient.prenume} {selectedPatient.nume}
+                  <strong>{isEnglish ? 'Selected patient:' : 'Pacient selectat:'}</strong> {selectedPatient.prenume} {selectedPatient.nume}
                 </Typography>
                 {!isPacient && (
                   <Button
@@ -1556,7 +1557,7 @@ export default function SenzoriLive() {
                       await loadDetailedHistoryForDialog(selectedPatient.id, historyRange, historyFrom, historyTo);
                     }}
                   >
-                    Vezi istoricul pacientului
+                    {isEnglish ? 'View patient history' : 'Vezi istoricul pacientului'}
                   </Button>
                 )}
               </Paper>
@@ -1566,30 +1567,30 @@ export default function SenzoriLive() {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Monitorizare Senzori Live
+              {isEnglish ? 'Live Sensor Monitoring' : 'Monitorizare Senzori Live'}
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Date în timp real de la Raspberry Pi 5
+              {isEnglish ? 'Real-time data from Raspberry Pi 5' : 'Date în timp real de la Raspberry Pi 5'}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Chip
               icon={<FiberManualRecordIcon sx={{ fontSize: 12 }} />}
-              label={connected ? 'Conectat' : 'Deconectat'}
+              label={connected ? (isEnglish ? 'Connected' : 'Conectat') : (isEnglish ? 'Disconnected' : 'Deconectat')}
               color={connected ? 'success' : 'error'}
               variant="outlined"
               size="small"
             />
-            <Tooltip title={Object.values(sensorsRunning).some(v => v) ? 'Ceva senzori rulează' : 'Niciun senzor activ'}>
+            <Tooltip title={Object.values(sensorsRunning).some(v => v) ? (isEnglish ? 'Some sensors are running' : 'Ceva senzori rulează') : (isEnglish ? 'No active sensors' : 'Niciun senzor activ')}>
               <Chip
                 icon={<FiberManualRecordIcon sx={{ fontSize: 12 }} />}
-                label={Object.values(sensorsRunning).some(v => v) ? 'Senzori Activi' : 'Senzori Inactivi'}
+                label={Object.values(sensorsRunning).some(v => v) ? (isEnglish ? 'Active sensors' : 'Senzori Activi') : (isEnglish ? 'Inactive sensors' : 'Senzori Inactivi')}
                 color={Object.values(sensorsRunning).some(v => v) ? 'success' : 'default'}
                 variant="outlined"
                 size="small"
               />
             </Tooltip>
-            <Tooltip title="Resetează datele">
+            <Tooltip title={isEnglish ? 'Reset data' : 'Resetează datele'}>
               <IconButton onClick={handleRefresh} size="small">
                 <RefreshIcon />
               </IconButton>
@@ -1629,7 +1630,7 @@ export default function SenzoriLive() {
           <Grid size={{ xs: 12, sm: 4 }}>
             <SensorStatusCard
               icon={<ThermostatIcon sx={{ fontSize: 28 }} />}
-              label="Temperatură"
+              label={isEnglish ? 'Temperature' : 'Temperatură'}
               online={isSensorOnline('temperatura')}
               color="#ff9800"
               sensorType="temperatura"
@@ -1649,26 +1650,26 @@ export default function SenzoriLive() {
           sx={{ mb: 2 }}
         >
           <ToggleButton value="all">
-            <MonitorHeartIcon sx={{ mr: 1 }} /> Toate
+            <MonitorHeartIcon sx={{ mr: 1 }} /> {isEnglish ? 'All' : 'Toate'}
           </ToggleButton>
           <ToggleButton value="ecg">
             <MonitorHeartIcon sx={{ mr: 1 }} /> ECG
           </ToggleButton>
           <ToggleButton value="puls">
-            <FavoriteIcon sx={{ mr: 1 }} /> Puls
+            <FavoriteIcon sx={{ mr: 1 }} /> {isEnglish ? 'Pulse' : 'Puls'}
           </ToggleButton>
           <ToggleButton value="temperatura">
-            <ThermostatIcon sx={{ mr: 1 }} /> Temperatură
+            <ThermostatIcon sx={{ mr: 1 }} /> {isEnglish ? 'Temperature' : 'Temperatură'}
           </ToggleButton>
         </ToggleButtonGroup>
 
         <Box sx={{ display: activeTab === 'all' ? 'block' : 'none' }}>
           <Grid container spacing={1.5} alignItems="stretch">
             <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-              <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight />
+              <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight isEnglish={isEnglish} />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-              <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight />
+              <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight isEnglish={isEnglish} />
             </Grid>
           </Grid>
           <Box sx={{ mt: 1.5, width: '100%' }}>
@@ -1677,6 +1678,7 @@ export default function SenzoriLive() {
               theme={theme}
               paused={ecgPaused}
               onTogglePause={() => setEcgPaused((prev) => !prev)}
+              isEnglish={isEnglish}
             />
           </Box>
         </Box>
@@ -1687,15 +1689,16 @@ export default function SenzoriLive() {
             theme={theme}
             paused={ecgPaused}
             onTogglePause={() => setEcgPaused((prev) => !prev)}
+            isEnglish={isEnglish}
           />
         </Box>
 
         <Box sx={{ display: activeTab === 'puls' ? 'block' : 'none' }}>
-          <PulseChart data={pulseData} latest={latestPulse} theme={theme} />
+          <PulseChart data={pulseData} latest={latestPulse} theme={theme} isEnglish={isEnglish} />
         </Box>
 
         <Box sx={{ display: activeTab === 'temperatura' ? 'block' : 'none' }}>
-          <TempChart data={tempData} latest={latestTemp} theme={theme} />
+          <TempChart data={tempData} latest={latestTemp} theme={theme} isEnglish={isEnglish} />
         </Box>
 
         <Dialog open={confirmAssignOpen} onClose={() => {
@@ -1703,10 +1706,10 @@ export default function SenzoriLive() {
           setPendingAssignPatientId(null);
           setPendingAssignPatientName('');
         }}>
-          <DialogTitle>Confirmare asignare</DialogTitle>
+          <DialogTitle>{isEnglish ? 'Confirm assignment' : 'Confirmare asignare'}</DialogTitle>
           <DialogContent>
             <Typography variant="body2">
-              Sigur vrei să asignezi dispozitivul pacientului <strong>{pendingAssignPatientName}</strong>?
+              {isEnglish ? 'Are you sure you want to assign the device to patient' : 'Sigur vrei să asignezi dispozitivul pacientului'} <strong>{pendingAssignPatientName}</strong>?
             </Typography>
           </DialogContent>
           <DialogActions>
@@ -1715,7 +1718,7 @@ export default function SenzoriLive() {
               setPendingAssignPatientId(null);
               setPendingAssignPatientName('');
             }}>
-              Anulează
+              {isEnglish ? 'Cancel' : 'Anulează'}
             </Button>
             <Button
               variant="contained"
@@ -1723,16 +1726,16 @@ export default function SenzoriLive() {
               onClick={confirmAssignDevice}
               disabled={Boolean(assigningDevice)}
             >
-              Confirmă
+              {isEnglish ? 'Confirm' : 'Confirmă'}
             </Button>
           </DialogActions>
         </Dialog>
 
         <Dialog open={confirmUnassignOpen} onClose={() => setConfirmUnassignOpen(false)}>
-          <DialogTitle>Confirmare deasignare</DialogTitle>
+          <DialogTitle>{isEnglish ? 'Confirm unassignment' : 'Confirmare deasignare'}</DialogTitle>
           <DialogContent>
             <Typography variant="body2">
-              Sigur vrei să deasignezi dispozitivul de la pacient?
+              {isEnglish ? 'Are you sure you want to unassign the device from the patient?' : 'Sigur vrei să deasignezi dispozitivul de la pacient?'}
             </Typography>
           </DialogContent>
           <DialogActions>
@@ -1740,7 +1743,7 @@ export default function SenzoriLive() {
               setConfirmUnassignOpen(false);
               setPendingUnassignPatientId(null);
             }}>
-              Anulează
+              {isEnglish ? 'Cancel' : 'Anulează'}
             </Button>
             <Button
               variant="contained"
@@ -1748,7 +1751,7 @@ export default function SenzoriLive() {
               onClick={confirmUnassignDevice}
               disabled={Boolean(unassigningPatientId)}
             >
-              Confirmă
+              {isEnglish ? 'Confirm' : 'Confirmă'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1760,7 +1763,7 @@ export default function SenzoriLive() {
           maxWidth="md"
         >
           <DialogTitle>
-            Istoric pacient: {selectedPatient?.prenume} {selectedPatient?.nume}
+            {isEnglish ? 'Patient history: ' : 'Istoric pacient: '}{selectedPatient?.prenume} {selectedPatient?.nume}
           </DialogTitle>
           <DialogContent dividers>
             <Grid container spacing={1.5} sx={{ mb: 2 }}>
@@ -1770,10 +1773,10 @@ export default function SenzoriLive() {
                     value={historyRange}
                     onChange={(e) => setHistoryRange(e.target.value)}
                   >
-                    <MenuItem value="24h">Ultimele 24 ore</MenuItem>
-                    <MenuItem value="7d">Ultimele 7 zile</MenuItem>
-                    <MenuItem value="30d">Ultimele 30 zile</MenuItem>
-                    <MenuItem value="custom">Interval personalizat</MenuItem>
+                    <MenuItem value="24h">{isEnglish ? 'Last 24 hours' : 'Ultimele 24 ore'}</MenuItem>
+                    <MenuItem value="7d">{isEnglish ? 'Last 7 days' : 'Ultimele 7 zile'}</MenuItem>
+                    <MenuItem value="30d">{isEnglish ? 'Last 30 days' : 'Ultimele 30 zile'}</MenuItem>
+                    <MenuItem value="custom">{isEnglish ? 'Custom range' : 'Interval personalizat'}</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -1784,7 +1787,7 @@ export default function SenzoriLive() {
                       fullWidth
                       size="small"
                       type="datetime-local"
-                      label="De la"
+                      label={isEnglish ? 'From' : 'De la'}
                       InputLabelProps={{ shrink: true }}
                       value={historyFrom}
                       onChange={(e) => setHistoryFrom(e.target.value)}
@@ -1795,7 +1798,7 @@ export default function SenzoriLive() {
                       fullWidth
                       size="small"
                       type="datetime-local"
-                      label="Până la"
+                      label={isEnglish ? 'To' : 'Până la'}
                       InputLabelProps={{ shrink: true }}
                       value={historyTo}
                       onChange={(e) => setHistoryTo(e.target.value)}
@@ -1809,7 +1812,7 @@ export default function SenzoriLive() {
                   onClick={() => loadDetailedHistoryForDialog(selectedPatient?.id, historyRange, historyFrom, historyTo)}
                   disabled={historyLoading || !selectedPatient?.id}
                 >
-                  Aplică filtru
+                  {isEnglish ? 'Apply filter' : 'Aplică filtru'}
                 </Button>
                 <Button
                   variant="outlined"
@@ -1817,7 +1820,7 @@ export default function SenzoriLive() {
                   onClick={handleExportAllHistoryCsv}
                   disabled={historyLoading}
                 >
-                  Export toate datele
+                  {isEnglish ? 'Export all data' : 'Export toate datele'}
                 </Button>
               </Grid>
             </Grid>
@@ -1830,7 +1833,7 @@ export default function SenzoriLive() {
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>ECG</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{isEnglish ? 'ECG' : 'ECG'}</Typography>
                     <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleExportSensorCsv('ecg')}>
                       CSV
                     </Button>
@@ -1838,13 +1841,13 @@ export default function SenzoriLive() {
                   <Paper variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
                     <List dense>
                       {historySnapshot.ecg.length === 0 && (
-                        <ListItem><ListItemText primary="Fără date ECG" /></ListItem>
+                        <ListItem><ListItemText primary={isEnglish ? 'No ECG data' : 'Fără date ECG'} /></ListItem>
                       )}
                       {historySnapshot.ecg.slice().reverse().slice(0, historyVisibleCounts.ecg).map((r) => (
                         <ListItem key={r.id}>
                           <ListItemText
                             primary={`${Number(r.value_1).toFixed(1)} mV`}
-                            secondary={new Date(r.created_at).toLocaleString('ro-RO')}
+                            secondary={new Date(r.created_at).toLocaleString(locale)}
                           />
                         </ListItem>
                       ))}
@@ -1856,19 +1859,19 @@ export default function SenzoriLive() {
                       sx={{ mt: 1 }}
                       onClick={() => handleLoadMoreHistory('ecg')}
                     >
-                      Afișează încă {Math.min(HISTORY_PAGE_SIZE, historySnapshot.ecg.length - historyVisibleCounts.ecg)}
+                      {isEnglish ? 'Show more ' : 'Afișează încă '}{Math.min(HISTORY_PAGE_SIZE, historySnapshot.ecg.length - historyVisibleCounts.ecg)}
                     </Button>
                   )}
                   {historySnapshot.ecg.length > 0 && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                      Afișate {Math.min(historyVisibleCounts.ecg, historySnapshot.ecg.length)} din {historySnapshot.ecg.length}
+                      {isEnglish ? 'Shown ' : 'Afișate '}{Math.min(historyVisibleCounts.ecg, historySnapshot.ecg.length)}{isEnglish ? ' of ' : ' din '}{historySnapshot.ecg.length}
                     </Typography>
                   )}
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Puls</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{isEnglish ? 'Pulse' : 'Puls'}</Typography>
                     <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleExportSensorCsv('puls')}>
                       CSV
                     </Button>
@@ -1876,13 +1879,13 @@ export default function SenzoriLive() {
                   <Paper variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
                     <List dense>
                       {historySnapshot.puls.length === 0 && (
-                        <ListItem><ListItemText primary="Fără date puls" /></ListItem>
+                        <ListItem><ListItemText primary={isEnglish ? 'No pulse data' : 'Fără date puls'} /></ListItem>
                       )}
                       {historySnapshot.puls.slice().reverse().slice(0, historyVisibleCounts.puls).map((r) => (
                         <ListItem key={r.id}>
                           <ListItemText
                             primary={`${Number(r.value_1).toFixed(0)} BPM`}
-                            secondary={new Date(r.created_at).toLocaleString('ro-RO')}
+                            secondary={new Date(r.created_at).toLocaleString(locale)}
                           />
                         </ListItem>
                       ))}
@@ -1894,19 +1897,19 @@ export default function SenzoriLive() {
                       sx={{ mt: 1 }}
                       onClick={() => handleLoadMoreHistory('puls')}
                     >
-                      Afișează încă {Math.min(HISTORY_PAGE_SIZE, historySnapshot.puls.length - historyVisibleCounts.puls)}
+                      {isEnglish ? 'Show more ' : 'Afișează încă '}{Math.min(HISTORY_PAGE_SIZE, historySnapshot.puls.length - historyVisibleCounts.puls)}
                     </Button>
                   )}
                   {historySnapshot.puls.length > 0 && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                      Afișate {Math.min(historyVisibleCounts.puls, historySnapshot.puls.length)} din {historySnapshot.puls.length}
+                      {isEnglish ? 'Shown ' : 'Afișate '}{Math.min(historyVisibleCounts.puls, historySnapshot.puls.length)}{isEnglish ? ' of ' : ' din '}{historySnapshot.puls.length}
                     </Typography>
                   )}
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Temperatură</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{isEnglish ? 'Temperature' : 'Temperatură'}</Typography>
                     <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleExportSensorCsv('temperatura')}>
                       CSV
                     </Button>
@@ -1914,13 +1917,13 @@ export default function SenzoriLive() {
                   <Paper variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
                     <List dense>
                       {historySnapshot.temperatura.length === 0 && (
-                        <ListItem><ListItemText primary="Fără date temperatură" /></ListItem>
+                        <ListItem><ListItemText primary={isEnglish ? 'No temperature data' : 'Fără date temperatură'} /></ListItem>
                       )}
                       {historySnapshot.temperatura.slice().reverse().slice(0, historyVisibleCounts.temperatura).map((r) => (
                         <ListItem key={r.id}>
                           <ListItemText
                             primary={`${Number(r.value_1).toFixed(1)} °C`}
-                            secondary={new Date(r.created_at).toLocaleString('ro-RO')}
+                            secondary={new Date(r.created_at).toLocaleString(locale)}
                           />
                         </ListItem>
                       ))}
@@ -1932,12 +1935,12 @@ export default function SenzoriLive() {
                       sx={{ mt: 1 }}
                       onClick={() => handleLoadMoreHistory('temperatura')}
                     >
-                      Afișează încă {Math.min(HISTORY_PAGE_SIZE, historySnapshot.temperatura.length - historyVisibleCounts.temperatura)}
+                      {isEnglish ? 'Show more ' : 'Afișează încă '}{Math.min(HISTORY_PAGE_SIZE, historySnapshot.temperatura.length - historyVisibleCounts.temperatura)}
                     </Button>
                   )}
                   {historySnapshot.temperatura.length > 0 && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                      Afișate {Math.min(historyVisibleCounts.temperatura, historySnapshot.temperatura.length)} din {historySnapshot.temperatura.length}
+                      {isEnglish ? 'Shown ' : 'Afișate '}{Math.min(historyVisibleCounts.temperatura, historySnapshot.temperatura.length)}{isEnglish ? ' of ' : ' din '}{historySnapshot.temperatura.length}
                     </Typography>
                   )}
                 </Grid>
@@ -1945,7 +1948,7 @@ export default function SenzoriLive() {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setHistoryDialogOpen(false)}>Închide</Button>
+            <Button onClick={() => setHistoryDialogOpen(false)}>{isEnglish ? 'Close' : 'Închide'}</Button>
           </DialogActions>
         </Dialog>
 
@@ -2027,7 +2030,7 @@ function SensorStatusCard({ icon, label, online, color, extra, sensorType, onSta
   );
 }
 
-function ECGChart({ data, theme, paused, onTogglePause }) {
+function ECGChart({ data, theme, paused, onTogglePause, isEnglish }) {
   const isDark = theme.palette.mode === 'dark';
   const display = buildEcgDisplay(data);
 
@@ -2037,7 +2040,7 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             <MonitorHeartIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
-            Electrocardiogramă (ECG)
+            {isEnglish ? 'Electrocardiogram (ECG)' : 'Electrocardiogramă (ECG)'}
           </Typography>
           <Button
             size="small"
@@ -2046,14 +2049,14 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
             onClick={onTogglePause}
             startIcon={paused ? <PlayArrowIcon /> : <PauseIcon />}
           >
-            {paused ? 'Reia' : 'Pauză'}
+            {paused ? (isEnglish ? 'Resume' : 'Reia') : (isEnglish ? 'Pause' : 'Pauză')}
           </Button>
         </Box>
         {data.length > 0 && (
           <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
             <Chip
               size="small"
-              label={`Calitate: ${display.quality}`}
+              label={`${isEnglish ? 'Quality' : 'Calitate'}: ${display.quality === 'Semnal util' ? (isEnglish ? 'Useful signal' : 'Semnal util') : (isEnglish ? 'Weak signal' : 'Semnal slab')}`}
               color={display.quality === 'Semnal util' ? 'success' : 'warning'}
               variant="outlined"
             />
@@ -2072,21 +2075,15 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
         {data.length === 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
             <Typography color="text.secondary">
-              Se așteaptă date ECG de la senzor...
+              {isEnglish ? 'Waiting for ECG data from the sensor...' : 'Se așteaptă date ECG de la senzor...'}
             </Typography>
           </Box>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={display.chartData} margin={{ top: 10, right: 8, left: 0, bottom: 10 }}>
               <CartesianGrid
-                stroke={isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)'}
-                horizontalPoints={display.minorHorizontals}
-                verticalPoints={display.minorVerticals}
-              />
-              <CartesianGrid
+                strokeDasharray="3 3"
                 stroke={isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.12)'}
-                horizontalPoints={display.majorHorizontals}
-                verticalPoints={display.majorVerticals}
               />
               <XAxis
                 type="number"
@@ -2099,18 +2096,19 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
               />
               <YAxis
                 domain={display.yDomain}
+                allowDataOverflow
                 label={{ value: display.yLabel, angle: -90, position: 'insideLeft' }}
                 width={64}
                 tickFormatter={(value) => Number(value).toFixed(1)}
                 tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
               />
               <RechartsTooltip
-                formatter={(val) => [`${Number(val).toFixed(2)} mV`, 'Semnal']}
+                formatter={(val) => [`${Number(val).toFixed(2)} mV`, isEnglish ? 'Signal' : 'Semnal']}
                 labelFormatter={(label) => `t-${Math.abs(Number(label)).toFixed(3)} s`}
               />
-              <ReferenceLine y={display.baseline} stroke="#667" strokeDasharray="5 5" label="Baseline" />
+              <ReferenceLine y={display.baseline} stroke="#667" strokeDasharray="5 5" label={isEnglish ? 'Baseline' : 'Linie de bază'} />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="value"
                 stroke="#f44336"
                 strokeWidth={1.5}
@@ -2126,7 +2124,7 @@ function ECGChart({ data, theme, paused, onTogglePause }) {
   );
 }
 
-function PulseChart({ data, latest, theme, fullHeight = false }) {
+function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   const isDark = theme.palette.mode === 'dark';
 
   return (
@@ -2136,7 +2134,7 @@ function PulseChart({ data, latest, theme, fullHeight = false }) {
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, px: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               <FavoriteIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#e91e63' }} />
-              Frecvență cardiacă (BPM)
+              {isEnglish ? 'Heart rate (BPM)' : 'Frecvență cardiacă (BPM)'}
             </Typography>
             <Box sx={{ textAlign: 'right' }}>
               <FavoriteIcon sx={{ fontSize: 28, color: '#e91e63' }} />
@@ -2147,7 +2145,7 @@ function PulseChart({ data, latest, theme, fullHeight = false }) {
           </Box>
           {data.length === 0 ? (
             <Box sx={{ py: 6, textAlign: 'center', px: 2 }}>
-              <Typography color="text.secondary">Se așteaptă date...</Typography>
+              <Typography color="text.secondary">{isEnglish ? 'Waiting for data...' : 'Se așteaptă date...'}</Typography>
             </Box>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
@@ -2188,7 +2186,7 @@ function PulseChart({ data, latest, theme, fullHeight = false }) {
   );
 }
 
-function TempChart({ data, latest, theme, fullHeight = false }) {
+function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   const isDark = theme.palette.mode === 'dark';
 
   const getTemperatureColor = (temp) => {
@@ -2201,12 +2199,12 @@ function TempChart({ data, latest, theme, fullHeight = false }) {
   };
 
   const getTemperatureLabel = (temp) => {
-    if (temp === '--') return 'Necunoscut';
+    if (temp === '--') return isEnglish ? 'Unknown' : 'Necunoscut';
     const t = parseFloat(temp);
-    if (t < 36.0) return 'Hipotermie';
-    if (t <= 37.2) return 'Normal';
-    if (t <= 38.0) return 'Subfebril';
-    return 'Febră';
+    if (t < 36.0) return isEnglish ? 'Hypothermia' : 'Hipotermie';
+    if (t <= 37.2) return isEnglish ? 'Normal' : 'Normal';
+    if (t <= 38.0) return isEnglish ? 'Mild fever' : 'Subfebril';
+    return isEnglish ? 'Fever' : 'Febră';
   };
 
   return (
@@ -2214,9 +2212,9 @@ function TempChart({ data, latest, theme, fullHeight = false }) {
       <Card sx={{ width: '100%', display: 'flex', flexDirection: 'column', height: fullHeight ? '100%' : 'auto' }}>
         <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: 2, pb: 1.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, px: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
               <ThermostatIcon sx={{ mr: 1, verticalAlign: 'middle', color: getTemperatureColor(latest) }} />
-              Evoluție temperatură
+              {isEnglish ? 'Temperature trend' : 'Evoluție temperatură'}
             </Typography>
             <Box sx={{ textAlign: 'right' }}>
               <ThermostatIcon sx={{ fontSize: 28, color: getTemperatureColor(latest) }} />
@@ -2232,7 +2230,7 @@ function TempChart({ data, latest, theme, fullHeight = false }) {
           </Box>
           {data.length === 0 ? (
             <Box sx={{ py: 6, textAlign: 'center', px: 2 }}>
-              <Typography color="text.secondary">Se așteaptă date de la senzor...</Typography>
+              <Typography color="text.secondary">{isEnglish ? 'Waiting for data from the sensor...' : 'Se așteaptă date de la senzor...'}</Typography>
             </Box>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
@@ -2246,7 +2244,7 @@ function TempChart({ data, latest, theme, fullHeight = false }) {
                 />
                 <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} width={34} />
                 <RechartsTooltip
-                  formatter={(val) => [`${val}°C`, 'Temperatură']}
+                  formatter={(val) => [`${val}°C`, isEnglish ? 'Temperature' : 'Temperatură']}
                   contentStyle={{
                     backgroundColor: isDark ? 'rgba(15, 23, 42, 0.96)' : '#ffffff',
                     border: isDark ? '1px solid rgba(148, 163, 184, 0.35)' : '1px solid #e2e8f0',

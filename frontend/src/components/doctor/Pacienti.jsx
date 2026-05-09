@@ -21,8 +21,11 @@ import PeopleIcon from '@mui/icons-material/People';
 import SearchIcon from '@mui/icons-material/Search';
 import AppLayout from '../layout/AppLayout';
 import { api } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 export default function Patients() {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [patients, setPatients] = useState([]);
@@ -42,7 +45,7 @@ export default function Patients() {
       setCurrentPage(page);
       setError('');
     } catch (e) {
-      setError('Nu am putut încărca lista de pacienți');
+      setError(isEnglish ? 'Could not load the patient list' : 'Nu am putut încărca lista de pacienți');
     } finally {
       setLoading(false);
     }
@@ -65,7 +68,7 @@ export default function Patients() {
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('ro-RO', {
+    return new Date(dateString).toLocaleString(locale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -81,16 +84,16 @@ export default function Patients() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <PeopleIcon sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Pacienții mei
+              {isEnglish ? 'My patients' : 'Pacienții mei'}
             </Typography>
             {!loading && (
-              <Chip label={`${totalItems} pacienți`} color="primary" />
+              <Chip label={`${totalItems} ${isEnglish ? 'patients' : 'pacienți'}`} color="primary" />
             )}
           </Box>
           
           <TextField
             size="small"
-            placeholder="Caută după nume, prenume, email sau telefon..."
+            placeholder={isEnglish ? 'Search by name, surname, email, or phone...' : 'Caută după nume, prenume, email sau telefon...'}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyPress={handleSearchKeyPress}
@@ -114,7 +117,7 @@ export default function Patients() {
         {!loading && !error && patients.length === 0 && (
           <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="text.secondary">
-              Nu există încă pacienți care au avut programări sau aplicări la medicamentele tale.
+              {isEnglish ? 'There are no patients yet who had appointments or medication applications with your treatments.' : 'Nu există încă pacienți care au avut programări sau aplicări la medicamentele tale.'}
             </Typography>
           </Paper>
         )}
@@ -124,13 +127,13 @@ export default function Patients() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Nume complet</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Full name' : 'Nume complet'}</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Telefon</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="center">Programări</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="center">Aplicări</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Ultima programare</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Înregistrat la</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Phone' : 'Telefon'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="center">{isEnglish ? 'Appointments' : 'Programări'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="center">{isEnglish ? 'Applications' : 'Aplicări'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Last appointment' : 'Ultima programare'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Registered at' : 'Înregistrat la'}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -159,7 +162,7 @@ export default function Patients() {
                       {formatDate(p.ultima_programare)}
                     </TableCell>
                     <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                      {new Date(p.created_at).toLocaleDateString('ro-RO')}
+                      {new Date(p.created_at).toLocaleDateString(locale)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -174,7 +177,7 @@ export default function Patients() {
               disabled={currentPage <= 1}
               onClick={() => loadPatients(currentPage - 1)}
             >
-              Anterior
+              {isEnglish ? 'Previous' : 'Anterior'}
             </Button>
 
             <Typography>
@@ -186,7 +189,7 @@ export default function Patients() {
               disabled={currentPage >= totalPages}
               onClick={() => loadPatients(currentPage + 1)}
             >
-              Următor
+              {isEnglish ? 'Next' : 'Următor'}
             </Button>
           </Box>
           </>

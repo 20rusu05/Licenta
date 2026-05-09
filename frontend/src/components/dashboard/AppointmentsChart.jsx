@@ -3,8 +3,11 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
+import { useLanguage } from '../../LanguageContext';
 
 export default function AppointmentsChart({ data = [], allAppointments = [] }) {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const [selectedDate, setSelectedDate] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -44,7 +47,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
       date.setDate(date.getDate() + i);
       days.push({
         date: date.toISOString().split('T')[0],
-        label: date.toLocaleDateString('ro-RO', { weekday: 'short', day: 'numeric', month: 'short' })
+        label: date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })
       });
     }
     return days;
@@ -105,10 +108,10 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
             </Box>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Programări următoarea săptămână
+                {isEnglish ? 'Appointments for the next week' : 'Programări următoarea săptămână'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Activitate zilnică
+                {isEnglish ? 'Daily activity' : 'Activitate zilnică'}
               </Typography>
             </Box>
           </Box>
@@ -129,7 +132,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
             </Typography>
           </Box>
           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>
-            Total săptămână
+            {isEnglish ? 'Weekly total' : 'Total săptămână'}
           </Typography>
         </Box>
       </Box>
@@ -273,7 +276,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
           color: 'white'
         }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Programări - {selectedDate && new Date(selectedDate + 'T00:00:00').toLocaleDateString('ro-RO', { 
+            {isEnglish ? 'Appointments - ' : 'Programări - '}{selectedDate && new Date(selectedDate + 'T00:00:00').toLocaleDateString(locale, { 
               weekday: 'long', 
               day: 'numeric', 
               month: 'long',
@@ -287,7 +290,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
         <DialogContent sx={{ mt: 2 }}>
           {getAppointmentsForDate().length === 0 ? (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              Nu există programări pentru această zi
+              {isEnglish ? 'There are no appointments for this day' : 'Nu există programări pentru această zi'}
             </Typography>
           ) : (
             <List>
@@ -312,7 +315,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
                           📧 {apt.email}
                         </Typography>
                         <Typography variant="body2" color="primary" sx={{ mt: 0.5 }}>
-                          🕐 {new Date(apt.data_programare).toLocaleTimeString('ro-RO', { 
+                          🕐 {new Date(apt.data_programare).toLocaleTimeString(locale, { 
                             hour: '2-digit', 
                             minute: '2-digit' 
                           })}
@@ -332,7 +335,15 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
                             display: 'inline-block'
                           }}
                         >
-                          {apt.status}
+                          {apt.status === 'programata'
+                            ? (isEnglish ? 'Scheduled' : 'Programată')
+                            : apt.status === 'confirmata'
+                              ? (isEnglish ? 'Confirmed' : 'Confirmată')
+                              : apt.status === 'completata'
+                                ? (isEnglish ? 'Completed' : 'Completată')
+                                : apt.status === 'anulata'
+                                  ? (isEnglish ? 'Cancelled' : 'Anulată')
+                                  : apt.status}
                         </Typography>
                       </Box>
                     }

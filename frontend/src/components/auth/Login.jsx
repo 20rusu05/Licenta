@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { TextField, Button, Box, Typography, Container, Alert, Paper, Link } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -26,7 +29,7 @@ export default function Login() {
     setError('');
 
     if (!formData.email.trim() || !formData.parola.trim()) {
-      setError('Completează adresa de email și parola.');
+      setError(isEnglish ? 'Fill in the email address and password.' : 'Completează adresa de email și parola.');
       setLoading(false);
       return;
     }
@@ -49,7 +52,7 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err) {
       console.error('Eroare la autentificare:', err);
-      setError(err.response?.data?.error || 'Eroare la autentificare');
+      setError(err.response?.data?.error || (isEnglish ? 'Login failed' : 'Eroare la autentificare'));
     } finally {
       setLoading(false);
     }
@@ -81,7 +84,7 @@ export default function Login() {
 
           <Paper elevation={0} sx={{ p: 4, width: '100%', borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
             <Typography component="h2" variant="h5" sx={{ mb: 3, textAlign: 'center', fontWeight: 500 }}>
-              Autentificare
+              {isEnglish ? 'Login' : 'Autentificare'}
             </Typography>
 
             {error && <Alert severity="error" sx={{ width: '100%', mb: 2, borderRadius: 1 }}>{error}</Alert>}
@@ -105,7 +108,7 @@ export default function Login() {
                 required
                 fullWidth
                 name="parola"
-                label="Parola"
+                label={isEnglish ? 'Password' : 'Parola'}
                 type="password"
                 id="parola"
                 autoComplete="current-password"
@@ -120,17 +123,17 @@ export default function Login() {
                 sx={{ mt: 2, mb: 2, py: 1.5, fontSize: '1rem' }}
                 disabled={loading}
               >
-                {loading ? 'Se încarcă...' : 'Autentificare'}
+                {loading ? (isEnglish ? 'Loading...' : 'Se încarcă...') : (isEnglish ? 'Login' : 'Autentificare')}
               </Button>
 
               <Box sx={{ textAlign: 'center', mt: 2 }}>
                 <Link component="button" type="button" variant="body2" onClick={() => navigate('/forgot-password')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-                  Ai uitat parola?
+                  {isEnglish ? 'Forgot your password?' : 'Ai uitat parola?'}
                 </Link>
               </Box>
               <Box sx={{ textAlign: 'center', mt: 2 }}>
                 <Link component="button" type="button" variant="body2" onClick={() => navigate('/register')} sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-                  Nu ai cont? Înregistrează-te
+                  {isEnglish ? 'No account? Sign up' : 'Nu ai cont? Înregistrează-te'}
                 </Link>
               </Box>
             </Box>

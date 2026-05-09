@@ -4,36 +4,39 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import SensorsIcon from '@mui/icons-material/Sensors';
 import PersonIcon from '@mui/icons-material/Person';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../LanguageContext';
 
 export default function QuickActions() {
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const navigate = useNavigate();
 
   const actions = [
     {
       icon: <CalendarMonthIcon />,
-      title: 'Programările mele',
-      description: 'Vezi consultațiile tale',
+      title: isEnglish ? 'My appointments' : 'Programările mele',
+      description: isEnglish ? 'See your consultations' : 'Vezi consultațiile tale',
       color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       action: () => navigate('/dashboard/programari')
     },
     {
       icon: <MedicationIcon />,
-      title: 'Medicamente',
-      description: 'Vezi medicamentele tale',
+      title: isEnglish ? 'Medications' : 'Medicamente',
+      description: isEnglish ? 'See your medications' : 'Vezi medicamentele tale',
       color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
       action: () => navigate('/dashboard/medicamente')
     },
     {
       icon: <SensorsIcon />,
-      title: 'Senzori live',
-      description: 'Datele tale în timp real',
+      title: isEnglish ? 'Live sensors' : 'Senzori live',
+      description: isEnglish ? 'Your real-time data' : 'Datele tale în timp real',
       color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       action: () => navigate('/dashboard/senzori')
     },
     {
       icon: <PersonIcon />,
-      title: 'Profil',
-      description: 'Setări cont',
+      title: isEnglish ? 'Profile' : 'Profil',
+      description: isEnglish ? 'Account settings' : 'Setări cont',
       color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
       action: () => navigate('/dashboard/profil')
     }
@@ -42,7 +45,7 @@ export default function QuickActions() {
   return (
     <Paper sx={{ p: 3, height: '100%' }} elevation={0}>
       <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-        Acțiuni rapide
+        {isEnglish ? 'Quick actions' : 'Acțiuni rapide'}
       </Typography>
 
       <Grid container spacing={2}>

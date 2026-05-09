@@ -33,10 +33,13 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditCalendarIcon from '@mui/icons-material/EditCalendar';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import AppLayout from "../layout/AppLayout";
+import { useLanguage } from '../../LanguageContext';
 
 const API_URL = "/programari";
 
 export default function Programari() {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const storedUser = sessionStorage.getItem("user");
   if (!storedUser) return null;
   const user = JSON.parse(storedUser);
@@ -117,7 +120,7 @@ export default function Programari() {
       setSelectedProgramare(null);
       setSnackbar({
         open: true,
-        message: selectedProgramare.id ? 'Programare reprogramată cu succes!' : 'Programare creată cu succes!',
+        message: selectedProgramare.id ? (isEnglish ? 'Appointment rescheduled successfully!' : 'Programare reprogramată cu succes!') : (isEnglish ? 'Appointment created successfully!' : 'Programare creată cu succes!'),
         severity: 'success'
       });
       reload();
@@ -125,7 +128,7 @@ export default function Programari() {
       console.error(err);
       setSnackbar({
         open: true,
-        message: err.response?.data?.error || "Eroare la salvarea programării",
+        message: err.response?.data?.error || (isEnglish ? 'Error while saving the appointment' : "Eroare la salvarea programării"),
         severity: 'error'
       });
     }
@@ -140,7 +143,7 @@ export default function Programari() {
       setProgramareToDelete(null);
       setSnackbar({
         open: true,
-        message: 'Programare anulată cu succes!',
+        message: isEnglish ? 'Appointment cancelled successfully!' : 'Programare anulată cu succes!',
         severity: 'success'
       });
       reload();
@@ -148,7 +151,7 @@ export default function Programari() {
       console.error(err);
       setSnackbar({
         open: true,
-        message: err.response?.data?.error || "Eroare la anularea programării",
+        message: err.response?.data?.error || (isEnglish ? 'Error while cancelling the appointment' : "Eroare la anularea programării"),
         severity: 'error'
       });
     }
@@ -164,7 +167,7 @@ export default function Programari() {
       await api.patch(`${API_URL}/${programare.id}/completeaza`);
       setSnackbar({
         open: true,
-        message: programare.status === 'completata' ? 'Programare resetată la status programată!' : 'Programare marcată ca completată!',
+        message: programare.status === 'completata' ? (isEnglish ? 'Appointment reset to scheduled!' : 'Programare resetată la status programată!') : (isEnglish ? 'Appointment marked as completed!' : 'Programare marcată ca completată!'),
         severity: 'success'
       });
       reload();
@@ -172,7 +175,7 @@ export default function Programari() {
       console.error(err);
       setSnackbar({
         open: true,
-        message: err.response?.data?.error || "Eroare la actualizarea programării",
+        message: err.response?.data?.error || (isEnglish ? 'Error while updating the appointment' : "Eroare la actualizarea programării"),
         severity: 'error'
       });
     }
@@ -208,10 +211,10 @@ export default function Programari() {
 
   const getStatusChip = (dataOra, status) => {
     if (status === 'completata') {
-      return <Chip size="small" label="Completată" color="info" />;
+      return <Chip size="small" label={isEnglish ? 'Completed' : 'Completată'} color="info" />;
     }
     
-    if (!dataOra) return <Chip size="small" label="Neprogramat" color="default" />;
+    if (!dataOra) return <Chip size="small" label={isEnglish ? 'Not scheduled' : 'Neprogramat'} color="default" />;
     
     const programareDate = new Date(dataOra);
     const now = new Date();
@@ -219,11 +222,11 @@ export default function Programari() {
     const programareDay = new Date(programareDate.getFullYear(), programareDate.getMonth(), programareDate.getDate());
     
     if (programareDay.getTime() === today.getTime()) {
-      return <Chip size="small" label="Astăzi" color="warning" />;
+      return <Chip size="small" label={isEnglish ? 'Today' : 'Astăzi'} color="warning" />;
     } else if (programareDate > now) {
-      return <Chip size="small" label="Programată" color="success" />;
+      return <Chip size="small" label={isEnglish ? 'Scheduled' : 'Programată'} color="success" />;
     } else {
-      return <Chip size="small" label="Trecută" color="error" />;
+      return <Chip size="small" label={isEnglish ? 'Past' : 'Trecută'} color="error" />;
     }
   };
 
@@ -236,13 +239,13 @@ export default function Programari() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <EventIcon sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Programările mele
+              {isEnglish ? 'My appointments' : 'Programările mele'}
             </Typography>
           </Box>
 
           <TextField
             size="small"
-            placeholder={user.role === 'doctor' ? 'Caută după pacient, email sau dată...' : 'Caută după doctor, email sau dată...'}
+            placeholder={user.role === 'doctor' ? (isEnglish ? 'Search by patient, email, or date...' : 'Caută după pacient, email sau dată...') : (isEnglish ? 'Search by doctor, email, or date...' : 'Caută după doctor, email sau dată...')}
             value={searchInput}
             onChange={handleSearchInputChange}
             sx={{ width: { xs: '100%', md: 420 } }}
@@ -256,19 +259,19 @@ export default function Programari() {
           >
             <ToggleButton value="toate">
               <FilterListIcon sx={{ mr: 0.5 }} fontSize="small" />
-              Toate
+              {isEnglish ? 'All' : 'Toate'}
               <Chip label={counts.toate} size="small" sx={{ ml: 1 }} />
             </ToggleButton>
             <ToggleButton value="viitoare">
-              Viitoare
+              {isEnglish ? 'Upcoming' : 'Viitoare'}
               <Chip label={counts.viitoare} size="small" color="success" sx={{ ml: 1 }} />
             </ToggleButton>
             <ToggleButton value="trecute">
-              Trecute
+              {isEnglish ? 'Past' : 'Trecute'}
               <Chip label={counts.trecute} size="small" color="error" sx={{ ml: 1 }} />
             </ToggleButton>
             <ToggleButton value="completate">
-              Completate
+              {isEnglish ? 'Completed' : 'Completate'}
               <Chip label={counts.completate} size="small" color="info" sx={{ ml: 1 }} />
             </ToggleButton>
           </ToggleButtonGroup>
@@ -282,17 +285,17 @@ export default function Programari() {
         <TableRow>
           {user.role === "doctor" ? (
             <>
-              <TableCell>Pacient</TableCell>
+              <TableCell>{isEnglish ? 'Patient' : 'Pacient'}</TableCell>
               <TableCell>Email</TableCell>
-              <TableCell>Data și ora</TableCell>
+              <TableCell>{isEnglish ? 'Date and time' : 'Data și ora'}</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell align="right">Acțiuni</TableCell>
+              <TableCell align="right">{isEnglish ? 'Actions' : 'Acțiuni'}</TableCell>
             </>
           ) : (
             <>
-              <TableCell>Doctor</TableCell>
+              <TableCell>{isEnglish ? 'Doctor' : 'Doctor'}</TableCell>
               <TableCell>Email</TableCell>
-              <TableCell>Data și ora</TableCell>
+              <TableCell>{isEnglish ? 'Date and time' : 'Data și ora'}</TableCell>
               <TableCell>Status</TableCell>
             </>
           )}
@@ -310,7 +313,7 @@ export default function Programari() {
                     {p.data_programare ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <EventIcon fontSize="small" color="action" />
-                        {new Date(p.data_programare).toLocaleString('ro-RO', {
+                        {new Date(p.data_programare).toLocaleString(locale, {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
@@ -319,13 +322,13 @@ export default function Programari() {
                         })}
                       </Box>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">Neprogramat</Typography>
+                      <Typography variant="body2" color="text.secondary">{isEnglish ? 'Not scheduled' : 'Neprogramat'}</Typography>
                     )}
                   </TableCell>
                   <TableCell>{getStatusChip(p.data_programare, p.status)}</TableCell>
                   <TableCell align="right">
                     {p.data_programare && (
-                      <Tooltip title={p.data_programare ? "Reprogramează" : "Programează"}>
+                      <Tooltip title={p.data_programare ? (isEnglish ? 'Reschedule' : 'Reprogramează') : (isEnglish ? 'Schedule' : 'Programează')}>
                         <IconButton
                           size="small"
                           color="primary"
@@ -336,7 +339,7 @@ export default function Programari() {
                       </Tooltip>
                     )}
                     {p.data_programare && p.status !== 'completata' && (
-                      <Tooltip title="Marchează ca completată">
+                      <Tooltip title={isEnglish ? 'Mark as completed' : 'Marchează ca completată'}>
                         <IconButton
                           size="small"
                           color="success"
@@ -347,7 +350,7 @@ export default function Programari() {
                       </Tooltip>
                     )}
                     {p.data_programare && p.status !== 'completata' && (
-                      <Tooltip title="Anulează programarea">
+                      <Tooltip title={isEnglish ? 'Cancel appointment' : 'Anulează programarea'}>
                         <IconButton
                           size="small"
                           color="error"
@@ -367,7 +370,7 @@ export default function Programari() {
                     {p.data_programare ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <EventIcon fontSize="small" color="action" />
-                        {new Date(p.data_programare).toLocaleString('ro-RO', {
+                        {new Date(p.data_programare).toLocaleString(locale, {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
@@ -376,7 +379,7 @@ export default function Programari() {
                         })}
                       </Box>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">În așteptare</Typography>
+                      <Typography variant="body2" color="text.secondary">{isEnglish ? 'Pending' : 'În așteptare'}</Typography>
                     )}
                   </TableCell>
                   <TableCell>{getStatusChip(p.data_programare, p.status)}</TableCell>
@@ -389,10 +392,10 @@ export default function Programari() {
             <TableRow>
               <TableCell colSpan={user.role === "doctor" ? 5 : 4} align="center" sx={{ py: 4 }}>
                 <Typography variant="body1" color="text.secondary">
-                  {filter === 'viitoare' ? 'Nu există programări viitoare.' :
-                   filter === 'trecute' ? 'Nu există programări trecute.' :
-                   filter === 'completate' ? 'Nu există programări completate.' :
-                   'Nu există programări disponibile.'}
+                  {filter === 'viitoare' ? (isEnglish ? 'No upcoming appointments.' : 'Nu există programări viitoare.') :
+                   filter === 'trecute' ? (isEnglish ? 'No past appointments.' : 'Nu există programări trecute.') :
+                   filter === 'completate' ? (isEnglish ? 'No completed appointments.' : 'Nu există programări completate.') :
+                   (isEnglish ? 'No appointments available.' : 'Nu există programări disponibile.')}
                 </Typography>
               </TableCell>
             </TableRow>
@@ -409,11 +412,11 @@ export default function Programari() {
               disabled={currentPage <= 1}
               onClick={() => setCurrentPage(p => p - 1)}
             >
-              Anterior
+              {isEnglish ? 'Previous' : 'Anterior'}
             </Button>
 
             <Typography>
-              Pagina {currentPage} / {totalPages}
+              {isEnglish ? 'Page' : 'Pagina'} {currentPage} / {totalPages}
             </Typography>
 
             <Button 
@@ -421,7 +424,7 @@ export default function Programari() {
               disabled={currentPage >= totalPages}
               onClick={() => setCurrentPage(p => p + 1)}
             >
-              Următor
+              {isEnglish ? 'Next' : 'Următor'}
             </Button>
           </Box>
         )}
@@ -430,15 +433,15 @@ export default function Programari() {
         {user.role === "doctor" && (
           <Dialog open={calendarOpen} onClose={() => setCalendarOpen(false)} maxWidth="sm" fullWidth>
             <DialogTitle>
-              {selectedProgramare?.data_programare ? 'Reprogramează consultație' : 'Programează consultație'}
+              {selectedProgramare?.data_programare ? (isEnglish ? 'Reschedule consultation' : 'Reprogramează consultație') : (isEnglish ? 'Schedule consultation' : 'Programează consultație')}
             </DialogTitle>
             <DialogContent sx={{ pt: 3 }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Pacient: <strong>{selectedProgramare?.pacient_nume}</strong>
+                {isEnglish ? 'Patient:' : 'Pacient:'} <strong>{selectedProgramare?.pacient_nume}</strong>
               </Typography>
               <TextField
                 type="datetime-local"
-                label="Selectează data și ora"
+                label={isEnglish ? 'Select date and time' : 'Selectează data și ora'}
                 fullWidth
                 value={selectedDate || ''}
                 onChange={(e) => setSelectedDate(e.target.value)}
@@ -452,13 +455,13 @@ export default function Programari() {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setCalendarOpen(false)}>Anulează</Button>
+              <Button onClick={() => setCalendarOpen(false)}>{isEnglish ? 'Cancel' : 'Anulează'}</Button>
               <Button 
                 onClick={submitProgramare} 
                 variant="contained"
                 disabled={!selectedDate}
               >
-                {selectedProgramare?.data_programare ? 'Reprogramează' : 'Programează'}
+                {selectedProgramare?.data_programare ? (isEnglish ? 'Reschedule' : 'Reprogramează') : (isEnglish ? 'Schedule' : 'Programează')}
               </Button>
             </DialogActions>
           </Dialog>
@@ -466,21 +469,21 @@ export default function Programari() {
 
         {/* Dialog confirmare anulare */}
         <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-          <DialogTitle>Confirmă anularea</DialogTitle>
+          <DialogTitle>{isEnglish ? 'Confirm cancellation' : 'Confirmă anularea'}</DialogTitle>
           <DialogContent>
             <Typography>
-              Sigur vrei să anulezi programarea cu <strong>{programareToDelete?.pacient_nume}</strong>?
+              {isEnglish ? 'Are you sure you want to cancel the appointment with' : 'Sigur vrei să anulezi programarea cu'} <strong>{programareToDelete?.pacient_nume}</strong>?
             </Typography>
             {programareToDelete?.data_programare && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Data: {new Date(programareToDelete.data_programare).toLocaleString('ro-RO')}
+                {isEnglish ? 'Date:' : 'Data:'} {new Date(programareToDelete.data_programare).toLocaleString(locale)}
               </Typography>
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setConfirmDeleteOpen(false)}>Renunță</Button>
+            <Button onClick={() => setConfirmDeleteOpen(false)}>{isEnglish ? 'Dismiss' : 'Renunță'}</Button>
             <Button onClick={handleDeleteProgramare} variant="contained" color="error">
-              Anulează programarea
+              {isEnglish ? 'Cancel appointment' : 'Anulează programarea'}
             </Button>
           </DialogActions>
         </Dialog>

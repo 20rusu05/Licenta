@@ -3,22 +3,26 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import CancelIcon from '@mui/icons-material/Cancel';
+import { useLanguage } from '../../LanguageContext';
 
 export default function MyMedications({ medications = [] }) {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
+
   const getStatusInfo = (status) => {
     const info = {
       'acceptat': { 
-        label: 'Acceptat', 
+        label: isEnglish ? 'Accepted' : 'Acceptat', 
         color: 'success', 
         icon: <CheckCircleIcon fontSize="small" /> 
       },
       'pending': { 
-        label: 'În așteptare', 
+        label: isEnglish ? 'Pending' : 'În așteptare', 
         color: 'warning', 
         icon: <HourglassEmptyIcon fontSize="small" /> 
       },
       'respins': { 
-        label: 'Respins', 
+        label: isEnglish ? 'Rejected' : 'Respins', 
         color: 'error', 
         icon: <CancelIcon fontSize="small" /> 
       }
@@ -28,7 +32,7 @@ export default function MyMedications({ medications = [] }) {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   return (
@@ -36,7 +40,7 @@ export default function MyMedications({ medications = [] }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
         <MedicationIcon color="primary" />
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Medicamentele mele
+          {isEnglish ? 'My medications' : 'Medicamentele mele'}
         </Typography>
         {medications.length > 0 && (
           <Chip 
@@ -52,7 +56,7 @@ export default function MyMedications({ medications = [] }) {
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <MedicationIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
           <Typography color="text.secondary">
-            Nu ai medicamente înregistrate
+            {isEnglish ? 'You do not have any registered medications' : 'Nu ai medicamente înregistrate'}
           </Typography>
         </Box>
       ) : (

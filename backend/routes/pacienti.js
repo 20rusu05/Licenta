@@ -232,4 +232,39 @@ router.post("/:id/avatar", verifyToken, (req, res) => {
   });
 });
 
+router.delete("/:id/avatar", verifyToken, async (req, res) => {
+  const profileId = req.params.id;
+  const userId = req.user.id;
+  const role = req.user.role;
+
+  if (parseInt(userId, 10) !== parseInt(profileId, 10)) {
+    return res.status(403).json({ error: "Nu aveți permisiunea de a actualiza acest profil" });
+  }
+
+  const table = role === "doctor" ? "doctori" : "pacienti";
+
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT avatar_url FROM ${table} WHERE id = ? LIMIT 1`,
+      [profileId]
+    );
+
+    const currentAvatarUrl = rows?.[0]?.avatar_url || null;
+
+    await db.promise().query(
+      `UPDATE ${table}
+       SET avatar_url = NULL
+       WHERE id = ?`,
+      [profileId]
+    );
+
+    await deleteAvatarIfLocal(currentAvatarUrl);
+
+    return res.json({ message: "Poza de profil a fost ștearsă", avatar_url: null });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Eroare la ștergerea pozei de profil" });
+  }
+});
+
 export default router;

@@ -14,6 +14,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import ChatIcon from '@mui/icons-material/Chat';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 const drawerWidth = 240;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
@@ -22,6 +23,8 @@ const SENSORS_CONTROL_EVENT = 'sensors-control-action';
 export default function Sidebar() {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState(() => {
@@ -35,7 +38,7 @@ export default function Sidebar() {
   const isAdmin = user?.role === 'admin';
   const [monitoringInfo, setMonitoringInfo] = useState({
     connected: false,
-    patientName: 'Niciun pacient selectat',
+    patientName: isEnglish ? 'No patient selected' : 'Niciun pacient selectat',
     patientId: null,
   });
   const [runningSensors, setRunningSensors] = useState({ ecg: false, puls: false, temperatura: false });
@@ -58,22 +61,22 @@ export default function Sidebar() {
   const items = useMemo(() => {
     if (isAdmin) {
       return [
-        { label: 'Panou Administrare', icon: <AdminPanelSettingsIcon />, path: '/dashboard/admin' },
+        { label: isEnglish ? 'Admin Panel' : 'Panou Administrare', icon: <AdminPanelSettingsIcon />, path: '/dashboard/admin' },
       ];
     }
 
     const base = [
-      { label: 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
-      { label: 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
-      { label: 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
-      { label: 'Mesaje', icon: <ChatIcon />, path: '/dashboard/mesaje' },
+      { label: isEnglish ? 'Dashboard' : 'Tablou de bord', icon: <DashboardIcon />, path: '/dashboard' },
+      { label: isEnglish ? 'Appointments' : 'Programări', icon: <CalendarMonthIcon />, path: '/dashboard/programari' },
+      { label: isEnglish ? 'Medications' : 'Medicamente', icon: <HealthAndSafetyIcon />, path: '/dashboard/medicamente' },
+      { label: isEnglish ? 'Messages' : 'Mesaje', icon: <ChatIcon />, path: '/dashboard/mesaje' },
     ];
-    base.push({ label: 'Senzori Live', icon: <SensorsIcon />, path: '/dashboard/senzori' });
+    base.push({ label: isEnglish ? 'Live Sensors' : 'Senzori Live', icon: <SensorsIcon />, path: '/dashboard/senzori' });
     if (user?.role === 'doctor') {
-      base.splice(1, 0, { label: 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });
+      base.splice(1, 0, { label: isEnglish ? 'Patients' : 'Pacienți', icon: <PeopleIcon />, path: '/dashboard/pacienti' });
     }
     return base;
-  }, [isAdmin, user?.role]);
+  }, [isAdmin, isEnglish, user?.role]);
 
   useEffect(() => {
     const readMonitoringStatus = () => {
@@ -81,7 +84,7 @@ export default function Sidebar() {
         const sessionRaw = sessionStorage.getItem(MONITORING_STATUS_KEY);
         const raw = sessionRaw || localStorage.getItem(MONITORING_STATUS_KEY);
         if (!raw) {
-          setMonitoringInfo({ connected: false, patientName: 'Niciun pacient selectat', patientId: null });
+          setMonitoringInfo({ connected: false, patientName: isEnglish ? 'No patient selected' : 'Niciun pacient selectat', patientId: null });
           return;
         }
 
@@ -92,11 +95,11 @@ export default function Sidebar() {
         }
         setMonitoringInfo({
           connected: Boolean(parsed?.connected),
-          patientName: parsed?.selectedPatient?.name || 'Niciun pacient selectat',
+          patientName: parsed?.selectedPatient?.name || (isEnglish ? 'No patient selected' : 'Niciun pacient selectat'),
           patientId: parsed?.selectedPatient?.id || null,
         });
       } catch {
-        setMonitoringInfo({ connected: false, patientName: 'Niciun pacient selectat', patientId: null });
+        setMonitoringInfo({ connected: false, patientName: isEnglish ? 'No patient selected' : 'Niciun pacient selectat', patientId: null });
       }
     };
 
@@ -313,10 +316,10 @@ export default function Sidebar() {
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-                    Administrare conturi
+                    {isEnglish ? 'Account management' : 'Administrare conturi'}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
-                    Control rapid pentru doctori și pacienți.
+                    {isEnglish ? 'Quick control for doctors and patients.' : 'Control rapid pentru doctori și pacienți.'}
                   </Typography>
                 </Box>
               </Box>
@@ -336,10 +339,10 @@ export default function Sidebar() {
                   <DeleteOutlineIcon sx={{ fontSize: 18, color: 'error.main' }} />
                   <Box>
                     <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, lineHeight: 1.2 }}>
-                      Ștergere conturi
+                      {isEnglish ? 'Delete accounts' : 'Ștergere conturi'}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.2 }}>
-                      Din panoul principal.
+                      {isEnglish ? 'From the main dashboard.' : 'Din panoul principal.'}
                     </Typography>
                   </Box>
                 </Box>
@@ -357,10 +360,10 @@ export default function Sidebar() {
                   <GroupsIcon sx={{ fontSize: 18, color: 'primary.main' }} />
                   <Box>
                     <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, lineHeight: 1.2 }}>
-                      Gestionare utilizatori
+                      {isEnglish ? 'User management' : 'Gestionare utilizatori'}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.2 }}>
-                      Doctori și pacienți.
+                      {isEnglish ? 'Doctors and patients.' : 'Doctori și pacienți.'}
                     </Typography>
                   </Box>
                 </Box>
@@ -371,12 +374,12 @@ export default function Sidebar() {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                 <Chip
                   size="small"
-                  label={user?.role === 'admin' ? 'Rol: Admin' : 'Rol necunoscut'}
+                  label={user?.role === 'admin' ? (isEnglish ? 'Role: Admin' : 'Rol: Admin') : (isEnglish ? 'Unknown role' : 'Rol necunoscut')}
                   variant="outlined"
                   sx={{ alignSelf: 'flex-start', fontWeight: 600 }}
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                  {user?.nume ? `Conectat ca ${user.nume}` : 'Cont administrativ conectat.'}
+                  {user?.nume ? (isEnglish ? `Connected as ${user.nume}` : `Conectat ca ${user.nume}`) : (isEnglish ? 'Administrative account connected.' : 'Cont administrativ conectat.')}
                 </Typography>
               </Box>
             </Box>
@@ -401,17 +404,17 @@ export default function Sidebar() {
             >
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.dark', mb: 0.5 }}>
-                  Panou Monitorizare
+                  {isEnglish ? 'Monitoring panel' : 'Panou Monitorizare'}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.45 }}>
-                  Acces rapid la date live ECG, puls și temperatură.
+                  {isEnglish ? 'Quick access to live ECG, pulse, and temperature data.' : 'Acces rapid la date live ECG, puls și temperatură.'}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                 <Chip
                   size="small"
                   icon={<FiberManualRecordIcon sx={{ fontSize: 10 }} />}
-                  label={monitoringInfo.connected ? 'Conectat' : 'Deconectat'}
+                  label={monitoringInfo.connected ? (isEnglish ? 'Connected' : 'Conectat') : (isEnglish ? 'Disconnected' : 'Deconectat')}
                   color={monitoringInfo.connected ? 'success' : 'default'}
                   variant="outlined"
                 />
@@ -422,10 +425,10 @@ export default function Sidebar() {
 
 
               <Stack spacing={0.7}>
-                {[
+                  {[
                   { key: 'ecg', label: 'ECG' },
-                  { key: 'puls', label: 'Puls' },
-                  { key: 'temperatura', label: 'Temperatură' },
+                  { key: 'puls', label: isEnglish ? 'Pulse' : 'Puls' },
+                  { key: 'temperatura', label: isEnglish ? 'Temperature' : 'Temperatură' },
                 ].map((sensor) => (
                   <Box
                     key={sensor.key}
@@ -442,7 +445,7 @@ export default function Sidebar() {
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>{sensor.label}</Typography>
                     <Chip
                       size="small"
-                      label={runningSensors[sensor.key] ? 'Pornit' : 'Oprit'}
+                      label={runningSensors[sensor.key] ? (isEnglish ? 'Running' : 'Pornit') : (isEnglish ? 'Stopped' : 'Oprit')}
                       color={runningSensors[sensor.key] ? 'success' : 'default'}
                       variant="outlined"
                       sx={{ height: 21, '& .MuiChip-label': { px: 0.85 } }}
@@ -467,7 +470,7 @@ export default function Sidebar() {
                   }
                   sx={{ textTransform: 'none', fontWeight: 700 }}
                 >
-                  Start all
+                  {isEnglish ? 'Start all' : 'Start all'}
                 </Button>
                 <Button
                   size="small"
@@ -479,18 +482,18 @@ export default function Sidebar() {
                   disabled={actionLoading.startAll || actionLoading.stopAll}
                   sx={{ textTransform: 'none', fontWeight: 700 }}
                 >
-                  Stop all
+                  {isEnglish ? 'Stop all' : 'Stop all'}
                 </Button>
               </Stack>
 
               {!monitoringInfo.patientId && (
                 <Typography variant="caption" sx={{ mt: 0.8, color: 'text.secondary', display: 'block' }}>
-                  Pentru Start all, selectează mai întâi un pacient în pagina Senzori Live.
+                  {isEnglish ? 'For Start all, first select a patient on the Live Sensors page.' : 'Pentru Start all, selectează mai întâi un pacient în pagina Senzori Live.'}
                 </Typography>
               )}
               {user?.role === 'pacient' && assignmentLoaded && !patientHasAssignment && (
                 <Typography variant="caption" sx={{ mt: 0.8, color: 'text.secondary', display: 'block' }}>
-                  Nu poți porni senzorii până când doctorul nu îți asignează un dispozitiv activ.
+                  {isEnglish ? 'You cannot start the sensors until the doctor assigns you an active device.' : 'Nu poți porni senzorii până când doctorul nu îți asignează un dispozitiv activ.'}
                 </Typography>
               )}
             </Box>

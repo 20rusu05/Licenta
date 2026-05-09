@@ -4,9 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import { useLanguage } from '../../LanguageContext';
 
 export default function Register() {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -40,38 +43,38 @@ export default function Register() {
     e.preventDefault();
 
     if (!formData.nume.trim() || !formData.prenume.trim() || !formData.email.trim() || !formData.parola.trim() || !formData.telefon.trim()) {
-      setError('Completează toate câmpurile obligatorii.');
+      setError(isEnglish ? 'Fill in all required fields.' : 'Completează toate câmpurile obligatorii.');
       return;
     }
 
     if (!confirmParola.trim()) {
-      setError('Confirmă parola înainte de a crea contul.');
+      setError(isEnglish ? 'Confirm the password before creating the account.' : 'Confirmă parola înainte de a crea contul.');
       return;
     }
 
     if (formData.parola !== confirmParola) {
-      setError('Parolele nu coincid.');
+      setError(isEnglish ? 'Passwords do not match.' : 'Parolele nu coincid.');
       return;
     }
 
     
     if (!acceptedTerms) {
-      setError("Trebuie să acceptați termenii și condițiile pentru a crea un cont.");
+      setError(isEnglish ? 'You must accept the terms and conditions to create an account.' : "Trebuie să acceptați termenii și condițiile pentru a crea un cont.");
       return;
     }
     
     if (!emailRegex.test(formData.email)) {
-      setError("Adresa de email nu este validă. (ceva@ceva.ceva)");
+      setError(isEnglish ? 'The email address is not valid. (something@something.xxx)' : "Adresa de email nu este validă. (ceva@ceva.ceva)");
       return;
     }
 
     if (!passwordRegex.test(formData.parola)) {
-      setError("Parola trebuie să conțină minim 8 caractere, o literă mare și un caracter special.");
+      setError(isEnglish ? 'The password must contain at least 8 characters, one uppercase letter, and one special character.' : "Parola trebuie să conțină minim 8 caractere, o literă mare și un caracter special.");
       return;
     }
 
     if (!phoneRegex.test(formData.telefon)) {
-      setError("Numărul de telefon trebuie să înceapă cu 07, 02 sau 03 și să aibă exact 10 cifre.");
+      setError(isEnglish ? 'The phone number must start with 07, 02, or 03 and contain exactly 10 digits.' : "Numărul de telefon trebuie să înceapă cu 07, 02 sau 03 și să aibă exact 10 cifre.");
       return;
     }
 
@@ -134,7 +137,7 @@ export default function Register() {
               fontWeight: 500,
             }}
           >
-            Creare cont nou
+            {isEnglish ? 'Create a new account' : 'Creare cont nou'}
           </Typography>
           
           {error && (
@@ -161,7 +164,7 @@ export default function Register() {
             required
             fullWidth
             id="nume"
-            label="Nume"
+            label={isEnglish ? 'First name' : 'Nume'}
             name="nume"
             autoComplete="family-name"
             autoFocus
@@ -174,7 +177,7 @@ export default function Register() {
             required
             fullWidth
             id="prenume"
-            label="Prenume"
+            label={isEnglish ? 'Last name' : 'Prenume'}
             name="prenume"
             autoComplete="given-name"
             value={formData.prenume}
@@ -199,7 +202,7 @@ export default function Register() {
             required
             fullWidth
             name="parola"
-            label="Parola"
+            label={isEnglish ? 'Password' : 'Parola'}
             type={showParola ? 'text' : 'password'}
             id="parola"
             autoComplete="new-password"
@@ -209,7 +212,7 @@ export default function Register() {
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
-                    aria-label={showParola ? 'Ascunde parola' : 'Afișează parola'}
+                    aria-label={showParola ? (isEnglish ? 'Hide password' : 'Ascunde parola') : (isEnglish ? 'Show password' : 'Afișează parola')}
                     onClick={() => setShowParola((prev) => !prev)}
                     edge="end"
                   >
@@ -225,7 +228,7 @@ export default function Register() {
             required
             fullWidth
             name="confirmParola"
-            label="Confirmă parola"
+            label={isEnglish ? 'Confirm password' : 'Confirmă parola'}
             type={showConfirmParola ? 'text' : 'password'}
             id="confirmParola"
             autoComplete="new-password"
@@ -235,7 +238,7 @@ export default function Register() {
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
-                    aria-label={showConfirmParola ? 'Ascunde confirmarea parolei' : 'Afișează confirmarea parolei'}
+                    aria-label={showConfirmParola ? (isEnglish ? 'Hide password confirmation' : 'Ascunde confirmarea parolei') : (isEnglish ? 'Show password confirmation' : 'Afișează confirmarea parolei')}
                     onClick={() => setShowConfirmParola((prev) => !prev)}
                     edge="end"
                   >
@@ -251,7 +254,7 @@ export default function Register() {
             required
             fullWidth
             name="telefon"
-            label="Număr de telefon"
+            label={isEnglish ? 'Phone number' : 'Număr de telefon'}
             type="tel"
             id="telefon"
             autoComplete="tel"
@@ -275,7 +278,7 @@ export default function Register() {
             }
             label={
               <Typography variant="body2">
-                Accept{' '}
+                {isEnglish ? 'I accept the ' : 'Accept '}
                 <Link
                   component="button"
                   type="button"
@@ -291,7 +294,7 @@ export default function Register() {
                     },
                   }}
                 >
-                  termenii și condițiile
+                  {isEnglish ? 'terms and conditions' : 'termenii și condițiile'}
                 </Link>
               </Typography>
             }
@@ -310,7 +313,7 @@ export default function Register() {
             }}
             disabled={loading}
           >
-            {loading ? 'Se încarcă...' : 'Creare cont'}
+            {loading ? (isEnglish ? 'Loading...' : 'Se încarcă...') : (isEnglish ? 'Sign Up' : 'Creare cont')}
           </Button>
           
           <Box sx={{ textAlign: 'center', mt: 2 }}>
@@ -325,7 +328,7 @@ export default function Register() {
                 },
               }}
             >
-              Ai deja cont? Autentifică-te
+              {isEnglish ? 'Already have an account? Login' : 'Ai deja cont? Autentifică-te'}
             </Link>
           </Box>
         </Box>

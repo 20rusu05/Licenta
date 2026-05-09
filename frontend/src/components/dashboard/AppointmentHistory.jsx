@@ -1,21 +1,39 @@
 import { Paper, Box, Typography, List, ListItem, ListItemText, Chip, Divider } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
 import EventIcon from '@mui/icons-material/Event';
+import { useLanguage } from '../../LanguageContext';
 
 export default function AppointmentHistory({ appointments = [] }) {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
+
+  const normalizeStatus = (status) => String(status ?? '').trim().toLowerCase();
+
+  const getStatusLabel = (status) => {
+    const key = normalizeStatus(status);
+    const labels = {
+      programata: isEnglish ? 'Scheduled' : 'Programată',
+      confirmata: isEnglish ? 'Confirmed' : 'Confirmată',
+      completata: isEnglish ? 'Completed' : 'Completată',
+      anulata: isEnglish ? 'Canceled' : 'Anulată',
+    };
+    return labels[key] ?? String(status ?? '');
+  };
+
   const getStatusColor = (status) => {
+    const key = normalizeStatus(status);
     const colors = {
       'programata': 'primary',
       'confirmata': 'success',
       'completata': 'info',
       'anulata': 'error'
     };
-    return colors[status] || 'default';
+    return colors[key] || 'default';
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('ro-RO', { 
+    return date.toLocaleDateString(locale, { 
       day: 'numeric', 
       month: 'short', 
       year: 'numeric',
@@ -33,7 +51,7 @@ export default function AppointmentHistory({ appointments = [] }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
         <HistoryIcon color="primary" />
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Istoric programări
+          {isEnglish ? 'Appointment history' : 'Istoric programări'}
         </Typography>
       </Box>
 
@@ -41,7 +59,7 @@ export default function AppointmentHistory({ appointments = [] }) {
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <EventIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
           <Typography color="text.secondary">
-            Nu există programări în istoric
+            {isEnglish ? 'There are no appointments in the history' : 'Nu există programări în istoric'}
           </Typography>
         </Box>
       ) : (
@@ -75,7 +93,7 @@ export default function AppointmentHistory({ appointments = [] }) {
                         Dr. {apt.doctor_nume} {apt.doctor_prenume}
                       </Typography>
                       <Chip 
-                        label={apt.status} 
+                        label={getStatusLabel(apt.status)} 
                         size="small" 
                         color={getStatusColor(apt.status)}
                         sx={{ textTransform: 'capitalize' }}

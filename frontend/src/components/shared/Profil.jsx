@@ -24,9 +24,13 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AddAPhotoIcon from '@mui/icons-material/AddAPhoto';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { api, getBackendAssetUrl } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 export default function Profil() {
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const navigate = useNavigate();
@@ -38,6 +42,7 @@ export default function Profil() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAvatar, setDeletingAvatar] = useState(false);
   const [formData, setFormData] = useState({
     nume: '',
     prenume: '',
@@ -100,10 +105,10 @@ export default function Profil() {
       setUser(updatedUser);
 
       setEditMode(false);
-      setSuccess('Profilul a fost actualizat cu succes!');
+      setSuccess(isEnglish ? 'Profile updated successfully!' : 'Profilul a fost actualizat cu succes!');
     } catch (err) {
       console.error('Eroare la actualizare profil:', err);
-      setError(err.response?.data?.error || 'Eroare la actualizarea profilului');
+      setError(err.response?.data?.error || (isEnglish ? 'Error updating the profile' : 'Eroare la actualizarea profilului'));
     } finally {
       setLoading(false);
     }
@@ -114,12 +119,12 @@ export default function Profil() {
     if (!file || !user?.id) return;
 
     if (!file.type.startsWith('image/')) {
-      setError('Fișierul selectat trebuie să fie o imagine.');
+      setError(isEnglish ? 'The selected file must be an image.' : 'Fișierul selectat trebuie să fie o imagine.');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setError('Imaginea este prea mare. Dimensiunea maximă este 5MB.');
+      setError(isEnglish ? 'The image is too large. The maximum size is 5MB.' : 'Imaginea este prea mare. Dimensiunea maximă este 5MB.');
       return;
     }
 
@@ -140,15 +145,39 @@ export default function Profil() {
       setUser(updatedUser);
       window.dispatchEvent(new Event('auth-changed'));
 
-      setSuccess('Poza de profil a fost actualizată cu succes!');
+      setSuccess(isEnglish ? 'Profile picture updated successfully!' : 'Poza de profil a fost actualizată cu succes!');
     } catch (err) {
       console.error('Eroare la upload avatar:', err);
-      setError(err.response?.data?.error || 'Eroare la încărcarea pozei de profil');
+      setError(err.response?.data?.error || (isEnglish ? 'Error uploading the profile picture' : 'Eroare la încărcarea pozei de profil'));
     } finally {
       setUploadingAvatar(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!user?.id || !user?.avatar_url) return;
+
+    setDeletingAvatar(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await api.delete(`/pacienti/${user.id}/avatar`);
+
+      const updatedUser = { ...user, avatar_url: null };
+      sessionStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      window.dispatchEvent(new Event('auth-changed'));
+
+      setSuccess(isEnglish ? 'Profile picture removed successfully!' : 'Poza de profil a fost ștearsă cu succes!');
+    } catch (err) {
+      console.error('Eroare la ștergere avatar:', err);
+      setError(err.response?.data?.error || (isEnglish ? 'Error removing the profile picture' : 'Eroare la ștergerea pozei de profil'));
+    } finally {
+      setDeletingAvatar(false);
     }
   };
 
@@ -165,7 +194,7 @@ export default function Profil() {
   if (!user) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <Typography>Se încarcă...</Typography>
+        <Typography>{isEnglish ? 'Loading...' : 'Se încarcă...'}</Typography>
       </Box>
     );
   }
@@ -187,7 +216,7 @@ export default function Profil() {
             onClick={() => navigate('/dashboard')}
             sx={{ mb: 1, fontWeight: 700 }}
           >
-            Înapoi la Dashboard
+            {isEnglish ? 'Back to Dashboard' : 'Înapoi la Dashboard'}
           </Button>
         </Box>
 
@@ -235,16 +264,16 @@ export default function Profil() {
           >
             <Box>
               <Typography variant="h3" sx={{ fontWeight: 800, fontSize: { xs: '2rem', md: '2.5rem' } }}>
-                Profilul Meu
+                {isEnglish ? 'My profile' : 'Profilul Meu'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Gestionarea informațiilor personale și a contului
+                {isEnglish ? 'Manage your personal information and account details' : 'Gestionarea informațiilor personale și a contului'}
               </Typography>
             </Box>
 
             {!editMode ? (
               <Button variant="outlined" startIcon={<EditIcon />} onClick={handleEdit} sx={{ fontWeight: 700 }}>
-                Editează
+                {isEnglish ? 'Edit' : 'Editează'}
               </Button>
             ) : (
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -254,7 +283,7 @@ export default function Profil() {
                   onClick={handleCancel}
                   disabled={loading}
                 >
-                  Anulează
+                  {isEnglish ? 'Cancel' : 'Anulează'}
                 </Button>
                 <Button
                   variant="contained"
@@ -263,7 +292,7 @@ export default function Profil() {
                   disabled={loading}
                   sx={{ fontWeight: 700 }}
                 >
-                  Salvează
+                  {isEnglish ? 'Save' : 'Salvează'}
                 </Button>
               </Box>
             )}
@@ -299,10 +328,22 @@ export default function Profil() {
               variant="outlined"
               startIcon={<AddAPhotoIcon />}
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingAvatar}
+              disabled={uploadingAvatar || deletingAvatar}
+              sx={{ mb: 1 }}
+            >
+              {uploadingAvatar ? (isEnglish ? 'Loading...' : 'Se încarcă...') : (isEnglish ? 'Change picture' : 'Schimbă poza')}
+            </Button>
+            <Button
+              variant="text"
+              color="error"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={handleAvatarDelete}
+              disabled={!user?.avatar_url || uploadingAvatar || deletingAvatar}
               sx={{ mb: 1.5 }}
             >
-              {uploadingAvatar ? 'Se încarcă...' : 'Schimbă poza'}
+              {deletingAvatar
+                ? (isEnglish ? 'Removing...' : 'Se șterge...')
+                : (isEnglish ? 'Remove picture' : 'Șterge poza')}
             </Button>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               {user.nume} {user.prenume}
@@ -320,7 +361,7 @@ export default function Profil() {
               <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3, height: '100%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                   <BadgeIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="subtitle2" color="text.secondary">Nume</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{isEnglish ? 'Last name' : 'Nume'}</Typography>
                 </Box>
                 {editMode ? (
                   <TextField fullWidth size="small" name="nume" value={formData.nume} onChange={handleChange} />
@@ -334,7 +375,7 @@ export default function Profil() {
               <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3, height: '100%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                   <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="subtitle2" color="text.secondary">Prenume</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{isEnglish ? 'First name' : 'Prenume'}</Typography>
                 </Box>
                 {editMode ? (
                   <TextField fullWidth size="small" name="prenume" value={formData.prenume} onChange={handleChange} />
@@ -358,7 +399,7 @@ export default function Profil() {
               <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3, height: '100%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                   <PhoneIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="subtitle2" color="text.secondary">Telefon</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{isEnglish ? 'Phone' : 'Telefon'}</Typography>
                 </Box>
                 {editMode ? (
                   <TextField
@@ -367,11 +408,11 @@ export default function Profil() {
                     name="telefon"
                     value={formData.telefon}
                     onChange={handleChange}
-                    placeholder="Adaugă număr de telefon"
+                    placeholder={isEnglish ? 'Add phone number' : 'Adaugă număr de telefon'}
                   />
                 ) : (
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {user.telefon || 'Nu este setat'}
+                    {user.telefon || (isEnglish ? 'Not set' : 'Nu este setat')}
                   </Typography>
                 )}
               </Paper>
@@ -382,7 +423,7 @@ export default function Profil() {
                 <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                     <BadgeIcon sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="subtitle2" color="text.secondary">Specializare</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{isEnglish ? 'Specialization' : 'Specializare'}</Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>{user.specializare}</Typography>
                 </Paper>

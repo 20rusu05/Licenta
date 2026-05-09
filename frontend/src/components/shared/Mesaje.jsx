@@ -30,6 +30,7 @@ import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AppLayout from '../layout/AppLayout';
 import { api, getBackendAssetUrl } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 const REFRESH_INTERVAL_MS = 5000;
 
@@ -47,7 +48,7 @@ const getDisplayName = (person) => {
   return `${person.counterpart_nume || person.nume || ''} ${person.counterpart_prenume || person.prenume || ''}`.trim();
 };
 
-const formatConversationTime = (value) => {
+const formatConversationTime = (value, locale) => {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -56,10 +57,10 @@ const formatConversationTime = (value) => {
   const isToday = now.toDateString() === date.toDateString();
 
   if (isToday) {
-    return date.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }
 
-  return date.toLocaleDateString('ro-RO', {
+  return date.toLocaleDateString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -68,6 +69,8 @@ const formatConversationTime = (value) => {
 
 export default function Mesaje() {
   const user = useMemo(() => getStoredUser(), []);
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const isDoctor = user?.role === 'doctor';
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -154,7 +157,7 @@ export default function Mesaje() {
       setSelectedConversation(selected);
       await loadMessages(activeId, { silent });
     } catch (err) {
-      setError(err.response?.data?.error || 'Nu am putut încărca mesageria');
+      setError(err.response?.data?.error || (isEnglish ? 'Could not load messaging' : 'Nu am putut încărca mesageria'));
     } finally {
       setLoadingInitial(false);
     }
@@ -206,7 +209,7 @@ export default function Mesaje() {
     try {
       await loadMessages(conversation.id);
     } catch (err) {
-      setError(err.response?.data?.error || 'Nu am putut încărca mesajele conversației');
+      setError(err.response?.data?.error || (isEnglish ? 'Could not load the conversation messages' : 'Nu am putut încărca mesajele conversației'));
     }
   };
 
@@ -236,7 +239,7 @@ export default function Mesaje() {
       setError('');
       await loadMessages(conversationId);
     } catch (err) {
-      setError(err.response?.data?.error || 'Nu am putut porni conversația');
+      setError(err.response?.data?.error || (isEnglish ? 'Could not start the conversation' : 'Nu am putut porni conversația'));
     }
   };
 
@@ -258,7 +261,7 @@ export default function Mesaje() {
       setSelectedConversation(selected);
       setError('');
     } catch (err) {
-      setError(err.response?.data?.error || 'Nu am putut trimite mesajul');
+      setError(err.response?.data?.error || (isEnglish ? 'Could not send the message' : 'Nu am putut trimite mesajul'));
     } finally {
       setSending(false);
     }
@@ -311,7 +314,7 @@ export default function Mesaje() {
       await loadMessages(nextId);
       setError('');
     } catch (err) {
-      setError(err.response?.data?.error || 'Nu am putut șterge conversația');
+      setError(err.response?.data?.error || (isEnglish ? 'Could not delete the conversation' : 'Nu am putut șterge conversația'));
     } finally {
       setDeletingConversation(false);
     }
@@ -328,7 +331,7 @@ export default function Mesaje() {
     return (
       <AppLayout>
         <Container maxWidth="md" sx={{ mt: 3 }}>
-          <Alert severity="warning">Mesageria este disponibilă doar pentru doctori și pacienți.</Alert>
+          <Alert severity="warning">{isEnglish ? 'Messaging is available only for doctors and patients.' : 'Mesageria este disponibilă doar pentru doctori și pacienți.'}</Alert>
         </Container>
       </AppLayout>
     );
@@ -343,13 +346,13 @@ export default function Mesaje() {
               <Box sx={{ p: 2, pb: 1 }}>
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
                   <MessageIcon color="primary" />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>Mesaje</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{isEnglish ? 'Messages' : 'Mesaje'}</Typography>
                 </Stack>
 
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder={isDoctor ? 'Caută pacient...' : 'Caută doctor...'}
+                  placeholder={isDoctor ? (isEnglish ? 'Search patient...' : 'Caută pacient...') : (isEnglish ? 'Search doctor...' : 'Caută doctor...')}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   InputProps={{
@@ -366,7 +369,7 @@ export default function Mesaje() {
 
               <Box sx={{ p: 1.5, pb: 0.5 }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  CONVERSAȚII
+                  {isEnglish ? 'CONVERSATIONS' : 'CONVERSAȚII'}
                 </Typography>
               </Box>
 
@@ -379,15 +382,15 @@ export default function Mesaje() {
 
                 {!loadingInitial && conversations.length === 0 && (
                   <Box sx={{ px: 1.5, py: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Nu ai încă nicio conversație.
+                      <Typography variant="body2" color="text.secondary">
+                      {isEnglish ? 'You do not have any conversations yet.' : 'Nu ai încă nicio conversație.'}
                     </Typography>
                   </Box>
                 )}
 
                 {conversations.map((conversation) => {
                   const isSelected = Number(selectedConversationId) === Number(conversation.id);
-                  const lastText = conversation.last_message || 'Conversație fără mesaje';
+                  const lastText = conversation.last_message || (isEnglish ? 'Conversation without messages' : 'Conversație fără mesaje');
 
                   return (
                     <ListItemButton
@@ -407,7 +410,7 @@ export default function Mesaje() {
                               {getDisplayName(conversation)}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {formatConversationTime(conversation.last_message_at || conversation.updated_at)}
+                              {formatConversationTime(conversation.last_message_at || conversation.updated_at, locale)}
                             </Typography>
                           </Stack>
                         }
@@ -437,7 +440,7 @@ export default function Mesaje() {
               <Box sx={{ p: 1.5, pb: 0.5, display: 'flex', alignItems: 'center', gap: 0.8 }}>
                 <PersonSearchIcon fontSize="small" color="primary" />
                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  {isDoctor ? 'PACIENȚI DISPONIBILI' : 'DOCTORI DISPONIBILI'}
+                  {isDoctor ? (isEnglish ? 'AVAILABLE PATIENTS' : 'PACIENȚI DISPONIBILI') : (isEnglish ? 'AVAILABLE DOCTORS' : 'DOCTORI DISPONIBILI')}
                 </Typography>
               </Box>
 
@@ -466,8 +469,8 @@ export default function Mesaje() {
                   <Box sx={{ px: 1.5, py: 1.5 }}>
                     <Typography variant="caption" color="text.secondary">
                       {isDoctor
-                        ? 'Nu există pacienți disponibili pentru mesagerie.'
-                        : 'Nu există doctori disponibili pentru mesagerie.'}
+                        ? (isEnglish ? 'No patients available for messaging.' : 'Nu există pacienți disponibili pentru mesagerie.')
+                        : (isEnglish ? 'No doctors available for messaging.' : 'Nu există doctori disponibili pentru mesagerie.')}
                     </Typography>
                   </Box>
                 )}
@@ -487,7 +490,7 @@ export default function Mesaje() {
                           {selectedCounterpartName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Conversație salvată permanent
+                          {isEnglish ? 'Conversation saved permanently' : 'Conversație salvată permanent'}
                         </Typography>
                       </Box>
                     </Stack>
@@ -495,14 +498,14 @@ export default function Mesaje() {
                       color="error"
                       onClick={() => openDeleteDialog(selectedConversation.id)}
                       disabled={deletingConversation}
-                      aria-label="șterge conversația"
+                      aria-label={isEnglish ? 'delete conversation' : 'șterge conversația'}
                     >
                       {deletingConversation ? <CircularProgress size={18} /> : <DeleteOutlineIcon />}
                     </IconButton>
                   </Stack>
                 ) : (
                   <Typography variant="subtitle1" color="text.secondary">
-                    Selectează o conversație pentru a vedea mesajele
+                    {isEnglish ? 'Select a conversation to see the messages' : 'Selectează o conversație pentru a vedea mesajele'}
                   </Typography>
                 )}
               </Box>
@@ -516,7 +519,7 @@ export default function Mesaje() {
 
                 {!loadingMessages && selectedConversation && messages.length === 0 && (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 6 }}>
-                    Încă nu există mesaje. Scrie primul mesaj.
+                    {isEnglish ? 'No messages yet. Write the first message.' : 'Încă nu există mesaje. Scrie primul mesaj.'}
                   </Typography>
                 )}
 
@@ -556,7 +559,7 @@ export default function Mesaje() {
                             opacity: mine ? 0.85 : 0.6,
                           }}
                         >
-                          {new Date(msg.created_at).toLocaleString('ro-RO', {
+                          {new Date(msg.created_at).toLocaleString(locale, {
                             day: '2-digit',
                             month: '2-digit',
                             hour: '2-digit',
@@ -574,7 +577,7 @@ export default function Mesaje() {
                 <Stack direction="row" spacing={1}>
                   <TextField
                     fullWidth
-                    placeholder={selectedConversation ? 'Scrie mesajul...' : 'Selectează o conversație'}
+                    placeholder={selectedConversation ? (isEnglish ? 'Write a message...' : 'Scrie mesajul...') : (isEnglish ? 'Select a conversation' : 'Selectează o conversație')}
                     multiline
                     maxRows={4}
                     value={messageInput}
@@ -597,12 +600,12 @@ export default function Mesaje() {
 
         <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 1 }}>
           <Alert severity="info">
-            Pentru experiență completă de chat, deschide pagina pe ecran mediu sau mare.
+            {isEnglish ? 'For the full chat experience, open this page on a medium or large screen.' : 'Pentru experiență completă de chat, deschide pagina pe ecran mediu sau mare.'}
           </Alert>
           {selectedConversationId && (
             <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
               <Button variant="outlined" fullWidth startIcon={<SendIcon />}>
-                Conversație selectată
+                {isEnglish ? 'Selected conversation' : 'Conversație selectată'}
               </Button>
               <Button
                 variant="outlined"
@@ -611,7 +614,7 @@ export default function Mesaje() {
                 disabled={deletingConversation}
                 startIcon={deletingConversation ? <CircularProgress size={14} /> : <DeleteOutlineIcon />}
               >
-                Șterge
+                {isEnglish ? 'Delete' : 'Șterge'}
               </Button>
             </Stack>
           )}
@@ -629,15 +632,15 @@ export default function Mesaje() {
           maxWidth="xs"
           fullWidth
         >
-          <DialogTitle>Ștergere conversație</DialogTitle>
+          <DialogTitle>{isEnglish ? 'Delete conversation' : 'Ștergere conversație'}</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Sigur vrei să ștergi această conversație? Toate mesajele se vor pierde.
+              {isEnglish ? 'Are you sure you want to delete this conversation? All messages will be lost.' : 'Sigur vrei să ștergi această conversație? Toate mesajele se vor pierde.'}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={closeDeleteDialog} disabled={deletingConversation}>
-              Anulează
+              {isEnglish ? 'Cancel' : 'Anulează'}
             </Button>
             <Button
               color="error"
@@ -645,7 +648,7 @@ export default function Mesaje() {
               onClick={handleDeleteConversation}
               disabled={deletingConversation}
             >
-              {deletingConversation ? 'Se șterge...' : 'Șterge'}
+              {deletingConversation ? (isEnglish ? 'Deleting...' : 'Se șterge...') : (isEnglish ? 'Delete' : 'Șterge')}
             </Button>
           </DialogActions>
         </Dialog>

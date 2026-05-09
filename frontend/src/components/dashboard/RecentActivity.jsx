@@ -2,8 +2,12 @@ import { Paper, Box, Typography, List, ListItem, ListItemAvatar, ListItemText, A
 import TimelineIcon from '@mui/icons-material/Timeline';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import MedicationIcon from '@mui/icons-material/Medication';
+import { useLanguage } from '../../LanguageContext';
 
 export default function RecentActivity({ activities = [] }) {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -12,12 +16,12 @@ export default function RecentActivity({ activities = [] }) {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Acum';
-    if (diffMins < 60) return `${diffMins} min în urmă`;
-    if (diffHours < 24) return `${diffHours}h în urmă`;
-    if (diffDays === 1) return 'Ieri';
-    if (diffDays < 7) return `${diffDays} zile în urmă`;
-    return date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
+    if (diffMins < 1) return isEnglish ? 'Now' : 'Acum';
+    if (diffMins < 60) return isEnglish ? `${diffMins} min ago` : `${diffMins} min în urmă`;
+    if (diffHours < 24) return isEnglish ? `${diffHours}h ago` : `${diffHours}h în urmă`;
+    if (diffDays === 1) return isEnglish ? 'Yesterday' : 'Ieri';
+    if (diffDays < 7) return isEnglish ? `${diffDays} days ago` : `${diffDays} zile în urmă`;
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
   };
 
   const getActivityInfo = (activity) => {
@@ -26,7 +30,7 @@ export default function RecentActivity({ activities = [] }) {
         icon: <CalendarTodayIcon />,
         color: 'primary.main',
         bgcolor: 'primary.light',
-        title: `Programare nouă - ${activity.nume} ${activity.prenume}`,
+        title: isEnglish ? `New appointment - ${activity.nume} ${activity.prenume}` : `Programare nouă - ${activity.nume} ${activity.prenume}`,
         subtitle: activity.detalii
       };
     } else {
@@ -34,7 +38,7 @@ export default function RecentActivity({ activities = [] }) {
         icon: <MedicationIcon />,
         color: 'success.main',
         bgcolor: 'success.light',
-        title: `Cerere medicament - ${activity.nume} ${activity.prenume}`,
+        title: isEnglish ? `Medication request - ${activity.nume} ${activity.prenume}` : `Cerere medicament - ${activity.nume} ${activity.prenume}`,
         subtitle: activity.detalii
       };
     }
@@ -45,7 +49,7 @@ export default function RecentActivity({ activities = [] }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
         <TimelineIcon color="primary" />
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Activitate recentă
+          {isEnglish ? 'Recent activity' : 'Activitate recentă'}
         </Typography>
       </Box>
 
@@ -53,7 +57,7 @@ export default function RecentActivity({ activities = [] }) {
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <TimelineIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
           <Typography color="text.secondary">
-            Nu există activitate recentă
+            {isEnglish ? 'There is no recent activity' : 'Nu există activitate recentă'}
           </Typography>
         </Box>
       ) : (

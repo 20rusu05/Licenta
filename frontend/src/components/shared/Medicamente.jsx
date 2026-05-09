@@ -34,13 +34,16 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import AppLayout from "../layout/AppLayout";
+import { useLanguage } from '../../LanguageContext';
 
 const API_URL = "/medicamente";
 
-function StatusChip({ status }) {
+function StatusChip({ status, isEnglish }) {
   if (!status) return <Chip size="small" label="-" color="default" />;
   let label = status.charAt(0).toUpperCase() + status.slice(1);
-  if (status === "pending") label = "În așteptare";
+  if (status === "pending") label = isEnglish ? 'Pending' : 'În așteptare';
+  if (status === "acceptat") label = isEnglish ? 'Accepted' : 'Acceptat';
+  if (status === "respins") label = isEnglish ? 'Rejected' : 'Respins';
   let color = "default";
   if (status === "pending") color = "warning";
   if (status === "acceptat") color = "success";
@@ -49,6 +52,8 @@ function StatusChip({ status }) {
 }
 
 export default function Medicamente() {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const [loading, setLoading] = useState(true);
   const [medicamente, setMedicamente] = useState([]);
   const [openRows, setOpenRows] = useState({});
@@ -360,7 +365,7 @@ const handleConfirmRenunta = async () => {
     <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          Medicamente disponibile
+          {isEnglish ? 'Available medications' : 'Medicamente disponibile'}
         </Typography>
         {isDoctor && (
           <Button
@@ -371,7 +376,7 @@ const handleConfirmRenunta = async () => {
               setAddOpen(true);
             }}
           >
-            Adaugă medicament
+            {isEnglish ? 'Add medication' : 'Adaugă medicament'}
           </Button>
         )}
       </Box>
@@ -385,11 +390,11 @@ const handleConfirmRenunta = async () => {
               <TableHead>
                 <TableRow>
                   {isDoctor && <TableCell />}
-                  <TableCell>Denumire</TableCell>
-                  <TableCell>Descriere</TableCell>
-                  {!isDoctor && <TableCell>Doctor</TableCell>}
-                  {!isDoctor && <TableCell>Stare</TableCell>}
-                  <TableCell align="right">{isDoctor ? "Acțiuni" : "Opțiune"}</TableCell>
+                  <TableCell>{isEnglish ? 'Name' : 'Denumire'}</TableCell>
+                  <TableCell>{isEnglish ? 'Description' : 'Descriere'}</TableCell>
+                  {!isDoctor && <TableCell>{isEnglish ? 'Doctor' : 'Doctor'}</TableCell>}
+                  {!isDoctor && <TableCell>{isEnglish ? 'Status' : 'Stare'}</TableCell>}
+                  <TableCell align="right">{isDoctor ? (isEnglish ? 'Actions' : 'Acțiuni') : (isEnglish ? 'Option' : 'Opțiune')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -415,6 +420,7 @@ const handleConfirmRenunta = async () => {
                           {m.aplicanti?.find((a) => a.pacient_id === user.id) ? (
                             <StatusChip
                               status={m.aplicanti.find((a) => a.pacient_id === user.id).status}
+                              isEnglish={isEnglish}
                             />
                           ) : (
                             "-"
@@ -424,7 +430,7 @@ const handleConfirmRenunta = async () => {
                       <TableCell align="right">
                         {isDoctor ? (
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                            <Tooltip title="Editează">
+                            <Tooltip title={isEnglish ? 'Edit' : 'Editează'}>
                               <IconButton
                                 size="small"
                                 color="primary"
@@ -436,7 +442,7 @@ const handleConfirmRenunta = async () => {
                                 <EditIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Șterge">
+                            <Tooltip title={isEnglish ? 'Delete' : 'Șterge'}>
                               <IconButton
                                 size="small"
                                 color="error"
@@ -448,7 +454,7 @@ const handleConfirmRenunta = async () => {
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title={m.complet ? 'Redeschide pentru aplicări' : 'Marchează ca complet'}>
+                            <Tooltip title={m.complet ? (isEnglish ? 'Reopen for applications' : 'Redeschide pentru aplicări') : (isEnglish ? 'Mark as completed' : 'Marchează ca complet')}>
                               <IconButton
                                 size="small"
                                 color={m.complet ? "warning" : "success"}
@@ -458,7 +464,7 @@ const handleConfirmRenunta = async () => {
                                     await api.patch(`${API_URL}/${m.id}/completeaza`);
                                     setSnackbar({
                                       open: true,
-                                      message: m.complet ? 'Medicament redeschis pentru aplicări!' : 'Medicament marcat ca complet!',
+                                      message: m.complet ? (isEnglish ? 'Medication reopened for applications!' : 'Medicament redeschis pentru aplicări!') : (isEnglish ? 'Medication marked as completed!' : 'Medicament marcat ca complet!'),
                                       severity: 'success'
                                     });
                                     await reload();
@@ -466,7 +472,7 @@ const handleConfirmRenunta = async () => {
                                     console.error(err);
                                     setSnackbar({
                                       open: true,
-                                      message: err.response?.data?.error || 'Eroare la actualizare',
+                                      message: err.response?.data?.error || (isEnglish ? 'Update error' : 'Eroare la actualizare'),
                                       severity: 'error'
                                     });
                                   }
@@ -503,7 +509,7 @@ const handleConfirmRenunta = async () => {
 
                               if (!aplicare) {
                                 if (m.complet) {
-                                  setDialogMessage("Acest medicament nu mai acceptă aplicări noi.");
+                                  setDialogMessage(isEnglish ? 'This medication no longer accepts new applications.' : 'Acest medicament nu mai acceptă aplicări noi.');
                                   setDialogOpen(true);
                                   return;
                                 }
@@ -516,15 +522,13 @@ const handleConfirmRenunta = async () => {
                                 return;
                               }
 
-                              setDialogMessage(
-                                "Nu poti renunta daca statusul nu este pending."
-                              );
+                                setDialogMessage(isEnglish ? 'You cannot withdraw if the status is not pending.' : 'Nu poti renunta daca statusul nu este pending.');
                               setDialogOpen(true);
                             }}
                           >
                             {m.aplicanti?.find((a) => a.pacient_id === user.id)
-                              ? "Renunță"
-                              : m.complet ? "Complet" : "Aplică"}
+                              ? (isEnglish ? 'Withdraw' : 'Renunță')
+                              : m.complet ? (isEnglish ? 'Completed' : 'Complet') : (isEnglish ? 'Apply' : 'Aplică')}
                           </Button>
                         )}
                       </TableCell>
@@ -537,15 +541,15 @@ const handleConfirmRenunta = async () => {
                           <Collapse in={!!openRows[m.id]} timeout="auto" unmountOnExit>
                             <Box sx={{ m: 2 }}>
                               <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                                Aplicanți ({m.aplicantiTotal || 0})
+                                {isEnglish ? 'Applicants' : 'Aplicanți'} ({m.aplicantiTotal || 0})
                               </Typography>
                               <Table size="small">
                                 <TableHead>
                                   <TableRow>
-                                    <TableCell>Pacient</TableCell>
+                                    <TableCell>{isEnglish ? 'Patient' : 'Pacient'}</TableCell>
                                     <TableCell>Email</TableCell>
-                                    <TableCell>Status</TableCell>
-                                    <TableCell align="right">Acțiuni</TableCell>
+                                    <TableCell>{isEnglish ? 'Status' : 'Status'}</TableCell>
+                                    <TableCell align="right">{isEnglish ? 'Actions' : 'Acțiuni'}</TableCell>
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -554,11 +558,11 @@ const handleConfirmRenunta = async () => {
                                       <TableCell>{a.pacient_nume}</TableCell>
                                       <TableCell>{a.pacient_email}</TableCell>
                                       <TableCell>
-                                        <StatusChip status={a.status} />
+                                        <StatusChip status={a.status} isEnglish={isEnglish} />
                                       </TableCell>
                                       <TableCell align="right">
                                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                                          <Tooltip title="Acceptă">
+                                          <Tooltip title={isEnglish ? 'Accept' : 'Acceptă'}>
                                             <IconButton
                                               size="small"
                                               color="success"
@@ -570,7 +574,7 @@ const handleConfirmRenunta = async () => {
                                               <CheckCircleIcon fontSize="small" />
                                             </IconButton>
                                           </Tooltip>
-                                          <Tooltip title="Respinge">
+                                          <Tooltip title={isEnglish ? 'Reject' : 'Respinge'}>
                                             <IconButton
                                               size="small"
                                               color="error"
@@ -582,7 +586,7 @@ const handleConfirmRenunta = async () => {
                                               <DeleteIcon fontSize="small" />
                                             </IconButton>
                                           </Tooltip>
-                                          <Tooltip title="Vezi formular">
+                                          <Tooltip title={isEnglish ? 'View form' : 'Vezi formular'}>
                                             <IconButton
                                               size="small"
                                               color="info"
@@ -597,7 +601,7 @@ const handleConfirmRenunta = async () => {
                                   ))}
                                   {(m.aplicanti || []).length === 0 && (
                                     <TableRow>
-                                      <TableCell colSpan={4}>Nu există aplicanți.</TableCell>
+                                      <TableCell colSpan={4}>{isEnglish ? 'No applicants.' : 'Nu există aplicanți.'}</TableCell>
                                     </TableRow>
                                   )}
                                 </TableBody>
@@ -610,10 +614,10 @@ const handleConfirmRenunta = async () => {
                                     disabled={m.aplicantiPage <= 1}
                                     onClick={() => changeAplicantiPage(m.id, m.aplicantiPage - 1)}
                                   >
-                                    Anterior
+                                    {isEnglish ? 'Previous' : 'Anterior'}
                                   </Button>
                                   <Typography variant="body2">
-                                    Pagina {m.aplicantiPage} / {Math.ceil(m.aplicantiTotal / m.aplicantiLimit)}
+                                    {isEnglish ? 'Page' : 'Pagina'} {m.aplicantiPage} / {Math.ceil(m.aplicantiTotal / m.aplicantiLimit)}
                                   </Typography>
                                   <Button
                                     size="small"
@@ -621,7 +625,7 @@ const handleConfirmRenunta = async () => {
                                     disabled={m.aplicantiPage >= Math.ceil(m.aplicantiTotal / m.aplicantiLimit)}
                                     onClick={() => changeAplicantiPage(m.id, m.aplicantiPage + 1)}
                                   >
-                                    Următor
+                                    {isEnglish ? 'Next' : 'Următor'}
                                   </Button>
                                 </Box>
                               )}
@@ -642,67 +646,67 @@ const handleConfirmRenunta = async () => {
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
-              Anterior
+              {isEnglish ? 'Previous' : 'Anterior'}
             </Button>
             <Typography>
-              Pagina {page} / {Math.ceil(total / limit)}
+              {isEnglish ? 'Page' : 'Pagina'} {page} / {Math.ceil(total / limit)}
             </Typography>
             <Button
               variant="outlined"
               disabled={page >= Math.ceil(total / limit)}
               onClick={() => setPage(page + 1)}
             >
-              Următor
+              {isEnglish ? 'Next' : 'Următor'}
             </Button>
           </Box>
         </>
       )}
 
       <Dialog open={formularOpen} onClose={() => setFormularOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Formular pacient</DialogTitle>
+        <DialogTitle>{isEnglish ? 'Patient form' : 'Formular pacient'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <TextField
             select
             fullWidth
-            label="Fumezi?"
+            label={isEnglish ? 'Do you smoke?' : 'Fumezi?'}
             value={formData.fumeaza}
             onChange={(e) => setFormData({ ...formData, fumeaza: e.target.value })}
             sx={{ mb: 2 }}
             required
           >
-            <MenuItem value="da">Da</MenuItem>
-            <MenuItem value="nu">Nu</MenuItem>
-            <MenuItem value="fost">Am fost fumător</MenuItem>
+            <MenuItem value="da">{isEnglish ? 'Yes' : 'Da'}</MenuItem>
+            <MenuItem value="nu">{isEnglish ? 'No' : 'Nu'}</MenuItem>
+            <MenuItem value="fost">{isEnglish ? 'Former smoker' : 'Am fost fumător'}</MenuItem>
           </TextField>
           <TextField
             select
             fullWidth
-            label="Activitate fizică"
+            label={isEnglish ? 'Physical activity' : 'Activitate fizică'}
             value={formData.activitate_fizica}
             onChange={(e) => setFormData({ ...formData, activitate_fizica: e.target.value })}
             sx={{ mb: 2 }}
             required
           >
-            <MenuItem value="sedentar">Sedentar</MenuItem>
-            <MenuItem value="usoara">Ușoară</MenuItem>
-            <MenuItem value="moderata">Moderată</MenuItem>
-            <MenuItem value="intensa">Intensă</MenuItem>
+            <MenuItem value="sedentar">{isEnglish ? 'Sedentary' : 'Sedentar'}</MenuItem>
+            <MenuItem value="usoara">{isEnglish ? 'Light' : 'Ușoară'}</MenuItem>
+            <MenuItem value="moderata">{isEnglish ? 'Moderate' : 'Moderată'}</MenuItem>
+            <MenuItem value="intensa">{isEnglish ? 'Intense' : 'Intensă'}</MenuItem>
           </TextField>
           <TextField
             select
             fullWidth
-            label="Probleme de inimă?"
+            label={isEnglish ? 'Heart problems?' : 'Probleme de inimă?'}
             value={formData.probleme_inima}
             onChange={(e) => setFormData({ ...formData, probleme_inima: e.target.value === 'true' })}
             sx={{ mb: 2 }}
             required
           >
-            <MenuItem value="false">Nu</MenuItem>
-            <MenuItem value="true">Da</MenuItem>
+            <MenuItem value="false">{isEnglish ? 'No' : 'Nu'}</MenuItem>
+            <MenuItem value="true">{isEnglish ? 'Yes' : 'Da'}</MenuItem>
           </TextField>
           <TextField
             fullWidth
-            label="Alergii"
+            label={isEnglish ? 'Allergies' : 'Alergii'}
             value={formData.alergii}
             onChange={(e) => setFormData({ ...formData, alergii: e.target.value })}
             sx={{ mb: 2 }}
@@ -710,7 +714,7 @@ const handleConfirmRenunta = async () => {
           />
           <TextField
             fullWidth
-            label="Boli cronice"
+            label={isEnglish ? 'Chronic conditions' : 'Boli cronice'}
             value={formData.boli_cronice}
             onChange={(e) => setFormData({ ...formData, boli_cronice: e.target.value })}
             sx={{ mb: 2 }}
@@ -718,7 +722,7 @@ const handleConfirmRenunta = async () => {
           />
           <TextField
             fullWidth
-            label="Medicamente curente"
+            label={isEnglish ? 'Current medications' : 'Medicamente curente'}
             value={formData.medicamente_curente}
             onChange={(e) => setFormData({ ...formData, medicamente_curente: e.target.value })}
             sx={{ mb: 2 }}
@@ -726,7 +730,7 @@ const handleConfirmRenunta = async () => {
           />
           <TextField
             fullWidth
-            label="Greutate (kg)"
+            label={isEnglish ? 'Weight (kg)' : 'Greutate (kg)'}
             type="number"
             value={formData.greutate}
             onChange={(e) => setFormData({ ...formData, greutate: e.target.value })}
@@ -735,7 +739,7 @@ const handleConfirmRenunta = async () => {
           />
           <TextField
             fullWidth
-            label="Înălțime (cm)"
+            label={isEnglish ? 'Height (cm)' : 'Înălțime (cm)'}
             type="number"
             value={formData.inaltime}
             onChange={(e) => setFormData({ ...formData, inaltime: e.target.value })}
@@ -744,7 +748,7 @@ const handleConfirmRenunta = async () => {
           />
           <TextField
             fullWidth
-            label="Observații (opțional)"
+            label={isEnglish ? 'Notes (optional)' : 'Observații (opțional)'}
             multiline
             minRows={2}
             value={formData.observatii}
@@ -752,26 +756,26 @@ const handleConfirmRenunta = async () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setFormularOpen(false)}>Închide</Button>
-          <Button onClick={submitFormular} variant="contained">Trimite</Button>
+          <Button onClick={() => setFormularOpen(false)}>{isEnglish ? 'Close' : 'Închide'}</Button>
+          <Button onClick={submitFormular} variant="contained">{isEnglish ? 'Send' : 'Trimite'}</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={viewFormOpen} onClose={() => setViewFormOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Formular pacient - {viewFormData.pacient_nume}</DialogTitle>
+        <DialogTitle>{isEnglish ? 'Patient form - ' : 'Formular pacient - '}{viewFormData.pacient_nume}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Fumător:</strong> {viewFormData.fumeaza || '-'}</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Activitate fizică:</strong> {viewFormData.activitate_fizica || '-'}</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Probleme inimă:</strong> {viewFormData.probleme_inima ? 'Da' : 'Nu'}</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Alergii:</strong> {viewFormData.alergii || '-'}</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Boli cronice:</strong> {viewFormData.boli_cronice || '-'}</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Medicamente curente:</strong> {viewFormData.medicamente_curente || '-'}</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Greutate:</strong> {viewFormData.greutate || '-'} kg</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Înălțime:</strong> {viewFormData.inaltime || '-'} cm</Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}><strong>Observații:</strong> {viewFormData.observatii || '-'}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Smoker:' : 'Fumător:'}</strong> {viewFormData.fumeaza || '-'}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Physical activity:' : 'Activitate fizică:'}</strong> {viewFormData.activitate_fizica || '-'}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Heart problems:' : 'Probleme inimă:'}</strong> {viewFormData.probleme_inima ? (isEnglish ? 'Yes' : 'Da') : (isEnglish ? 'No' : 'Nu')}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Allergies:' : 'Alergii:'}</strong> {viewFormData.alergii || '-'}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Chronic conditions:' : 'Boli cronice:'}</strong> {viewFormData.boli_cronice || '-'}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Current medications:' : 'Medicamente curente:'}</strong> {viewFormData.medicamente_curente || '-'}</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Weight:' : 'Greutate:'}</strong> {viewFormData.greutate || '-'} kg</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Height:' : 'Înălțime:'}</strong> {viewFormData.inaltime || '-'} cm</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}><strong>{isEnglish ? 'Notes:' : 'Observații:'}</strong> {viewFormData.observatii || '-'}</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setViewFormOpen(false)}>Închide</Button>
+          <Button onClick={() => setViewFormOpen(false)}>{isEnglish ? 'Close' : 'Închide'}</Button>
         </DialogActions>
       </Dialog>
 
@@ -785,19 +789,19 @@ const handleConfirmRenunta = async () => {
       </Dialog>
 
       <Dialog open={confirmRenuntaOpen} onClose={() => setConfirmRenuntaOpen(false)}>
-        <DialogTitle>Confirmare renunțare</DialogTitle>
+        <DialogTitle>{isEnglish ? 'Confirm withdrawal' : 'Confirmare renunțare'}</DialogTitle>
         <DialogContent>
-          <Typography>Sigur vrei să renunți la această aplicare?</Typography>
+          <Typography>{isEnglish ? 'Are you sure you want to withdraw this application?' : 'Sigur vrei să renunți la această aplicare?'}</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmRenuntaOpen(false)}>Anulează</Button>
+          <Button onClick={() => setConfirmRenuntaOpen(false)}>{isEnglish ? 'Cancel' : 'Anulează'}</Button>
           <Button onClick={handleConfirmRenunta} variant="contained" color="error">
-            Da, renunță
+            {isEnglish ? 'Yes, withdraw' : 'Da, renunță'}
           </Button>
         </DialogActions>
       </Dialog>
         <Dialog open={openProgramareDialog} onClose={closeProgramareDialog}>
-  <DialogTitle>Selecteaza data programarii</DialogTitle>
+  <DialogTitle>{isEnglish ? 'Select appointment date' : 'Selecteaza data programarii'}</DialogTitle>
   <DialogContent>
     <TextField
       type="datetime-local"
@@ -808,26 +812,26 @@ const handleConfirmRenunta = async () => {
     />
   </DialogContent>
   <DialogActions>
-    <Button onClick={closeProgramareDialog}>Renunta</Button>
+    <Button onClick={closeProgramareDialog}>{isEnglish ? 'Cancel' : 'Renunta'}</Button>
     <Button onClick={creeazaProgramare} variant="contained" color="primary">
-      Creeaza
+      {isEnglish ? 'Create' : 'Creeaza'}
     </Button>
   </DialogActions>
 </Dialog>
 
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Adaugă medicament</DialogTitle>
+        <DialogTitle>{isEnglish ? 'Add medication' : 'Adaugă medicament'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <TextField
             fullWidth
-            label="Denumire"
+            label={isEnglish ? 'Name' : 'Denumire'}
             value={newMed.denumire}
             onChange={(e) => setNewMed({ ...newMed, denumire: e.target.value })}
             sx={{ mb: 2 }}
           />
           <TextField
             fullWidth
-            label="Descriere"
+            label={isEnglish ? 'Description' : 'Descriere'}
             multiline
             minRows={3}
             value={newMed.descriere}
@@ -835,26 +839,26 @@ const handleConfirmRenunta = async () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>Anulează</Button>
+          <Button onClick={() => setAddOpen(false)}>{isEnglish ? 'Cancel' : 'Anulează'}</Button>
           <Button onClick={addMedicament} variant="contained">
-            Salvează
+            {isEnglish ? 'Save' : 'Salvează'}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Editează medicament</DialogTitle>
+        <DialogTitle>{isEnglish ? 'Edit medication' : 'Editează medicament'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <TextField
             fullWidth
-            label="Denumire"
+            label={isEnglish ? 'Name' : 'Denumire'}
             value={newMed.denumire}
             onChange={(e) => setNewMed({ ...newMed, denumire: e.target.value })}
             sx={{ mb: 2 }}
           />
           <TextField
             fullWidth
-            label="Descriere"
+            label={isEnglish ? 'Description' : 'Descriere'}
             multiline
             minRows={3}
             value={newMed.descriere}
@@ -862,7 +866,7 @@ const handleConfirmRenunta = async () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditOpen(false)}>Anulează</Button>
+          <Button onClick={() => setEditOpen(false)}>{isEnglish ? 'Cancel' : 'Anulează'}</Button>
           <Button 
             onClick={async () => {
               console.log('Salvare editare:', selectedMed, newMed);
@@ -876,22 +880,22 @@ const handleConfirmRenunta = async () => {
             }} 
             variant="contained"
           >
-            Salvează
+            {isEnglish ? 'Save' : 'Salvează'}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Confirmare ștergere</DialogTitle>
+        <DialogTitle>{isEnglish ? 'Confirm delete' : 'Confirmare ștergere'}</DialogTitle>
         <DialogContent>
           <Typography>
-            Sigur vrei să ștergi medicamentul "{selectedMed?.denumire}"?
+            {isEnglish ? 'Are you sure you want to delete the medication' : 'Sigur vrei să ștergi medicamentul'} "{selectedMed?.denumire}"?
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)}>Anulează</Button>
+          <Button onClick={() => setConfirmOpen(false)}>{isEnglish ? 'Cancel' : 'Anulează'}</Button>
           <Button onClick={confirmDelete} variant="contained" color="error">
-            Șterge
+            {isEnglish ? 'Delete' : 'Șterge'}
           </Button>
         </DialogActions>
       </Dialog>

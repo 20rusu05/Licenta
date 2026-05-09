@@ -5,20 +5,23 @@ import { CssBaseline } from '@mui/material'
 import App from './App.jsx'
 import { getTheme } from './theme'
 import { ThemeModeProvider, ThemeModeContext } from './ThemeModeContext'
+import { LanguageProvider } from './LanguageContext'
 
 function Root() {
   return (
     <React.StrictMode>
-      <ThemeModeProvider>
-        <ThemeModeContext.Consumer>
-          {({ mode }) => (
-            <ThemeProvider theme={getTheme(mode)}>
-              <CssBaseline />
-              <App />
-            </ThemeProvider>
-          )}
-        </ThemeModeContext.Consumer>
-      </ThemeModeProvider>
+      <LanguageProvider>
+        <ThemeModeProvider>
+          <ThemeModeContext.Consumer>
+            {({ mode }) => (
+              <ThemeProvider theme={getTheme(mode)}>
+                <CssBaseline />
+                <App />
+              </ThemeProvider>
+            )}
+          </ThemeModeContext.Consumer>
+        </ThemeModeProvider>
+      </LanguageProvider>
     </React.StrictMode>
   )
 }

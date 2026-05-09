@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { Container, Box, Typography, TextField, Button, Alert, Paper, Link } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 export default function ForgotPassword() {
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -16,16 +19,16 @@ export default function ForgotPassword() {
     setError('');
 
     if (!email.trim()) {
-      setError('Completează adresa de email.');
+      setError(isEnglish ? 'Fill in the email address.' : 'Completează adresa de email.');
       return;
     }
 
     setLoading(true);
     try {
       const res = await api.post('/forgot-password', { email });
-      setMessage(res.data.message || 'Verifică-ți emailul pentru instrucțiuni.');
+      setMessage(res.data.message || (isEnglish ? 'Check your email for instructions.' : 'Verifică-ți emailul pentru instrucțiuni.'));
     } catch (err) {
-      setError(err.response?.data?.error || 'A apărut o eroare.');
+      setError(err.response?.data?.error || (isEnglish ? 'Something went wrong.' : 'A apărut o eroare.'));
     } finally {
       setLoading(false);
     }
@@ -62,7 +65,7 @@ export default function ForgotPassword() {
             textAlign: 'center',
           }}
         >
-          Recuperare parola
+          {isEnglish ? 'Password recovery' : 'Recuperare parola'}
         </Typography>
 
         <Paper
@@ -80,7 +83,9 @@ export default function ForgotPassword() {
           }}
         >
           <Typography variant="body1" sx={{ mb: 3 }}>
-            Introdu adresa de email asociată contului tău. Îți vom trimite un link pentru resetarea parolei.
+            {isEnglish
+              ? 'Enter the email address associated with your account. We will send you a password reset link.'
+              : 'Introdu adresa de email asociată contului tău. Îți vom trimite un link pentru resetarea parolei.'}
           </Typography>
 
           {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
@@ -92,7 +97,7 @@ export default function ForgotPassword() {
               required
               fullWidth
               id="email"
-              label="Adresa de email"
+              label={isEnglish ? 'Email address' : 'Adresa de email'}
               name="email"
               autoComplete="email"
               value={email}
@@ -106,7 +111,7 @@ export default function ForgotPassword() {
               sx={{ mt: 2, py: 1.2 }}
               disabled={loading}
             >
-              {loading ? 'Se trimite...' : 'Trimite link-ul de resetare'}
+              {loading ? (isEnglish ? 'Sending...' : 'Se trimite...') : (isEnglish ? 'Send reset link' : 'Trimite link-ul de resetare')}
             </Button>
 
             <Box sx={{ textAlign: 'center', mt: 2 }}>
@@ -115,7 +120,7 @@ export default function ForgotPassword() {
                 variant="body2"
                 onClick={() => navigate('/login')}
               >
-                Înapoi la autentificare
+                {isEnglish ? 'Back to login' : 'Înapoi la autentificare'}
               </Link>
             </Box>
           </Box>

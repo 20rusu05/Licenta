@@ -2,8 +2,12 @@ import { Paper, Box, Typography, Chip, Avatar, Divider } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PersonIcon from '@mui/icons-material/Person';
+import { useLanguage } from '../../LanguageContext';
 
 export default function UpcomingAppointments({ appointments = [] }) {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
+
   const getStatusColor = (status) => {
     const colors = {
       'programata': 'primary',
@@ -21,16 +25,27 @@ export default function UpcomingAppointments({ appointments = [] }) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     if (date.toDateString() === today.toDateString()) {
-      return 'Astăzi';
+      return isEnglish ? 'Today' : 'Astăzi';
     } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Mâine';
+      return isEnglish ? 'Tomorrow' : 'Mâine';
     }
-    return date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
   };
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      programata: isEnglish ? 'Scheduled' : 'Programată',
+      confirmata: isEnglish ? 'Confirmed' : 'Confirmată',
+      completata: isEnglish ? 'Completed' : 'Completată',
+      anulata: isEnglish ? 'Cancelled' : 'Anulată',
+    };
+
+    return labels[status] || status;
   };
 
   return (
@@ -38,7 +53,7 @@ export default function UpcomingAppointments({ appointments = [] }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
         <EventIcon color="primary" />
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Programări de astăzi
+          {isEnglish ? 'Today’s appointments' : 'Programări de astăzi'}
         </Typography>
         {appointments.length > 0 && (
           <Chip 
@@ -54,7 +69,7 @@ export default function UpcomingAppointments({ appointments = [] }) {
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <EventIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
           <Typography color="text.secondary">
-            Nu există programări pentru astăzi
+            {isEnglish ? 'There are no appointments for today' : 'Nu există programări pentru astăzi'}
           </Typography>
         </Box>
       ) : (
@@ -93,7 +108,7 @@ export default function UpcomingAppointments({ appointments = [] }) {
                       {apt.nume} {apt.prenume}
                     </Typography>
                     <Chip 
-                      label={apt.status} 
+                      label={getStatusLabel(apt.status)} 
                       size="small" 
                       color={getStatusColor(apt.status)}
                       sx={{ textTransform: 'capitalize' }}

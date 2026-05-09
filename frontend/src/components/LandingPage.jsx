@@ -7,46 +7,50 @@ import PeopleIcon from '@mui/icons-material/People';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SpeedIcon from '@mui/icons-material/Speed';
 import SecurityIcon from '@mui/icons-material/Security';
+import LanguageToggle from './layout/LanguageToggle';
+import { useLanguage } from '../LanguageContext';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
 
   const features = [
     {
       icon: <CalendarMonthIcon sx={{ fontSize: 48 }} />,
-      title: 'Programări Online',
-      description: 'Programează-te rapid și simplu la medicul tău preferat, oricând și de oriunde.',
+      title: isEnglish ? 'Online appointments' : 'Programări Online',
+      description: isEnglish ? 'Book quickly and easily with your preferred doctor, anytime and anywhere.' : 'Programează-te rapid și simplu la medicul tău preferat, oricând și de oriunde.',
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     },
     {
       icon: <MedicationIcon sx={{ fontSize: 48 }} />,
-      title: 'Gestionare Medicamente',
-      description: 'Ține evidența medicamentelor tale și primește notificări despre tratament.',
+      title: isEnglish ? 'Medication management' : 'Gestionare Medicamente',
+      description: isEnglish ? 'Track your medication and receive treatment notifications.' : 'Ține evidența medicamentelor tale și primește notificări despre tratament.',
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
     },
     {
       icon: <PeopleIcon sx={{ fontSize: 48 }} />,
-      title: 'Istoric Medical',
-      description: 'Accesează oricând istoricul consultațiilor și al tratamentelor tale.',
+      title: isEnglish ? 'Medical history' : 'Istoric Medical',
+      description: isEnglish ? 'Access your consultations and treatment history anytime.' : 'Accesează oricând istoricul consultațiilor și al tratamentelor tale.',
       gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       centered: true
     },
     {
       icon: <LocalHospitalIcon sx={{ fontSize: 48 }} />,
-      title: 'Echipă Medicală',
-      description: 'Doctori specializați gata să îți ofere îngrijirea de care ai nevoie.',
+      title: isEnglish ? 'Medical team' : 'Echipă Medicală',
+      description: isEnglish ? 'Specialized doctors ready to provide the care you need.' : 'Doctori specializați gata să îți ofere îngrijirea de care ai nevoie.',
       gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
       centered: true
     }
   ];
 
   const benefits = [
-    'Programări rapide și simple',
-    'Acces 24/7 la informațiile tale medicale',
-    'Comunicare directă cu medicul',
-    'Notificări automate pentru programări',
-    'Istoric complet al consultațiilor',
-    'Securitate maximă a datelor'
+    isEnglish ? 'Fast and simple appointments' : 'Programări rapide și simple',
+    isEnglish ? '24/7 access to your medical information' : 'Acces 24/7 la informațiile tale medicale',
+    isEnglish ? 'Direct communication with your doctor' : 'Comunicare directă cu medicul',
+    isEnglish ? 'Automatic appointment notifications' : 'Notificări automate pentru programări',
+    isEnglish ? 'Full consultation history' : 'Istoric complet al consultațiilor',
+    isEnglish ? 'Maximum data security' : 'Securitate maximă a datelor'
   ];
 
   return (
@@ -75,13 +79,14 @@ export default function LandingPage() {
             NewMed
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <LanguageToggle />
           <Button 
             variant="outlined" 
             onClick={() => navigate('/login')}
             sx={{ px: 3 }}
           >
-            Login
+            {isEnglish ? 'Login' : 'Autentificare'}
           </Button>
           <Button 
             variant="contained" 
@@ -91,7 +96,7 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
             }}
           >
-            Sign Up
+            {isEnglish ? 'Sign Up' : 'Creează cont'}
           </Button>
         </Box>
       </Box>
@@ -133,11 +138,12 @@ export default function LandingPage() {
                 backgroundClip: 'text'
               }}
             >
-              Sănătatea ta, la un click distanță
+              {isEnglish ? 'Your health, one click away' : 'Sănătatea ta, la un click distanță'}
             </Typography>
             <Typography variant="h6" sx={{ mb: 4, color: 'text.secondary', lineHeight: 1.8, maxWidth: 800, mx: 'auto' }}>
-              NewMed este platforma care simplifică accesul la servicii medicale de calitate. 
-              Programează-te online, gestionează-ți medicamentele și păstrează legătura cu medicul tău.
+              {isEnglish
+                ? 'NewMed simplifies access to quality healthcare. Book appointments online, manage your medication, and stay connected with your doctor.'
+                : 'NewMed este platforma care simplifică accesul la servicii medicale de calitate. Programează-te online, gestionează-ți medicamentele și păstrează legătura cu medicul tău.'}
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
               <Button 
@@ -152,7 +158,7 @@ export default function LandingPage() {
                   boxShadow: '0 8px 24px rgba(102, 126, 234, 0.4)'
                 }}
               >
-                Începe acum
+                {isEnglish ? 'Get started' : 'Începe acum'}
               </Button>
               <Button 
                 variant="outlined" 
@@ -160,7 +166,7 @@ export default function LandingPage() {
                 onClick={() => navigate('/login')}
                 sx={{ py: 1.5, px: 4, fontSize: '1.1rem' }}
               >
-                Autentificare
+                {isEnglish ? 'Login' : 'Autentificare'}
               </Button>
             </Box>
           </Box>
@@ -170,10 +176,10 @@ export default function LandingPage() {
       {/* Features Section */}
   <Container maxWidth="lg" sx={{ py: 10 }}>
        <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-          De ce NewMed?
+          {isEnglish ? 'Why NewMed?' : 'De ce NewMed?'}
         </Typography>
         <Typography variant="h6" align="center" color="text.secondary" sx={{ mb: 8 }}>
-          Totul ce ai nevoie pentru o sănătate perfectă, într-un singur loc.
+          {isEnglish ? 'Everything you need for better health, all in one place.' : 'Totul ce ai nevoie pentru o sănătate perfectă, într-un singur loc.'}
         </Typography>
 
         <Grid container spacing={3} sx={{ justifyContent: 'center' }}>
@@ -233,7 +239,7 @@ export default function LandingPage() {
           <Grid container spacing={6} alignItems="center">
             <Grid size={{ xs: 12, md: 6 }}>
               <Typography variant="h3" sx={{ fontWeight: 700, mb: 3 }}>
-                Beneficii pentru tine
+                {isEnglish ? 'Benefits for you' : 'Beneficii pentru tine'}
               </Typography>
               <Grid container spacing={2}>
                 {benefits.map((benefit, index) => (
@@ -262,7 +268,7 @@ export default function LandingPage() {
                       24/7
                     </Typography>
                     <Typography variant="body2">
-                      Disponibilitate
+                      {isEnglish ? 'Availability' : 'Disponibilitate'}
                     </Typography>
                   </Paper>
                 </Grid>
@@ -280,7 +286,7 @@ export default function LandingPage() {
                       100%
                     </Typography>
                     <Typography variant="body2">
-                      Securitate
+                      {isEnglish ? 'Security' : 'Securitate'}
                     </Typography>
                   </Paper>
                 </Grid>
@@ -298,7 +304,7 @@ export default function LandingPage() {
                       1000+
                     </Typography>
                     <Typography variant="body2">
-                      Pacienți mulțumiți
+                      {isEnglish ? 'Happy patients' : 'Pacienți mulțumiți'}
                     </Typography>
                   </Paper>
                 </Grid>
@@ -311,26 +317,25 @@ export default function LandingPage() {
       {/* Despre Noi Section */}
       <Container maxWidth="md" sx={{ py: 10 }}>
         <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-          Despre Noi
+          {isEnglish ? 'About Us' : 'Despre Noi'}
         </Typography>
         <Typography variant="h6" align="center" color="text.secondary" sx={{ mb: 6 }}>
-          Cine suntem și ce ne motivează
+          {isEnglish ? 'Who we are and what drives us' : 'Cine suntem și ce ne motivează'}
         </Typography>
 
         <Box>
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
-              Misiunea noastră
+              {isEnglish ? 'Our mission' : 'Misiunea noastră'}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.8 }}>
-              NewMed a fost creată cu scopul de a revoluționa accesul la serviciile medicale în România. 
-              Credem că tehnologia poate face medicina mai accesibilă, mai eficientă și mai prietenoasă 
-              pentru fiecare pacient.
+              {isEnglish
+                ? 'NewMed was created to revolutionize access to healthcare services. We believe technology can make medicine more accessible, efficient, and friendly for every patient.'
+                : 'NewMed a fost creată cu scopul de a revoluționa accesul la serviciile medicale în România. Credem că tehnologia poate face medicina mai accesibilă, mai eficientă și mai prietenoasă pentru fiecare pacient.'}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.8 }}>
-              Echipa noastră este formată din profesioniști medicali și experți în tehnologie care lucrează 
-              împreună pentru a oferi cele mai bune soluții digitale în domeniul sănătății. Vom continua 
-              să inovăm și să îmbunătățim platforma pentru a răspunde nevoilor în continuă schimbare ale 
-              pacienților și medicilor.
+              {isEnglish
+                ? 'Our team is made up of medical professionals and technology experts who work together to provide the best digital healthcare solutions. We will continue to innovate and improve the platform to meet the changing needs of patients and doctors.'
+                : 'Echipa noastră este formată din profesioniști medicali și experți în tehnologie care lucrează împreună pentru a oferi cele mai bune soluții digitale în domeniul sănătății. Vom continua să inovăm și să îmbunătățim platforma pentru a răspunde nevoilor în continuă schimbare ale pacienților și medicilor.'}
             </Typography>
             <Box sx={{ display: 'flex', gap: 3, mt: 4 }}>
               <Box>
@@ -338,7 +343,7 @@ export default function LandingPage() {
                   5+
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Ani experiență
+                  {isEnglish ? 'Years of experience' : 'Ani experiență'}
                 </Typography>
               </Box>
               <Box>
@@ -346,7 +351,7 @@ export default function LandingPage() {
                   50+
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Doctori parteneri
+                  {isEnglish ? 'Partner doctors' : 'Doctori parteneri'}
                 </Typography>
               </Box>
               <Box>
@@ -354,7 +359,7 @@ export default function LandingPage() {
                   24/7
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Suport disponibil
+                  {isEnglish ? 'Support available' : 'Suport disponibil'}
                 </Typography>
               </Box>
             </Box>
@@ -371,10 +376,12 @@ export default function LandingPage() {
       >
         <Container maxWidth="md">
           <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 3 }}>
-            Începe astăzi!
+            {isEnglish ? 'Start today!' : 'Începe astăzi!'}
           </Typography>
           <Typography variant="h6" align="center" sx={{ mb: 5, opacity: 0.9 }}>
-            Alătură-te comunității NewMed și descoperă o nouă modalitate de a-ți gestiona sănătatea
+            {isEnglish
+              ? 'Join the NewMed community and discover a new way to manage your health'
+              : 'Alătură-te comunității NewMed și descoperă o nouă modalitate de a-ți gestiona sănătatea'}
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
             <Button 
@@ -390,7 +397,7 @@ export default function LandingPage() {
                 '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' }
               }}
             >
-              Creează cont gratuit
+              {isEnglish ? 'Create a free account' : 'Creează cont gratuit'}
             </Button>
           </Box>
         </Container>
@@ -400,7 +407,7 @@ export default function LandingPage() {
       <Box sx={{ bgcolor: 'background.paper', py: 4, borderTop: '1px solid', borderColor: 'divider' }}>
         <Container maxWidth="lg">
           <Typography variant="body2" align="center" color="text.secondary">
-            © 2025 NewMed. Toate drepturile rezervate.
+            {isEnglish ? '© 2025 NewMed. All rights reserved.' : '© 2025 NewMed. Toate drepturile rezervate.'}
           </Typography>
         </Container>
       </Box>

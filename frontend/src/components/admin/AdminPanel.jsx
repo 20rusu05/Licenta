@@ -37,8 +37,11 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import AppLayout from '../layout/AppLayout';
 import { api } from '../../services/api';
+import { useLanguage } from '../../LanguageContext';
 
 export default function AdminPanel() {
+  const { lang, locale } = useLanguage();
+  const isEnglish = lang === 'en';
   const [activeTab, setActiveTab] = useState(0);
   const [users, setUsers] = useState({ doctori: [], pacienti: [] });
   const [statistics, setStatistics] = useState(null);
@@ -59,7 +62,7 @@ export default function AdminPanel() {
       const response = await api.get('/admin/users');
       setUsers(response.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Eroare la încărcarea utilizatorilor');
+      setError(err.response?.data?.error || (isEnglish ? 'Error loading users' : 'Eroare la încărcarea utilizatorilor'));
     }
   };
 
@@ -83,12 +86,12 @@ export default function AdminPanel() {
 
     try {
       await api.delete(`/admin/users/${role}/${user.id}`);
-      setSuccess(`${role === 'doctor' ? 'Doctor' : 'Pacient'} șters cu succes!`);
+      setSuccess(isEnglish ? `${role === 'doctor' ? 'Doctor' : 'Patient'} deleted successfully!` : `${role === 'doctor' ? 'Doctor' : 'Pacient'} șters cu succes!`);
       setDeleteDialog({ open: false, user: null, role: null });
       fetchUsers();
       fetchStatistics();
     } catch (err) {
-      setError(err.response?.data?.error || 'Eroare la ștergerea utilizatorului');
+      setError(err.response?.data?.error || (isEnglish ? 'Error deleting user' : 'Eroare la ștergerea utilizatorului'));
     } finally {
       setLoading(false);
     }
@@ -99,12 +102,12 @@ export default function AdminPanel() {
       const response = await api.get(`/admin/users/${role}/${user.id}`);
       setDetailsDialog({ open: true, user: response.data.user, data: response.data.relatedData });
     } catch (err) {
-      setError(err.response?.data?.error || 'Eroare la încărcarea detaliilor');
+      setError(err.response?.data?.error || (isEnglish ? 'Error loading details' : 'Eroare la încărcarea detaliilor'));
     }
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('ro-RO', {
+    return new Date(dateString).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -144,7 +147,7 @@ export default function AdminPanel() {
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography color="text.secondary" variant="body2" gutterBottom>
+              <Typography color="text.secondary" variant="body2" gutterBottom>
               {title}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 600, color }}>
@@ -172,12 +175,12 @@ export default function AdminPanel() {
         <TableHead>
           <TableRow sx={{ bgcolor: 'action.hover' }}>
             <TableCell sx={{ fontWeight: 600 }}>ID</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Nume</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Prenume</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'First name' : 'Nume'}</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Last name' : 'Prenume'}</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Telefon</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Data creării</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 600 }}>Acțiuni</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Phone' : 'Telefon'}</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>{isEnglish ? 'Created at' : 'Data creării'}</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600 }}>{isEnglish ? 'Actions' : 'Acțiuni'}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -186,8 +189,8 @@ export default function AdminPanel() {
               <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                 <Typography color="text.secondary">
                   {searchQuery.trim()
-                    ? 'Nu s-au găsit rezultate pentru căutarea introdusă'
-                    : `Nu există ${role === 'doctor' ? 'doctori' : 'pacienți'} înregistrați`}
+                    ? (isEnglish ? 'No results found for the entered search' : 'Nu s-au găsit rezultate pentru căutarea introdusă')
+                    : (isEnglish ? `No registered ${role === 'doctor' ? 'doctors' : 'patients'}` : `Nu există ${role === 'doctor' ? 'doctori' : 'pacienți'} înregistrați`)}
                 </Typography>
               </TableCell>
             </TableRow>
@@ -201,7 +204,7 @@ export default function AdminPanel() {
                 <TableCell>{user.telefon}</TableCell>
                 <TableCell>{formatDate(user.created_at)}</TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Detalii">
+                  <Tooltip title={isEnglish ? 'Details' : 'Detalii'}>
                     <IconButton 
                       size="small" 
                       color="info"
@@ -211,7 +214,7 @@ export default function AdminPanel() {
                       <InfoIcon />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Șterge">
+                  <Tooltip title={isEnglish ? 'Delete' : 'Șterge'}>
                     <IconButton 
                       size="small" 
                       color="error"
@@ -233,7 +236,7 @@ export default function AdminPanel() {
     <AppLayout>
       <Box>
         <Typography variant="h4" sx={{ mb: 3, fontWeight: 600 }}>
-          Panou Administrare
+          {isEnglish ? 'Admin Panel' : 'Panou Administrare'}
         </Typography>
 
         <Paper sx={{ p: 2, mb: 3 }}>
@@ -241,7 +244,7 @@ export default function AdminPanel() {
             fullWidth
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Caută după nume, prenume, email, telefon sau ID"
+            placeholder={isEnglish ? 'Search by name, surname, email, phone, or ID' : 'Caută după nume, prenume, email, telefon sau ID'}
             size="small"
             InputProps={{
               startAdornment: (
@@ -254,7 +257,7 @@ export default function AdminPanel() {
                   <IconButton
                     size="small"
                     onClick={() => setSearchQuery('')}
-                    aria-label="șterge căutarea"
+                    aria-label={isEnglish ? 'clear search' : 'șterge căutarea'}
                     edge="end"
                   >
                     <ClearIcon fontSize="small" />
@@ -281,7 +284,7 @@ export default function AdminPanel() {
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <StatCard 
-                title="Total Doctori" 
+                title={isEnglish ? 'Total Doctors' : 'Total Doctori'} 
                 value={statistics.doctori} 
                 icon={<LocalHospitalIcon sx={{ fontSize: 40, color: 'primary.main' }} />}
                 color="primary.main"
@@ -289,7 +292,7 @@ export default function AdminPanel() {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <StatCard 
-                title="Total Pacienți" 
+                title={isEnglish ? 'Total Patients' : 'Total Pacienți'} 
                 value={statistics.pacienti} 
                 icon={<PeopleIcon sx={{ fontSize: 40, color: 'success.main' }} />}
                 color="success.main"
@@ -297,7 +300,7 @@ export default function AdminPanel() {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <StatCard 
-                title="Total Programări" 
+                title={isEnglish ? 'Total Appointments' : 'Total Programări'} 
                 value={statistics.programari} 
                 icon={<CalendarMonthIcon sx={{ fontSize: 40, color: 'info.main' }} />}
                 color="info.main"
@@ -305,7 +308,7 @@ export default function AdminPanel() {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <StatCard 
-                title="Total Medicamente" 
+                title={isEnglish ? 'Total Medications' : 'Total Medicamente'} 
                 value={statistics.medicamente} 
                 icon={<MedicationIcon sx={{ fontSize: 40, color: 'warning.main' }} />}
                 color="warning.main"
@@ -320,8 +323,8 @@ export default function AdminPanel() {
             onChange={(e, newValue) => setActiveTab(newValue)}
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab label={`Doctori (${filteredDoctors.length}/${users.doctori.length})`} />
-            <Tab label={`Pacienți (${filteredPatients.length}/${users.pacienti.length})`} />
+            <Tab label={`${isEnglish ? 'Doctors' : 'Doctori'} (${filteredDoctors.length}/${users.doctori.length})`} />
+            <Tab label={`${isEnglish ? 'Patients' : 'Pacienți'} (${filteredPatients.length}/${users.pacienti.length})`} />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
@@ -335,26 +338,26 @@ export default function AdminPanel() {
           open={deleteDialog.open}
           onClose={() => setDeleteDialog({ open: false, user: null, role: null })}
         >
-          <DialogTitle>Confirmă Ștergerea</DialogTitle>
+          <DialogTitle>{isEnglish ? 'Confirm Deletion' : 'Confirmă Ștergerea'}</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Ești sigur că vrei să ștergi {deleteDialog.role === 'doctor' ? 'doctorul' : 'pacientul'}{' '}
+              {isEnglish ? 'Are you sure you want to delete' : 'Ești sigur că vrei să ștergi'} {deleteDialog.role === 'doctor' ? (isEnglish ? 'the doctor' : 'doctorul') : (isEnglish ? 'the patient' : 'pacientul')}{' '}
               <strong>{deleteDialog.user?.nume} {deleteDialog.user?.prenume}</strong>?
               <br /><br />
               <Typography color="error" variant="body2">
-                Atenție: Aceasta va șterge permanent:
+                {isEnglish ? 'Warning: this will permanently delete:' : 'Atenție: Aceasta va șterge permanent:'}
               </Typography>
               <Typography variant="body2" component="ul" sx={{ mt: 1, pl: 2 }}>
                 {deleteDialog.role === 'doctor' ? (
                   <>
-                    <li>Toate medicamentele create de doctor</li>
-                    <li>Toate aplicările de medicamente asociate</li>
-                    <li>Toate programările cu acest doctor</li>
+                    <li>{isEnglish ? 'All medications created by the doctor' : 'Toate medicamentele create de doctor'}</li>
+                    <li>{isEnglish ? 'All associated medication applications' : 'Toate aplicările de medicamente asociate'}</li>
+                    <li>{isEnglish ? 'All appointments with this doctor' : 'Toate programările cu acest doctor'}</li>
                   </>
                 ) : (
                   <>
-                    <li>Toate aplicările de medicamente ale pacientului</li>
-                    <li>Toate programările pacientului</li>
+                    <li>{isEnglish ? 'All medication applications for the patient' : 'Toate aplicările de medicamente ale pacientului'}</li>
+                    <li>{isEnglish ? 'All patient appointments' : 'Toate programările pacientului'}</li>
                   </>
                 )}
               </Typography>
@@ -365,7 +368,7 @@ export default function AdminPanel() {
               onClick={() => setDeleteDialog({ open: false, user: null, role: null })}
               disabled={loading}
             >
-              Anulează
+              {isEnglish ? 'Cancel' : 'Anulează'}
             </Button>
             <Button 
               onClick={handleDeleteConfirm} 
@@ -373,7 +376,7 @@ export default function AdminPanel() {
               variant="contained"
               disabled={loading}
             >
-              {loading ? 'Se șterge...' : 'Șterge'}
+              {loading ? (isEnglish ? 'Deleting...' : 'Se șterge...') : (isEnglish ? 'Delete' : 'Șterge')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -386,35 +389,35 @@ export default function AdminPanel() {
           fullWidth
         >
           <DialogTitle>
-            Detalii Utilizator
+            {isEnglish ? 'User Details' : 'Detalii Utilizator'}
           </DialogTitle>
           <DialogContent>
             {detailsDialog.user && (
               <Box>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Informații Personale
+                  {isEnglish ? 'Personal Information' : 'Informații Personale'}
                 </Typography>
                 <Box sx={{ mt: 1, mb: 3 }}>
-                  <Typography><strong>Nume:</strong> {detailsDialog.user.nume} {detailsDialog.user.prenume}</Typography>
+                  <Typography><strong>{isEnglish ? 'Name:' : 'Nume:'}</strong> {detailsDialog.user.nume} {detailsDialog.user.prenume}</Typography>
                   <Typography><strong>Email:</strong> {detailsDialog.user.email}</Typography>
-                  <Typography><strong>Telefon:</strong> {detailsDialog.user.telefon}</Typography>
-                  <Typography><strong>Rol:</strong> <Chip label={detailsDialog.user.role} size="small" color="primary" /></Typography>
-                  <Typography><strong>Data creării:</strong> {formatDate(detailsDialog.user.created_at)}</Typography>
+                  <Typography><strong>{isEnglish ? 'Phone:' : 'Telefon:'}</strong> {detailsDialog.user.telefon}</Typography>
+                  <Typography><strong>{isEnglish ? 'Role:' : 'Rol:'}</strong> <Chip label={detailsDialog.user.role} size="small" color="primary" /></Typography>
+                  <Typography><strong>{isEnglish ? 'Created at:' : 'Data creării:'}</strong> {formatDate(detailsDialog.user.created_at)}</Typography>
                 </Box>
 
                 <Typography variant="subtitle2" color="text.secondary">
-                  Date Asociate
+                  {isEnglish ? 'Associated Data' : 'Date Asociate'}
                 </Typography>
                 <Box sx={{ mt: 1 }}>
                   {detailsDialog.user.role === 'doctor' ? (
                     <>
-                      <Typography><strong>Medicamente create:</strong> {detailsDialog.data?.medicamente || 0}</Typography>
-                      <Typography><strong>Programări:</strong> {detailsDialog.data?.programari || 0}</Typography>
+                      <Typography><strong>{isEnglish ? 'Created medications:' : 'Medicamente create:'}</strong> {detailsDialog.data?.medicamente || 0}</Typography>
+                      <Typography><strong>{isEnglish ? 'Appointments:' : 'Programări:'}</strong> {detailsDialog.data?.programari || 0}</Typography>
                     </>
                   ) : (
                     <>
-                      <Typography><strong>Aplicări medicamente:</strong> {detailsDialog.data?.aplicari_medicamente || 0}</Typography>
-                      <Typography><strong>Programări:</strong> {detailsDialog.data?.programari || 0}</Typography>
+                      <Typography><strong>{isEnglish ? 'Medication applications:' : 'Aplicări medicamente:'}</strong> {detailsDialog.data?.aplicari_medicamente || 0}</Typography>
+                      <Typography><strong>{isEnglish ? 'Appointments:' : 'Programări:'}</strong> {detailsDialog.data?.programari || 0}</Typography>
                     </>
                   )}
                 </Box>
@@ -423,7 +426,7 @@ export default function AdminPanel() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDetailsDialog({ open: false, user: null, data: null })}>
-              Închide
+              {isEnglish ? 'Close' : 'Închide'}
             </Button>
           </DialogActions>
         </Dialog>

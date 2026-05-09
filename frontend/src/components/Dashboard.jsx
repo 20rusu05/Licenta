@@ -14,8 +14,11 @@ import MyMedications from './dashboard/MyMedications';
 import QuickActions from './dashboard/QuickActions';
 import AppointmentHistory from './dashboard/AppointmentHistory';
 import { api } from '../services/api';
+import { useLanguage } from '../LanguageContext';
 
 export default function Dashboard() {
+  const { lang } = useLanguage();
+  const isEnglish = lang === 'en';
   const user = JSON.parse(sessionStorage.getItem('user') || 'null');
   
   if (user?.role === 'admin') {
@@ -60,12 +63,14 @@ export default function Dashboard() {
       <Container maxWidth={false} disableGutters sx={{ mt: 2, mb: 4, px: { xs: 2, md: 3 } }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-            Bun venit, {isDoctor ? `Dr. ${displayName}` : displayName}! 👋
+            {isDoctor
+              ? `${isEnglish ? 'Welcome, Dr.' : 'Bun venit, Dr.'} ${displayName}! 👋`
+              : `${isEnglish ? 'Welcome,' : 'Bun venit,'} ${displayName}! 👋`}
           </Typography>
           <Typography variant="body1" color="text.secondary">
             {isDoctor 
-              ? 'Iată o privire de ansamblu asupra activității tale de astăzi' 
-              : 'Gestionează programările și medicamentele tale'}
+              ? (isEnglish ? 'Here is an overview of your activity today' : 'Iată o privire de ansamblu asupra activității tale de astăzi') 
+              : (isEnglish ? 'Manage your appointments and medications' : 'Gestionează programările și medicamentele tale')}
           </Typography>
         </Box>
 
@@ -74,36 +79,36 @@ export default function Dashboard() {
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PeopleIcon sx={{ fontSize: 28 }} />}
-                label="Total pacienți"
+                label={isEnglish ? 'Total patients' : 'Total pacienți'}
                 value={dashboardData?.stats?.totalPacienti || 0}
-                subtitle="Pacienți unici"
+                subtitle={isEnglish ? 'Unique patients' : 'Pacienți unici'}
                 color="primary"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<CalendarMonthIcon sx={{ fontSize: 28 }} />}
-                label="Programări astăzi"
+                label={isEnglish ? 'Appointments today' : 'Programări astăzi'}
                 value={dashboardData?.stats?.programariAzi || 0}
-                subtitle="Consultații de azi"
+                subtitle={isEnglish ? 'Today’s consultations' : 'Consultații de azi'}
                 color="success"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PendingActionsIcon sx={{ fontSize: 28 }} />}
-                label="Cereri în așteptare"
+                label={isEnglish ? 'Pending requests' : 'Cereri în așteptare'}
                 value={dashboardData?.stats?.cereriPending || 0}
-                subtitle="Cereri medicamente"
+                subtitle={isEnglish ? 'Medication requests' : 'Cereri medicamente'}
                 color="warning"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<MedicationIcon sx={{ fontSize: 28 }} />}
-                label="Medicamente active"
+                label={isEnglish ? 'Active medications' : 'Medicamente active'}
                 value={dashboardData?.stats?.medicamenteActive || 0}
-                subtitle="În tratament"
+                subtitle={isEnglish ? 'In treatment' : 'În tratament'}
                 color="info"
               />
             </Grid>
@@ -128,36 +133,36 @@ export default function Dashboard() {
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<CalendarMonthIcon sx={{ fontSize: 28 }} />}
-                label="Total programări"
+                label={isEnglish ? 'Total appointments' : 'Total programări'}
                 value={dashboardData?.stats?.totalProgramari || 0}
-                subtitle="Toate programările"
+                subtitle={isEnglish ? 'All appointments' : 'Toate programările'}
                 color="primary"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PendingActionsIcon sx={{ fontSize: 28 }} />}
-                label="Programări viitoare"
+                label={isEnglish ? 'Future appointments' : 'Programări viitoare'}
                 value={dashboardData?.stats?.programariViitoare || 0}
-                subtitle="În așteptare"
+                subtitle={isEnglish ? 'Awaiting' : 'În așteptare'}
                 color="success"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<MedicationIcon sx={{ fontSize: 28 }} />}
-                label="Medicamente active"
+                label={isEnglish ? 'Active medications' : 'Medicamente active'}
                 value={dashboardData?.stats?.medicamenteActive || 0}
-                subtitle="În tratament"
+                subtitle={isEnglish ? 'In treatment' : 'În tratament'}
                 color="info"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
               <StatCardModern
                 icon={<PendingActionsIcon sx={{ fontSize: 28 }} />}
-                label="Cereri în așteptare"
+                label={isEnglish ? 'Pending requests' : 'Cereri în așteptare'}
                 value={dashboardData?.stats?.cereriPending || 0}
-                subtitle="Neaprobate"
+                subtitle={isEnglish ? 'Not approved' : 'Neaprobate'}
                 color="warning"
               />
             </Grid>
