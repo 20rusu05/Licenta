@@ -253,7 +253,7 @@ router.get("/device-patient/:deviceId", (req, res) => {
 
 // POST /api/sensors/reading - Primește o citire de la senzor (fallback HTTP)
 router.post("/reading", (req, res) => {
-  const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp } = req.body;
+  const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp, leads_ok } = req.body;
 
   if (!sensor_type || value_1 === undefined) {
     return res.status(400).json({ error: "Date incomplete" });
@@ -294,7 +294,9 @@ router.post("/reading", (req, res) => {
         value_2: filtered.value2,
         device_id,
         pacient_id,
-        timestamp: new Date().toISOString(),
+        leads_ok: leads_ok === false ? false : true,
+        // Preserve the sensor-provided timestamp for stable chart sampling.
+        timestamp: new Date(readingTimestampMs).toISOString(),
         filtered: filtered.filtered,
         filter_reason: filtered.reason,
       });

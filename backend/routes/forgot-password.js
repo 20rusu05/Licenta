@@ -67,7 +67,7 @@ router.post('/forgot-password', async (req, res) => {
       }
     });
 
-    const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || 'https://localhost:3000').replace(/\/$/, '');
     const resetUrl = `${frontendBaseUrl}/reset-password/${token}`;
 
     const sendMailOptions = {

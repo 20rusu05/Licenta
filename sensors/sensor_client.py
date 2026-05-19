@@ -104,16 +104,7 @@ class SensorClient:
                 print(f"[{self.sensor_type}] Eroare conectare: {e}. Reîncerc în 5s...")
                 time.sleep(5)
 
-    def send_reading(self, value_1, value_2=None, pacient_id=None):
-        """Trimite o citire la server."""
-        data = {
-            "sensor_type": self.sensor_type,
-            "device_id": self.device_id,
-            "value_1": value_1,
-            "value_2": value_2,
-            "pacient_id": pacient_id,
-            "timestamp": time.time(),
-        }
+    def _enqueue(self, data):
         try:
             self.data_queue.put_nowait(data)
         except queue.Full:
@@ -122,6 +113,21 @@ class SensorClient:
             except queue.Empty:
                 pass
             self.data_queue.put_nowait(data)
+
+    def send_reading(self, value_1, value_2=None, pacient_id=None, timestamp=None, leads_ok=None):
+        """Trimite o citire la server."""
+        data = {
+            "sensor_type": self.sensor_type,
+            "device_id": self.device_id,
+            "value_1": value_1,
+            "value_2": value_2,
+            "pacient_id": pacient_id,
+            "timestamp": (time.time() if timestamp is None else timestamp),
+        }
+        if leads_ok is not None:
+            data["leads_ok"] = bool(leads_ok)
+
+        self._enqueue(data)
 
     def send_batch(self, readings, pacient_id=None):
         """Trimite un batch de citiri la server."""
@@ -141,8 +147,10 @@ class SensorClient:
             for reading in readings:
                 self.send_reading(
                     value_1=reading.get("value"),
-                    value_2=None,
+                    value_2=reading.get("value_2"),
                     pacient_id=pacient_id,
+                    timestamp=reading.get("timestamp"),
+                    leads_ok=reading.get("leads_ok"),
                 )
 
     def _start_sender_thread(self):

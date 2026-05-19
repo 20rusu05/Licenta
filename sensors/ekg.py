@@ -16,6 +16,8 @@ import time
 import signal
 import sys
 import math
+import os
+import random
 
 try:
     import RPi.GPIO as GPIO
@@ -90,6 +92,9 @@ class ECGSensor:
         self.notch_freq_hz = float(ECG_INPUT.get("notch_freq_hz", 50.0))
         self.notch_r = float(ECG_INPUT.get("notch_r", 0.97))
         self.max_step_mv = float(ECG_INPUT.get("max_step_mv", 70.0))
+        self.output_mode = str(ECG_INPUT.get("output_mode", os.getenv("ECG_OUTPUT_MODE", "raw"))).strip().lower()
+        if self.output_mode not in ("raw", "filtered", "ac"):
+            self.output_mode = "raw"
         self.reconnect_settle_samples = max(0, int(ECG_INPUT.get("reconnect_settle_samples", 20)))
         self._reconnect_skip_remaining = 0
         self._baseline_mv = None
@@ -108,8 +113,13 @@ class ECGSensor:
         self._notch_b2 = 0.0
         self._notch_a1 = 0.0
         self._notch_a2 = 0.0
+        self._last_sample_ts = None
+        self._last_sr_update_at = 0.0
         self.adc_max_value = 1023.0
         self.hardware_available = HARDWARE_AVAILABLE
+        if os.getenv("ECG_FORCE_SIM", "").strip().lower() in ("1", "true", "yes", "on"):
+            self.hardware_available = False
+            print("[ECG] ECG_FORCE_SIM activ - mod simulare forțat")
         self._update_notch_coeffs()
 
         if self.hardware_available:
@@ -220,28 +230,7 @@ class ECGSensor:
     def read_adc(self, channel):
         """Citire canal ADC (MCP3008 sau ADS1115)."""
         if not self.hardware_available:
-            import math
-            import random
-            t = time.time()
-            heart_rate = 72
-            period = 60.0 / heart_rate
-            phase = (t % period) / period
-
-            if 0.0 <= phase < 0.05:
-                value = 512 + 30 * math.sin(phase / 0.05 * math.pi)
-            elif 0.15 <= phase < 0.18:
-                value = 512 - 40 * math.sin((phase - 0.15) / 0.03 * math.pi)
-            elif 0.18 <= phase < 0.22:
-                value = 512 + 350 * math.sin((phase - 0.18) / 0.04 * math.pi)
-            elif 0.22 <= phase < 0.26:
-                value = 512 - 60 * math.sin((phase - 0.22) / 0.04 * math.pi)
-            elif 0.30 <= phase < 0.45:
-                value = 512 + 50 * math.sin((phase - 0.30) / 0.15 * math.pi)
-            else:
-                value = 512
-
-            value += random.gauss(0, 5)
-            return max(0, min(int(self.adc_max_value), int(value)))
+            return self._simulate_ecg_adc_value()
 
         if self.backend == "ads1115":
             return self._read_ads1115(channel)
@@ -249,6 +238,74 @@ class ECGSensor:
         adc = self.spi.xfer2([1, (8 + channel) << 4, 0])
         value = ((adc[1] & 3) << 8) + adc[2]
         return value
+
+    def _simulate_ecg_adc_value(self, t=None):
+        """Semnal ECG simulat (P-QRS-T) ca să semene cu un ECG clasic.
+
+        Scop: când librăriile/hardware-ul nu sunt disponibile, graficul din UI
+        să arate coerent (complex QRS îngust + undă T/P), nu un semnal sinusoidal.
+        """
+        t = time.time() if t is None else float(t)
+        hr_env = os.getenv("ECG_SIM_HR", "72").strip()
+        try:
+            heart_rate = float(hr_env)
+        except ValueError:
+            heart_rate = 72.0
+        heart_rate = max(40.0, min(160.0, heart_rate))
+
+        period = 60.0 / heart_rate
+        phase = (t % period) / period  # 0..1
+
+        def gauss(mu, sigma, amp):
+            x = (phase - mu) / max(1e-6, sigma)
+            return amp * math.exp(-0.5 * x * x)
+
+        # P-QRS-T model (unitless), then scale to ADC counts.
+        p = gauss(0.18, 0.025, 0.12)
+        q = gauss(0.37, 0.010, -0.15)
+        r = gauss(0.40, 0.008, 1.00)
+        s = gauss(0.43, 0.012, -0.25)
+        tw = gauss(0.66, 0.045, 0.35)
+        beat = p + q + r + s + tw
+
+        # Optional very slow baseline wander (respiration/motion).
+        # Default is OFF to keep the simulated waveform clean and repetitive.
+        wander_env = os.getenv("ECG_SIM_WANDER", "0").strip()
+        try:
+            wander_amp = float(wander_env)
+        except ValueError:
+            wander_amp = 0.0
+        wander_amp = max(0.0, min(0.2, wander_amp))
+        wander = wander_amp * math.sin(2.0 * math.pi * (t / 8.0))
+        signal = beat + wander
+
+        mid = self.adc_max_value / 2.0
+
+        # Default amplitude is intentionally modest; the UI further detrends and scales.
+        amp_env = os.getenv("ECG_SIM_AMP", "").strip()
+        if amp_env:
+            try:
+                amp_counts = float(amp_env)
+            except ValueError:
+                amp_counts = self.adc_max_value * 0.06
+        else:
+            amp_counts = self.adc_max_value * 0.06
+
+        value = mid + (signal * amp_counts)
+
+        # Small measurement noise (default very low for a stable, repetitive trace).
+        noise_env = os.getenv("ECG_SIM_NOISE", "").strip()
+        if noise_env:
+            try:
+                noise_counts = float(noise_env)
+            except ValueError:
+                noise_counts = self.adc_max_value * 0.0008
+        else:
+            noise_counts = self.adc_max_value * 0.0008
+
+        value += random.gauss(0.0, max(0.0, noise_counts))
+
+        return max(0, min(int(self.adc_max_value), int(round(value))))
 
     def _reset_filter_state(self):
         self._baseline_mv = None
@@ -278,8 +335,26 @@ class ECGSensor:
         self._notch_a2 = r * r
 
     def _filter_ecg_mv(self, raw_mv):
+        baseline_mv, ac_mv = self._filter_ecg_components(raw_mv)
+        filtered_mv = baseline_mv + ac_mv
+        return max(0.0, min(3300.0, filtered_mv))
+
+    def _filter_ecg_ac_mv(self, raw_mv):
+        """Filtrare ECG: returnează doar componenta AC (mV), centrată în jurul lui 0."""
+        _baseline_mv, ac_mv = self._filter_ecg_components(raw_mv)
+        # Keep a very wide clamp (safety net); UI can still scale/clip if needed.
+        return max(-2000.0, min(2000.0, ac_mv))
+
+    def _filter_ecg_components(self, raw_mv):
+        """Returnează (baseline_mv, ac_mv) pentru un eșantion.
+
+        - baseline_mv: componenta DC (estimare lentă)
+        - ac_mv: componenta filtrată (morfologie ECG), centrată pe 0
+        """
         if not self.filter_enabled:
-            return max(0.0, min(3300.0, raw_mv))
+            if self._baseline_mv is None:
+                self._baseline_mv = raw_mv
+            return self._baseline_mv, raw_mv - self._baseline_mv
 
         # Reject impulsive ADC glitches before shaping the ECG band.
         self._median_buffer_mv.append(raw_mv)
@@ -295,7 +370,7 @@ class ECGSensor:
         self._baseline_mv = self._baseline_mv + (self.baseline_alpha * (raw_mv - self._baseline_mv))
         centered = raw_mv - self._baseline_mv
 
-        # 50Hz hum suppression for setups sampling near 100Hz: simple Nyquist notch.
+        # 50Hz hum suppression for setups sampling near a target rate.
         if self.hum_suppress_50hz:
             target = self.hum_sample_rate_target
             tol = max(0.01, self.hum_sample_rate_tolerance)
@@ -335,9 +410,7 @@ class ECGSensor:
                 lowpassed = self._last_filtered_mv - self.max_step_mv
 
         self._last_filtered_mv = lowpassed
-
-        filtered_mv = self._baseline_mv + lowpassed
-        return max(0.0, min(3300.0, filtered_mv))
+        return self._baseline_mv, lowpassed
 
     def _instant_leads_ok(self, lo_plus, lo_minus):
         if self.ignore_leads:
@@ -405,7 +478,33 @@ class ECGSensor:
 
                     value = self.read_adc(self.ecg_channel)
                     raw_mv = (value / self.adc_max_value) * 3300.0
-                    voltage_mv = self._filter_ecg_mv(raw_mv)
+
+                    # Update effective sampling rate (helps notch accuracy on systems with jitter).
+                    now = time.time()
+                    if self._last_sample_ts is not None:
+                        dt = now - self._last_sample_ts
+                        if 0.001 <= dt <= 0.05:
+                            inst_hz = 1.0 / max(1e-6, dt)
+                            prev_hz = float(self.sample_rate_hz)
+                            self.sample_rate_hz = (0.9 * prev_hz) + (0.1 * inst_hz)
+                            if abs(self.sample_rate_hz - prev_hz) >= 2.0 and (now - self._last_sr_update_at) >= 0.35:
+                                self._update_notch_coeffs()
+                                self._last_sr_update_at = now
+                    self._last_sample_ts = now
+
+                    # Single-instance processing: choose the representation we send to backend/UI.
+                    # Attach a numeric mode code via value_2 (FLOAT in DB) so frontend can decide
+                    # how to display the stream without guessing.
+                    # 1=raw (0..3300mV), 2=filtered (0..3300mV), 3=ac (centered around 0mV)
+                    mode_code = 1
+                    if self.output_mode == "ac":
+                        voltage_mv = self._filter_ecg_ac_mv(raw_mv)
+                        mode_code = 3
+                    elif self.output_mode == "filtered":
+                        voltage_mv = self._filter_ecg_mv(raw_mv)
+                        mode_code = 2
+                    else:
+                        voltage_mv = raw_mv
                     self.last_raw_value = value
                     self.last_raw_mv = raw_mv
                     self.last_value_mv = voltage_mv
@@ -420,6 +519,7 @@ class ECGSensor:
 
                     self.batch.append({
                         "value": voltage_mv,
+                        "value_2": mode_code,
                         "timestamp": time.time(),
                         "leads_ok": True,
                     })
@@ -437,7 +537,8 @@ class ECGSensor:
                         self.client.send_reading(
                             value_1=0,
                             value_2=None,
-                            pacient_id=pacient_id
+                            pacient_id=pacient_id,
+                            leads_ok=False,
                         )
                         self.last_leadoff_sent_at = now
                     if self.last_leads_state is not False or (now - self.last_leads_log_at) >= self.leads_log_interval_seconds:

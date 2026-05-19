@@ -65,6 +65,12 @@ ECG_INPUT = {
     "notch_r": 0.97,
     "max_step_mv": 65.0,
     "reconnect_settle_samples": 20,
+    # output_mode:
+    #  - "raw": trimite tensiunea ADC brută (0..3300mV) către backend; recomandat pentru UI live,
+    #           deoarece frontend-ul aplică deja detrend + notch + lowpass.
+    #  - "filtered": aplică filtrarea din ekg.py înainte de trimitere.
+    #  - "ac": trimite componenta AC din ekg.py (poate distorsiona morfologia dacă alpha-urile nu sunt ideale)
+    "output_mode": "raw",
 }
 
 PINS = {

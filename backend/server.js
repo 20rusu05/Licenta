@@ -112,7 +112,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sensor_data", (data) => {
-    const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp } = data;
+    const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp, leads_ok } = data;
     const readingTimestampMs = typeof timestamp === "number" ? timestamp * 1000 : Date.now();
 
     const filtered = applyPlausibilityFilter({
@@ -158,7 +158,8 @@ io.on("connection", (socket) => {
       value_2: filteredValue2,
       device_id,
       pacient_id,
-      timestamp: new Date().toISOString(),
+      leads_ok: leads_ok === false ? false : true,
+      timestamp: new Date(readingTimestampMs).toISOString(),
       filtered: filtered.filtered,
       filter_reason: filtered.reason,
     });
@@ -186,7 +187,7 @@ io.on("connection", (socket) => {
         sensor_type,
         pacient_id || null,
         r.value,
-        null,
+        r.value_2 ?? null,
         device_id || "unknown",
       ]);
 
@@ -204,6 +205,7 @@ io.on("connection", (socket) => {
       sensor_type,
       readings: readings.map((r) => ({
         value_1: r.value,
+        value_2: r.value_2 ?? null,
         timestamp: new Date(r.timestamp * 1000).toISOString(),
         leads_ok: r.leads_ok,
       })),

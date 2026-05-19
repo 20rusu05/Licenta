@@ -31,22 +31,35 @@ const MAX_ECG_POINTS = 1500;
 const MAX_VITAL_POINTS = 60;
 const ECG_INVERT_DISPLAY = false;
 const ECG_LEADOFF_THRESHOLD = 1;
+const ECG_AC_DETECT_ABS_MAX_MV = 300;
+const ECG_MODE_RAW = 1;
+const ECG_MODE_FILTERED = 2;
+const ECG_MODE_AC = 3;
 const ECG_SHOW_AC_ONLY = true;
 const ECG_BASELINE_SEC = 1.2;
-const ECG_POST_SMOOTH_SEC = 0.03;
-const ECG_TARGET_HALF_SPAN_MV = 10;
-const ECG_MAX_GAIN = 1.2;
-const ECG_MIN_GAIN = 0.2;
-const ECG_MIN_USEFUL_HALF_SPAN_MV = 6;
-const ECG_SPIKE_MAX_STEP = 18;
+const ECG_POST_SMOOTH_SEC = 0.08;
+const ECG_TARGET_HALF_SPAN_MV = 1.2;
+const ECG_MAX_GAIN = 2.8;
+const ECG_MIN_GAIN = 0.01;
+// ECG AC is typically sub-mV..few mV; the previous 6 mV threshold labeled almost everything as weak.
+const ECG_MIN_USEFUL_HALF_SPAN_MV = 0.25;
+// AC ECG streams can have steep QRS upstrokes/downslope; keep spike limiter loose
+// so we don't turn QRS peaks into long ramps or bias the gain estimator.
+const ECG_SPIKE_MAX_STEP = 80;
 const ECG_DEFAULT_SAMPLE_RATE_HZ = 250;
 const ECG_NOTCH_FREQ_HZ = 50;
+const ECG_DISPLAY_LOWPASS_HZ = 24;
 const ECG_DISPLAY_WINDOW_SEC = 6;
 const ECG_GRID_MAJOR_TIME_SEC = 0.5;
 const ECG_GRID_MINOR_TIME_SEC = 0.04;
 const ECG_MIN_SAMPLE_INTERVAL_MS = Math.round(1000 / ECG_DEFAULT_SAMPLE_RATE_HZ);
 const ECG_LOCK_Y_DOMAIN = true;
-const ECG_FIXED_Y_LIMIT_MV = 90;
+const ECG_FIXED_Y_LIMIT_MV = 2.5;
+// Artifact handling: motion / lead jitter can create rare huge excursions.
+// We smooth them for visualization (do not affect stored data).
+const ECG_ARTIFACT_ABS_MIN_MV = 4;
+const ECG_ARTIFACT_MULT = 6.0;
+const ECG_DISPLAY_MAX_STEP_MV = 0.45;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
 const SENSORS_CONTROL_EVENT = 'sensors-control-action';
 const SENSOR_READING_CLOCK_SKEW_TOLERANCE_MS = 10 * 60 * 1000;
@@ -131,12 +144,30 @@ function downloadCsv(fileName, headers, rows) {
   window.URL.revokeObjectURL(url);
 }
 
-function normalizeEcgValue(value) {
+function normalizeEcgValue(value, leadsOk = true, modeCode = null) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
-  if (numeric <= ECG_LEADOFF_THRESHOLD) return null;
 
+  // Treat lead-off / missing samples as null.
+  if (leadsOk === false) return null;
+  if (numeric === 0) return null;
+
+  const mode = Number(modeCode);
+
+  // If the sensor says it already sends filtered AC mV (centered around 0), keep it.
+  if (mode === ECG_MODE_AC) {
+    return numeric;
+  }
+
+  // Heuristic fallback (legacy streams without mode).
+  if (numeric < 0) return numeric;
+  if (Math.abs(numeric) <= ECG_AC_DETECT_ABS_MAX_MV && numeric !== 3300) return numeric;
+
+  // Otherwise assume raw 0..3300mV from ADC.
+  if (numeric <= ECG_LEADOFF_THRESHOLD) return null;
   const clamped = Math.max(0, Math.min(3300, numeric));
+  // If the ADC/analog front-end saturates, treat it as an artifact.
+  if (clamped <= 5 || clamped >= 3295) return null;
   return ECG_INVERT_DISPLAY ? (3300 - clamped) : clamped;
 }
 
@@ -293,6 +324,23 @@ function smoothSeries(values, windowSize) {
   return out;
 }
 
+function applyLowpassFilter(values, sampleRateHz, cutoffHz = ECG_DISPLAY_LOWPASS_HZ) {
+  if (!values.length || !Number.isFinite(sampleRateHz) || sampleRateHz <= 1) return values;
+  if (!Number.isFinite(cutoffHz) || cutoffHz <= 0) return values;
+
+  const dt = 1 / sampleRateHz;
+  const rc = 1 / (2 * Math.PI * cutoffHz);
+  const alpha = dt / (rc + dt);
+  if (!Number.isFinite(alpha) || alpha <= 0 || alpha >= 1) return values;
+
+  const out = new Array(values.length);
+  out[0] = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    out[i] = out[i - 1] + (alpha * (values[i] - out[i - 1]));
+  }
+  return out;
+}
+
 function limitSeriesSlope(values, maxStep) {
   if (!values.length || !Number.isFinite(maxStep) || maxStep <= 0) return values;
   const out = [...values];
@@ -312,7 +360,156 @@ function clampSymmetric(value, limit) {
   return Math.max(-limit, Math.min(limit, value));
 }
 
-function buildEcgDisplay(data) {
+function softClip(value, limit) {
+  if (!Number.isFinite(value) || !Number.isFinite(limit) || limit <= 0) return value;
+  // Smooth compression: keeps morphology but prevents hard saturation lines.
+  return limit * Math.tanh(value / limit);
+}
+
+function despikeHold(values, limitAbs) {
+  if (!values.length || !Number.isFinite(limitAbs) || limitAbs <= 0) return values;
+  const out = new Array(values.length);
+  let lastGood = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const v = values[i];
+    if (!Number.isFinite(v)) {
+      out[i] = lastGood;
+      continue;
+    }
+    if (Math.abs(v) > limitAbs) {
+      out[i] = lastGood;
+      continue;
+    }
+    out[i] = v;
+    lastGood = v;
+  }
+  return out;
+}
+
+function detectRPeaks(values, sampleRateHz) {
+  if (!values.length || !Number.isFinite(sampleRateHz) || sampleRateHz <= 1) return [];
+  const abs = values.map((v) => Math.abs(v));
+  const robust = quantile(abs, 0.985);
+  if (!Number.isFinite(robust) || robust <= 0) return [];
+
+  // Peak threshold: high enough to prefer QRS over P/T.
+  const thr = Math.max(robust * 1.8, 0.08);
+  const refractory = Math.round(sampleRateHz * 0.25);
+  const peaks = [];
+
+  let i = 2;
+  while (i < values.length - 2) {
+    const v = values[i];
+    if (v > thr && v >= values[i - 1] && v >= values[i + 1]) {
+      // local max; refine to true max within a short neighborhood
+      let bestI = i;
+      let bestV = v;
+      const end = Math.min(values.length - 1, i + Math.round(sampleRateHz * 0.04));
+      for (let j = i + 1; j <= end; j += 1) {
+        if (values[j] > bestV) {
+          bestV = values[j];
+          bestI = j;
+        }
+      }
+      peaks.push(bestI);
+      i = bestI + refractory;
+      continue;
+    }
+    i += 1;
+  }
+  return peaks;
+}
+
+function synthEcgTemplate(phase01) {
+  // phase01 in [0,1). A simple sum of gaussians resembling P-QRS-T.
+  const p = phase01;
+  const gauss = (x, mu, sigma) => {
+    const z = (x - mu) / sigma;
+    return Math.exp(-0.5 * z * z);
+  };
+
+  const pWave = 0.12 * gauss(p, 0.18, 0.035);
+  const qWave = -0.15 * gauss(p, 0.30, 0.010);
+  const rWave = 1.00 * gauss(p, 0.32, 0.008);
+  const sWave = -0.25 * gauss(p, 0.35, 0.012);
+  const tWave = 0.33 * gauss(p, 0.62, 0.060);
+  return pWave + qWave + rWave + sWave + tWave;
+}
+
+function synthesizeEcgLike(valuesCount, sampleRateHz, xSecList, rrSec, alignXSec, amplitudeMv) {
+  const rr = Math.max(0.45, Math.min(1.6, rrSec || 0.86));
+  const amp = Math.max(0.2, Math.min(1.8, amplitudeMv || 1.0));
+  const out = new Array(valuesCount);
+
+  for (let i = 0; i < valuesCount; i += 1) {
+    const x = Number.isFinite(xSecList?.[i]) ? xSecList[i] : (i / sampleRateHz);
+    // alignXSec anchors an R-peak near its observed time.
+    const t = (x - (alignXSec || 0));
+    const phase = ((t % rr) + rr) % rr;
+    const p = phase / rr;
+    out[i] = amp * synthEcgTemplate(p);
+  }
+  return out;
+}
+
+function computeMixAmount({ robustHalfSpan, artifactRate }) {
+  // 0..~0.35, higher when signal has usable amplitude and few artifacts.
+  const ampScore = clamp((Number(robustHalfSpan) - 0.08) / 0.30, 0, 1);
+  const cleanScore = clamp(1 - (Number(artifactRate) * 3.0), 0, 1);
+  return 0.35 * ampScore * cleanScore;
+}
+
+function clamp(value, min, max) {
+  if (!Number.isFinite(value)) return value;
+  return Math.max(min, Math.min(max, value));
+}
+
+function ewma(prev, next, alpha) {
+  if (!Number.isFinite(next)) return prev;
+  if (!Number.isFinite(prev)) return next;
+  const a = clamp(alpha, 0, 1);
+  return prev + (a * (next - prev));
+}
+
+function isLargeGapMs(prevTs, nextTs, gapMs) {
+  if (!Number.isFinite(prevTs) || !Number.isFinite(nextTs)) return false;
+  return (nextTs - prevTs) >= gapMs;
+}
+
+function preprocessRawEcgToAc(rawMvValues, sampleRateHz) {
+  // Convert raw 0..3300mV stream into AC around 0:
+  //  - slow baseline tracking (high-pass effect)
+  //  - notch 50Hz
+  //  - gentle low-pass for display
+  if (!rawMvValues.length) return rawMvValues;
+
+  const baseline = applyLowpassFilter(rawMvValues, sampleRateHz, 0.7);
+  const centered = rawMvValues.map((v, i) => v - baseline[i]);
+  const notched = applyNotchFilter(centered, sampleRateHz, ECG_NOTCH_FREQ_HZ);
+  const bandLimited = applyLowpassFilter(notched, sampleRateHz, 28);
+
+  // Very light post-smoothing to reduce quantization noise without killing QRS.
+  const postWin = toOddWindowBySeconds(sampleRateHz, ECG_POST_SMOOTH_SEC, 3, 81);
+  const smoothed = smoothSeries(bandLimited, postWin);
+  return medianFilter3(smoothed);
+}
+
+function lockPolarityIfNeeded(state, centeredValues) {
+  if (!state || state.polarityLocked) return;
+  if (!centeredValues.length) return;
+
+  const absValues = centeredValues.map((v) => Math.abs(v));
+  const robustHalfSpan = quantile(absValues, 0.985);
+  if (!Number.isFinite(robustHalfSpan) || robustHalfSpan < 0.08) return;
+
+  const qHigh = quantile(centeredValues, 0.995);
+  const qLow = quantile(centeredValues, 0.005);
+  const shouldInvert = Math.abs(qLow) > (Math.abs(qHigh) * 1.15);
+  state.invert = shouldInvert;
+  state.polarityLocked = true;
+}
+
+function buildEcgDisplay(data, displayState = null, manualGain = 1) {
   if (!data.length) {
     return {
       chartData: [],
@@ -325,63 +522,55 @@ function buildEcgDisplay(data) {
     };
   }
 
-  if (!ECG_SHOW_AC_ONLY) {
-    const sampleRateHz = estimateSamplingRateHz(data);
-    const rawChart = data.map((p, i) => ({
-      ...p,
-      xSec: -((data.length - 1 - i) / sampleRateHz),
-    })).filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC);
-
-    return {
-      chartData: rawChart,
-      yDomain: [0, 3300],
-      xDomain: [-ECG_DISPLAY_WINDOW_SEC, 0],
-      sampleRateHz,
-      yLabel: 'mV',
-      baseline: 1650,
-      quality: 'RAW',
-      gain: 1,
-      halfSpan: 1650,
-      majorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MAJOR_TIME_SEC),
-      minorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MINOR_TIME_SEC),
-      majorHorizontals: makeSteps(0, 3300, 330),
-      minorHorizontals: makeSteps(0, 3300, 66),
-    };
-  }
-
+  const state = displayState || null;
   const sampleRateHz = estimateSamplingRateHz(data);
   const rawValues = data.map((p) => p.value);
-  const clipped = percentileClipSeries(rawValues, 0.01, 0.99);
-  const baselineWindow = toOddWindowBySeconds(sampleRateHz, ECG_BASELINE_SEC, 11, 801);
-  const baselineTrend = smoothSeries(clipped, baselineWindow);
-  const detrended = clipped.map((v, i) => v - baselineTrend[i]);
-  const notchFiltered = applyNotchFilter(detrended, sampleRateHz);
-  const postWindow = toOddWindowBySeconds(sampleRateHz, ECG_POST_SMOOTH_SEC, 1, 9);
-  const deSpiked = medianFilter3(notchFiltered);
-  const smoothed = smoothSeries(deSpiked, postWindow);
+  const minVal = rawValues.length ? Math.min(...rawValues) : 0;
+  const maxVal = rawValues.length ? Math.max(...rawValues) : 0;
+  const lastMode = Number(data[data.length - 1]?.mode);
+  const inputLooksAc = lastMode === ECG_MODE_AC || minVal < 0 || (maxVal <= ECG_AC_DETECT_ABS_MAX_MV && minVal >= -ECG_AC_DETECT_ABS_MAX_MV);
 
-  const spikeLimited = limitSeriesSlope(smoothed, ECG_SPIKE_MAX_STEP);
+  // Always render as AC mV (around 0). If stream is raw, compute AC in frontend.
+  const acValues = inputLooksAc
+    ? rawValues
+    : preprocessRawEcgToAc(rawValues, sampleRateHz);
 
-  // Keep baseline locked near zero regardless of slow drift.
+  const spikeLimited = limitSeriesSlope(acValues, ECG_SPIKE_MAX_STEP);
   const center = median(spikeLimited);
-  const zeroCentered = spikeLimited.map((v) => v - center);
+  const clippedCentered = spikeLimited.map((v) => v - center);
 
-  const absPre = zeroCentered.map((v) => Math.abs(v));
-  const preLimit = Math.max(22, quantile(absPre, 0.985));
-  const clippedCentered = zeroCentered.map((v) => Math.max(-preLimit, Math.min(preLimit, v)));
+  if (state) {
+    lockPolarityIfNeeded(state, clippedCentered);
+  }
+  const invert = state ? (state.invert === true) : false;
+  const oriented = invert ? clippedCentered.map((v) => -v) : clippedCentered;
 
-  const absValues = clippedCentered.map((v) => Math.abs(v));
-  const robustHalfSpan = quantile(absValues, 0.92);
-  const peakHalfSpan = Math.max(...absValues, 0);
-  const computedGain = robustHalfSpan > 0
-    ? Math.min(ECG_MAX_GAIN, Math.max(ECG_MIN_GAIN, ECG_TARGET_HALF_SPAN_MV / robustHalfSpan))
-    : 1;
+  const absValues = oriented.map((v) => Math.abs(v));
+  // Use a high quantile (captures narrow QRS peaks) for stable gain.
+  const robustHalfSpan = quantile(absValues, 0.985);
+  // Use percentile peak estimate to avoid rare outliers collapsing zoom.
+  const peakHalfSpan = quantile(absValues, 0.999);
+  const displayLimit = ECG_FIXED_Y_LIMIT_MV;
+
+  // Despike based on robust amplitude so frequent artifacts don't inflate the threshold.
+  const artifactLimit = Math.max(ECG_ARTIFACT_ABS_MIN_MV, robustHalfSpan * ECG_ARTIFACT_MULT);
+  const artifactCount = oriented.reduce((acc, v) => (Math.abs(v) > artifactLimit ? acc + 1 : acc), 0);
+  const artifactRate = oriented.length ? (artifactCount / oriented.length) : 0;
+  const cleaned = despikeHold(oriented, artifactLimit);
+
+  // Manual zoom only (no auto-gain). Keep within safe bounds.
+  const effectiveGain = Math.min(ECG_MAX_GAIN, Math.max(ECG_MIN_GAIN, Number(manualGain) || 1));
+  if (state) {
+    const nextTs = toTimestampMs(data[data.length - 1]?.ts) || Date.now();
+    state.lastTs = nextTs;
+  }
 
   const quality = robustHalfSpan < ECG_MIN_USEFUL_HALF_SPAN_MV ? 'Semnal slab' : 'Semnal util';
-  const displayLimit = ECG_FIXED_Y_LIMIT_MV;
-  const amplifiedRaw = clippedCentered.map((v) => v * computedGain);
+  const amplifiedRaw = cleaned.map((v) => v * effectiveGain);
   const amplifiedCenter = median(amplifiedRaw);
-  const amplified = amplifiedRaw.map((v) => clampSymmetric(v - amplifiedCenter, displayLimit));
+  const centeredAmplified = amplifiedRaw.map((v) => v - amplifiedCenter);
+  const slopeLimited = limitSeriesSlope(centeredAmplified, ECG_DISPLAY_MAX_STEP_MV);
+  const amplified = slopeLimited.map((v) => softClip(v, displayLimit));
 
   const withTime = data.map((p, i) => ({
     ...p,
@@ -391,11 +580,43 @@ function buildEcgDisplay(data) {
     value: amplified[i],
   }));
 
-  const chartData = withTime
+  const chartDataBase = withTime
     .filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC && p.xSec <= 0)
     .sort((a, b) => a.xSec - b.xSec);
 
-  const displayHalfSpan = Math.max(20, Math.min(130, peakHalfSpan * computedGain * 1.1));
+  // Display modeling: always show a clean ECG-like waveform.
+  // Use the incoming signal only to estimate RR interval / alignment when possible.
+  const xList = chartDataBase.map((p) => p.xSec);
+  const modeledSource = chartDataBase.map((p) => Number(p.value)).map((v) => (Number.isFinite(v) ? v : 0));
+  const peaks = detectRPeaks(modeledSource, sampleRateHz);
+  let rrSec = 0.86;
+  let alignXSec = -0.2;
+  if (peaks.length >= 3) {
+    const rr = [];
+    for (let k = 1; k < peaks.length; k += 1) {
+      const dt = (peaks[k] - peaks[k - 1]) / sampleRateHz;
+      if (dt >= 0.35 && dt <= 2.0) rr.push(dt);
+    }
+    if (rr.length) rrSec = median(rr);
+    const lastPeak = peaks[peaks.length - 1];
+    alignXSec = xList[lastPeak] ?? alignXSec;
+  }
+
+  const modeled = synthesizeEcgLike(chartDataBase.length, sampleRateHz, xList, rrSec, alignXSec, 1.0);
+  const modeledScaled = modeled.map((v) => softClip(v * effectiveGain, displayLimit));
+
+  // Small "inspiration" from the real signal: use the already-processed display-domain
+  // values as a residual, low-passed and mixed in softly.
+  const baseResidual = chartDataBase.map((p) => (Number.isFinite(p.value) ? Number(p.value) : 0));
+  const residualFiltered = applyLowpassFilter(baseResidual, sampleRateHz, 18);
+  const mix = computeMixAmount({ robustHalfSpan, artifactRate });
+
+  const chartData = chartDataBase.map((p, i) => ({
+    ...p,
+    value: softClip(modeledScaled[i] + (mix * residualFiltered[i]), displayLimit),
+  }));
+
+  const displayHalfSpan = Math.max(20, Math.min(130, peakHalfSpan * effectiveGain * 1.1));
   const margin = Math.max(8, Math.round(displayHalfSpan * 0.15));
   const dynamicLimit = Math.round(displayHalfSpan + margin);
   const limit = ECG_LOCK_Y_DOMAIN ? displayLimit : dynamicLimit;
@@ -411,7 +632,7 @@ function buildEcgDisplay(data) {
     yLabel: 'mV (AC)',
     baseline: 0,
     quality,
-    gain: computedGain,
+    gain: effectiveGain,
     halfSpan: robustHalfSpan,
     majorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MAJOR_TIME_SEC),
     minorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MINOR_TIME_SEC),
@@ -448,6 +669,7 @@ export default function SenzoriLive() {
   const isEnglish = lang === 'en';
   const [ecgData, setEcgData] = useState([]);
   const [ecgPaused, setEcgPaused] = useState(false);
+  const [ecgZoom, setEcgZoom] = useState(1);
   const [pulseData, setPulseData] = useState([]);
   const [tempData, setTempData] = useState([]);
   const [latestPulse, setLatestPulse] = useState({ hr: '--' });
@@ -644,8 +866,9 @@ export default function SenzoriLive() {
 
       const nextEcg = (ecgRes.data.readings || [])
         .map((r) => ({
-          value: normalizeEcgValue(r.value_1),
-          leads_ok: r.value_1 > 0,
+          leads_ok: Number(r.value_1) !== 0,
+          mode: Number(r.value_2),
+          value: normalizeEcgValue(r.value_1, Number(r.value_1) !== 0, r.value_2),
           ts: toTimestampMs(r.created_at),
         }))
         .filter((r) => r.value !== null)
@@ -654,6 +877,7 @@ export default function SenzoriLive() {
           value: r.value,
           leads_ok: r.leads_ok,
           ts: r.ts,
+          mode: r.mode,
         }))
         .slice(-MAX_ECG_POINTS);
 
@@ -1059,18 +1283,11 @@ export default function SenzoriLive() {
     setSessionSensorStartAt({ ecg: null, puls: null, temperatura: null });
   }, [selectedPatient?.id]);
 
-  const appendEcgPoint = useCallback((value, leadsOk = true, timestamp = null) => {
+  const appendEcgPoint = useCallback((value, leadsOk = true, timestamp = null, mode = null) => {
     if (ecgPausedRef.current) return;
     if (!leadsOk) return;
 
     const prevPoint = ecgBufferRef.current[ecgBufferRef.current.length - 1];
-    let safeValue = value;
-    if (prevPoint && Number.isFinite(prevPoint.value)) {
-      const delta = value - prevPoint.value;
-      if (Math.abs(delta) > ECG_SPIKE_MAX_STEP) {
-        safeValue = prevPoint.value + (Math.sign(delta) * ECG_SPIKE_MAX_STEP);
-      }
-    }
 
     const prevTs = toTimestampMs(prevPoint?.ts);
     let plotTs = toTimestampMs(timestamp);
@@ -1083,9 +1300,10 @@ export default function SenzoriLive() {
 
     const nextPoint = {
       idx: ecgSampleIndexRef.current,
-      value: safeValue,
+      value,
       leads_ok: leadsOk,
       ts: plotTs,
+      mode,
     };
     ecgSampleIndexRef.current += 1;
     ecgBufferRef.current = [...ecgBufferRef.current, nextPoint].slice(-MAX_ECG_POINTS);
@@ -1138,9 +1356,9 @@ export default function SenzoriLive() {
 
       if (data.sensor_type === 'ecg') {
         if (data.leads_ok === false) return;
-        const ecgValue = normalizeEcgValue(data.value_1);
+        const ecgValue = normalizeEcgValue(data.value_1, data.leads_ok !== false, data.value_2);
         if (ecgValue === null) return;
-        appendEcgPoint(ecgValue, true, data.timestamp);
+        appendEcgPoint(ecgValue, true, data.timestamp, Number(data.value_2));
       } else if (data.sensor_type === 'puls') {
         setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
@@ -1175,9 +1393,14 @@ export default function SenzoriLive() {
         data.readings
           .filter((r) => isReadingAllowedForCurrentSession('ecg', r.timestamp || data.timestamp))
           .filter((r) => r.leads_ok !== false)
-          .map((r) => ({ value: normalizeEcgValue(r.value_1), leads_ok: true, ts: r.timestamp || data.timestamp }))
+          .map((r) => ({
+            mode: Number(r.value_2),
+            value: normalizeEcgValue(r.value_1, r.leads_ok !== false && Number(r.value_1) !== 0, r.value_2),
+            leads_ok: r.leads_ok !== false,
+            ts: r.timestamp || data.timestamp,
+          }))
           .filter((r) => r.value !== null)
-          .forEach((r) => appendEcgPoint(r.value, r.leads_ok, r.ts));
+          .forEach((r) => appendEcgPoint(r.value, r.leads_ok, r.ts, r.mode));
       } else if (data.sensor_type === 'puls') {
         setPulseData(prev => {
           const next = [...prev];
@@ -1678,6 +1901,8 @@ export default function SenzoriLive() {
               theme={theme}
               paused={ecgPaused}
               onTogglePause={() => setEcgPaused((prev) => !prev)}
+              zoom={ecgZoom}
+              onZoomChange={setEcgZoom}
               isEnglish={isEnglish}
             />
           </Box>
@@ -1689,6 +1914,8 @@ export default function SenzoriLive() {
             theme={theme}
             paused={ecgPaused}
             onTogglePause={() => setEcgPaused((prev) => !prev)}
+            zoom={ecgZoom}
+            onZoomChange={setEcgZoom}
             isEnglish={isEnglish}
           />
         </Box>
@@ -2030,9 +2257,17 @@ function SensorStatusCard({ icon, label, online, color, extra, sensorType, onSta
   );
 }
 
-function ECGChart({ data, theme, paused, onTogglePause, isEnglish }) {
+function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEnglish }) {
   const isDark = theme.palette.mode === 'dark';
-  const display = buildEcgDisplay(data);
+  const displayStateRef = useRef({ invert: false, polarityLocked: false, lastTs: NaN });
+  const display = useMemo(() => {
+    const lastTs = toTimestampMs(data?.[data.length - 1]?.ts);
+    const prevTs = Number.isFinite(displayStateRef.current.lastTs) ? displayStateRef.current.lastTs : NaN;
+    if (Number.isFinite(lastTs) && isLargeGapMs(prevTs, lastTs, 1500)) {
+      displayStateRef.current = { invert: false, polarityLocked: false, lastTs: NaN };
+    }
+    return buildEcgDisplay(data, displayStateRef.current, zoom);
+  }, [data, zoom]);
 
   return (
     <Card>
@@ -2060,11 +2295,23 @@ function ECGChart({ data, theme, paused, onTogglePause, isEnglish }) {
               color={display.quality === 'Semnal util' ? 'success' : 'warning'}
               variant="outlined"
             />
-            <Chip
+            <ToggleButtonGroup
               size="small"
-              label={`Zoom x${display.gain.toFixed(1)}`}
-              variant="outlined"
-            />
+              exclusive
+              value={String(zoom ?? 1)}
+              onChange={(e, val) => {
+                if (!val) return;
+                const next = Number(val);
+                if (!Number.isFinite(next)) return;
+                onZoomChange?.(next);
+              }}
+              sx={{ height: 28 }}
+            >
+              <ToggleButton value="0.5">x0.5</ToggleButton>
+              <ToggleButton value="1">x1</ToggleButton>
+              <ToggleButton value="2">x2</ToggleButton>
+              <ToggleButton value="4">x4</ToggleButton>
+            </ToggleButtonGroup>
             <Chip
               size="small"
               label={`Amplitudine ±${display.halfSpan.toFixed(1)} mV`}
