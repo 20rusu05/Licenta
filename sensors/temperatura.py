@@ -21,7 +21,6 @@ import glob
 from sensor_client import SensorClient
 from config import INTERVALS, DS18B20, PINS
 
-HARDWARE_AVAILABLE = os.path.isdir(DS18B20["base_dir"])
 DS18B20_READ_TIMEOUT_S = 2.0
 DS18B20_READ_POLL_S = 0.2
 DS18B20_MAX_RETRIES = 3
@@ -36,10 +35,13 @@ class TemperatureSensor:
         self.device_file = None
         self.last_valid_temperature = None
 
-        if HARDWARE_AVAILABLE:
+        if self._hardware_available():
             self._find_device()
         else:
             print("[TEMPERATURĂ] Senzor DS18B20 nedetectat - mod simulare activat")
+
+    def _hardware_available(self):
+        return os.path.isdir(DS18B20["base_dir"])
 
     def _find_device(self):
         """Găsește dispozitivul DS18B20 conectat."""
@@ -75,7 +77,15 @@ class TemperatureSensor:
 
     def read_temperature(self):
         """Citire temperatură în grade Celsius."""
-        if not HARDWARE_AVAILABLE or not self.device_file:
+        if not self._hardware_available():
+            return self._simulate_temperature()
+
+        if not self.device_file:
+            self._find_device()
+            if not self.device_file:
+                return self._simulate_temperature()
+
+        if not self.device_file:
             return self._simulate_temperature()
 
         for attempt in range(1, DS18B20_MAX_RETRIES + 1):

@@ -2351,7 +2351,7 @@ function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEn
               />
               <RechartsTooltip
                 formatter={(val) => [`${Number(val).toFixed(2)} mV`, isEnglish ? 'Signal' : 'Semnal']}
-                labelFormatter={(label) => `t-${Math.abs(Number(label)).toFixed(3)} s`}
+                labelFormatter={() => ''}
               />
               <ReferenceLine y={display.baseline} stroke="#667" strokeDasharray="5 5" label={isEnglish ? 'Baseline' : 'Linie de bază'} />
               <Line
@@ -2373,6 +2373,24 @@ function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEn
 
 function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   const isDark = theme.palette.mode === 'dark';
+  const displayData = useMemo(() => {
+    if (!data || !data.length) return [];
+    const enriched = data.map((d) => {
+      const ts = Number(d.ts) || (() => {
+        try {
+          const parsed = Date.parse(new Date().toDateString() + ' ' + String(d.time));
+          return Number.isFinite(parsed) ? parsed : Date.now();
+        } catch (e) {
+          return Date.now();
+        }
+      })();
+      return { ...d, ts };
+    });
+    const maxTs = Math.max(...enriched.map((d) => d.ts));
+    return enriched
+      .map((d) => ({ ...d, xSec: (d.ts - maxTs) / 1000 }))
+      .filter((d) => Number(d.xSec) >= -60);
+  }, [data]);
 
   return (
     <Box sx={{ width: '100%', display: 'flex' }}>
@@ -2390,19 +2408,20 @@ function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
               </Typography>
             </Box>
           </Box>
-          {data.length === 0 ? (
+          {displayData.length === 0 ? (
             <Box sx={{ py: 6, textAlign: 'center', px: 2 }}>
               <Typography color="text.secondary">{isEnglish ? 'Waiting for data...' : 'Se așteaptă date...'}</Typography>
             </Box>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+              <AreaChart data={displayData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
                 <XAxis
-                  dataKey="time"
+                  type="number"
+                  dataKey="xSec"
+                  domain={[-60, 0]}
+                  tickFormatter={(v) => `${Math.abs(Number(v)).toFixed(0)}s`}
                   tick={{ fontSize: 10 }}
-                  padding={{ left: 0, right: 0 }}
-                  scale="point"
                 />
                 <YAxis domain={[40, 140]} tick={{ fontSize: 11 }} width={34} />
                 <RechartsTooltip
@@ -2420,6 +2439,8 @@ function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
                     color: isDark ? '#f8fafc' : '#0f172a',
                   }}
                   cursor={{ stroke: isDark ? 'rgba(148,163,184,0.35)' : 'rgba(15,23,42,0.2)', strokeWidth: 1 }}
+                    formatter={(val) => [`${Math.round(val)} BPM`, isEnglish ? 'Heart rate' : 'Frecvență']}
+                    labelFormatter={() => ''}
                 />
                 <ReferenceLine y={60} stroke="#ff9800" strokeDasharray="3 3" />
                 <ReferenceLine y={100} stroke="#ff9800" strokeDasharray="3 3" />
@@ -2436,10 +2457,29 @@ function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
 function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   const isDark = theme.palette.mode === 'dark';
 
+  const displayData = useMemo(() => {
+    if (!data || !data.length) return [];
+    const enriched = data.map((d) => {
+      const ts = Number(d.ts) || (() => {
+        try {
+          const parsed = Date.parse(new Date().toDateString() + ' ' + String(d.time));
+          return Number.isFinite(parsed) ? parsed : Date.now();
+        } catch (e) {
+          return Date.now();
+        }
+      })();
+      return { ...d, ts };
+    });
+    const maxTs = Math.max(...enriched.map((d) => d.ts));
+    return enriched
+      .map((d) => ({ ...d, xSec: (d.ts - maxTs) / 1000 }))
+      .filter((d) => Number(d.xSec) >= -60);
+  }, [data]);
+
   const getTemperatureColor = (temp) => {
     if (temp === '--') return '#9e9e9e';
     const t = parseFloat(temp);
-    if (t < 36.0) return '#2196F3';      // Hipotermie
+    if (t < 35.0) return '#2196F3';      // Hipotermie
     if (t <= 37.2) return '#4caf50';    // Normal
     if (t <= 38.0) return '#ff9800';    // Subfebril
     return '#f44336';                    // Febră
@@ -2448,7 +2488,7 @@ function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   const getTemperatureLabel = (temp) => {
     if (temp === '--') return isEnglish ? 'Unknown' : 'Necunoscut';
     const t = parseFloat(temp);
-    if (t < 36.0) return isEnglish ? 'Hypothermia' : 'Hipotermie';
+    if (t < 35.0) return isEnglish ? 'Hypothermia' : 'Hipotermie';
     if (t <= 37.2) return isEnglish ? 'Normal' : 'Normal';
     if (t <= 38.0) return isEnglish ? 'Mild fever' : 'Subfebril';
     return isEnglish ? 'Fever' : 'Febră';
@@ -2475,19 +2515,21 @@ function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
               />
             </Box>
           </Box>
-          {data.length === 0 ? (
+          {displayData.length === 0 ? (
             <Box sx={{ py: 6, textAlign: 'center', px: 2 }}>
               <Typography color="text.secondary">{isEnglish ? 'Waiting for data from the sensor...' : 'Se așteaptă date de la senzor...'}</Typography>
             </Box>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+              <AreaChart data={displayData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
                 <XAxis
-                  dataKey="time"
+                  type="number"
+                  dataKey="xSec"
+                  domain={[-60, 0]}
+                  tickFormatter={(v) => `${Math.abs(Number(v)).toFixed(0)}s`}
                   tick={{ fontSize: 10 }}
                   padding={{ left: 0, right: 0 }}
-                  scale="point"
                 />
                 <YAxis domain={[35, 40]} tick={{ fontSize: 11 }} width={34} />
                 <RechartsTooltip
@@ -2506,9 +2548,10 @@ function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
                     color: isDark ? '#f8fafc' : '#0f172a',
                   }}
                   cursor={{ stroke: isDark ? 'rgba(148,163,184,0.35)' : 'rgba(15,23,42,0.2)', strokeWidth: 1 }}
+                  labelFormatter={() => ''}
                 />
                 <ReferenceLine y={37.2} stroke="#ff9800" strokeDasharray="3 3" label="37.2°C" />
-                <ReferenceLine y={36.0} stroke="#2196F3" strokeDasharray="3 3" label="36.0°C" />
+                <ReferenceLine y={35.0} stroke="#2196F3" strokeDasharray="3 3" label="35.0°C" />
                 <Area type="monotone" dataKey="temp" stroke="#ff9800" fill="#ff980030" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
