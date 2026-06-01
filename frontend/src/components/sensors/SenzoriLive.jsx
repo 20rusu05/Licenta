@@ -50,8 +50,8 @@ const ECG_DEFAULT_SAMPLE_RATE_HZ = 250;
 const ECG_NOTCH_FREQ_HZ = 50;
 const ECG_DISPLAY_LOWPASS_HZ = 24;
 const ECG_DISPLAY_WINDOW_SEC = 6;
-const ECG_GRID_MAJOR_TIME_SEC = 0.5;
-const ECG_GRID_MINOR_TIME_SEC = 0.04;
+const ECG_GRID_MAJOR_TIME_SEC = 1.0;
+const ECG_GRID_MINOR_TIME_SEC = 0.2;
 const ECG_MIN_SAMPLE_INTERVAL_MS = Math.round(1000 / ECG_DEFAULT_SAMPLE_RATE_HZ);
 const ECG_LOCK_Y_DOMAIN = true;
 const ECG_FIXED_Y_LIMIT_MV = 2.5;
@@ -509,7 +509,7 @@ function lockPolarityIfNeeded(state, centeredValues) {
   state.polarityLocked = true;
 }
 
-function buildEcgDisplay(data, displayState = null, manualGain = 1) {
+function buildEcgDisplay(data, displayState = null) {
   if (!data.length) {
     return {
       chartData: [],
@@ -558,8 +558,9 @@ function buildEcgDisplay(data, displayState = null, manualGain = 1) {
   const artifactRate = oriented.length ? (artifactCount / oriented.length) : 0;
   const cleaned = despikeHold(oriented, artifactLimit);
 
-  // Manual zoom only (no auto-gain). Keep within safe bounds.
-  const effectiveGain = Math.min(ECG_MAX_GAIN, Math.max(ECG_MIN_GAIN, Number(manualGain) || 1));
+  // Auto-scale the display to keep the trace readable without needing manual zoom.
+  const targetHalfSpan = ECG_TARGET_HALF_SPAN_MV;
+  const effectiveGain = Math.max(0.002, Math.min(12, targetHalfSpan / Math.max(robustHalfSpan, 0.05)));
   if (state) {
     const nextTs = toTimestampMs(data[data.length - 1]?.ts) || Date.now();
     state.lastTs = nextTs;
@@ -584,42 +585,15 @@ function buildEcgDisplay(data, displayState = null, manualGain = 1) {
     .filter((p) => p.xSec >= -ECG_DISPLAY_WINDOW_SEC && p.xSec <= 0)
     .sort((a, b) => a.xSec - b.xSec);
 
-  // Display modeling: always show a clean ECG-like waveform.
-  // Use the incoming signal only to estimate RR interval / alignment when possible.
-  const xList = chartDataBase.map((p) => p.xSec);
-  const modeledSource = chartDataBase.map((p) => Number(p.value)).map((v) => (Number.isFinite(v) ? v : 0));
-  const peaks = detectRPeaks(modeledSource, sampleRateHz);
-  let rrSec = 0.86;
-  let alignXSec = -0.2;
-  if (peaks.length >= 3) {
-    const rr = [];
-    for (let k = 1; k < peaks.length; k += 1) {
-      const dt = (peaks[k] - peaks[k - 1]) / sampleRateHz;
-      if (dt >= 0.35 && dt <= 2.0) rr.push(dt);
-    }
-    if (rr.length) rrSec = median(rr);
-    const lastPeak = peaks[peaks.length - 1];
-    alignXSec = xList[lastPeak] ?? alignXSec;
-  }
-
-  const modeled = synthesizeEcgLike(chartDataBase.length, sampleRateHz, xList, rrSec, alignXSec, 1.0);
-  const modeledScaled = modeled.map((v) => softClip(v * effectiveGain, displayLimit));
-
-  // Small "inspiration" from the real signal: use the already-processed display-domain
-  // values as a residual, low-passed and mixed in softly.
-  const baseResidual = chartDataBase.map((p) => (Number.isFinite(p.value) ? Number(p.value) : 0));
-  const residualFiltered = applyLowpassFilter(baseResidual, sampleRateHz, 18);
-  const mix = computeMixAmount({ robustHalfSpan, artifactRate });
-
   const chartData = chartDataBase.map((p, i) => ({
     ...p,
-    value: softClip(modeledScaled[i] + (mix * residualFiltered[i]), displayLimit),
+    value: p.value,
   }));
 
-  const displayHalfSpan = Math.max(20, Math.min(130, peakHalfSpan * effectiveGain * 1.1));
-  const margin = Math.max(8, Math.round(displayHalfSpan * 0.15));
-  const dynamicLimit = Math.round(displayHalfSpan + margin);
-  const limit = ECG_LOCK_Y_DOMAIN ? displayLimit : dynamicLimit;
+  const displayHalfSpan = Math.max(0.5, Math.min(10, peakHalfSpan * effectiveGain * 1.1));
+  const margin = Math.max(0.25, displayHalfSpan * 0.15);
+  const dynamicLimit = Math.max(1.0, Math.round((displayHalfSpan + margin) * 10) / 10);
+  const limit = ECG_LOCK_Y_DOMAIN ? Math.min(displayLimit, dynamicLimit) : dynamicLimit;
   const ySpan = limit * 2;
   const majorY = ySpan / 8;
   const minorY = majorY / 5;
@@ -633,7 +607,7 @@ function buildEcgDisplay(data, displayState = null, manualGain = 1) {
     baseline: 0,
     quality,
     gain: effectiveGain,
-    halfSpan: robustHalfSpan,
+    halfSpan: limit,
     majorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MAJOR_TIME_SEC),
     minorVerticals: makeSteps(-ECG_DISPLAY_WINDOW_SEC, 0, ECG_GRID_MINOR_TIME_SEC),
     majorHorizontals: makeSteps(-limit, limit, majorY),
@@ -669,7 +643,6 @@ export default function SenzoriLive() {
   const isEnglish = lang === 'en';
   const [ecgData, setEcgData] = useState([]);
   const [ecgPaused, setEcgPaused] = useState(false);
-  const [ecgZoom, setEcgZoom] = useState(1);
   const [pulseData, setPulseData] = useState([]);
   const [tempData, setTempData] = useState([]);
   const [latestPulse, setLatestPulse] = useState({ hr: '--' });
@@ -1889,10 +1862,10 @@ export default function SenzoriLive() {
         <Box sx={{ display: activeTab === 'all' ? 'block' : 'none' }}>
           <Grid container spacing={1.5} alignItems="stretch">
             <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-              <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight isEnglish={isEnglish} />
+              <PulseChart data={pulseData} latest={latestPulse} theme={theme} fullHeight isEnglish={isEnglish} compact chartHeight={220} />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-              <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight isEnglish={isEnglish} />
+              <TempChart data={tempData} latest={latestTemp} theme={theme} fullHeight isEnglish={isEnglish} compact chartHeight={220} />
             </Grid>
           </Grid>
           <Box sx={{ mt: 1.5, width: '100%' }}>
@@ -1901,9 +1874,9 @@ export default function SenzoriLive() {
               theme={theme}
               paused={ecgPaused}
               onTogglePause={() => setEcgPaused((prev) => !prev)}
-              zoom={ecgZoom}
-              onZoomChange={setEcgZoom}
               isEnglish={isEnglish}
+              compact
+              chartHeight={240}
             />
           </Box>
         </Box>
@@ -1914,8 +1887,6 @@ export default function SenzoriLive() {
             theme={theme}
             paused={ecgPaused}
             onTogglePause={() => setEcgPaused((prev) => !prev)}
-            zoom={ecgZoom}
-            onZoomChange={setEcgZoom}
             isEnglish={isEnglish}
           />
         </Box>
@@ -2257,7 +2228,7 @@ function SensorStatusCard({ icon, label, online, color, extra, sensorType, onSta
   );
 }
 
-function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEnglish }) {
+function ECGChart({ data, theme, paused, onTogglePause, isEnglish, chartHeight = 400, compact = false }) {
   const isDark = theme.palette.mode === 'dark';
   const displayStateRef = useRef({ invert: false, polarityLocked: false, lastTs: NaN });
   const display = useMemo(() => {
@@ -2266,12 +2237,12 @@ function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEn
     if (Number.isFinite(lastTs) && isLargeGapMs(prevTs, lastTs, 1500)) {
       displayStateRef.current = { invert: false, polarityLocked: false, lastTs: NaN };
     }
-    return buildEcgDisplay(data, displayStateRef.current, zoom);
-  }, [data, zoom]);
+    return buildEcgDisplay(data, displayStateRef.current);
+  }, [data]);
 
   return (
     <Card>
-      <CardContent>
+    <CardContent sx={compact ? { py: 1.5, px: 1.5 } : undefined}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             <MonitorHeartIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
@@ -2288,33 +2259,16 @@ function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEn
           </Button>
         </Box>
         {data.length > 0 && (
-          <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: compact ? 1 : 1.5, flexWrap: 'wrap' }}>
             <Chip
               size="small"
               label={`${isEnglish ? 'Quality' : 'Calitate'}: ${display.quality === 'Semnal util' ? (isEnglish ? 'Useful signal' : 'Semnal util') : (isEnglish ? 'Weak signal' : 'Semnal slab')}`}
               color={display.quality === 'Semnal util' ? 'success' : 'warning'}
               variant="outlined"
             />
-            <ToggleButtonGroup
-              size="small"
-              exclusive
-              value={String(zoom ?? 1)}
-              onChange={(e, val) => {
-                if (!val) return;
-                const next = Number(val);
-                if (!Number.isFinite(next)) return;
-                onZoomChange?.(next);
-              }}
-              sx={{ height: 28 }}
-            >
-              <ToggleButton value="0.5">x0.5</ToggleButton>
-              <ToggleButton value="1">x1</ToggleButton>
-              <ToggleButton value="2">x2</ToggleButton>
-              <ToggleButton value="4">x4</ToggleButton>
-            </ToggleButtonGroup>
             <Chip
               size="small"
-              label={`Amplitudine ±${display.halfSpan.toFixed(1)} mV`}
+              label={`Scară fixă ±${display.halfSpan.toFixed(1)} mV`}
               variant="outlined"
             />
           </Box>
@@ -2326,7 +2280,7 @@ function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEn
             </Typography>
           </Box>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={display.chartData} margin={{ top: 10, right: 8, left: 0, bottom: 10 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -2371,7 +2325,7 @@ function ECGChart({ data, theme, paused, onTogglePause, zoom, onZoomChange, isEn
   );
 }
 
-function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
+function PulseChart({ data, latest, theme, fullHeight = false, isEnglish, chartHeight = 300, compact = false }) {
   const isDark = theme.palette.mode === 'dark';
   const displayData = useMemo(() => {
     if (!data || !data.length) return [];
@@ -2395,8 +2349,8 @@ function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   return (
     <Box sx={{ width: '100%', display: 'flex' }}>
       <Card sx={{ width: '100%', display: 'flex', flexDirection: 'column', height: fullHeight ? '100%' : 'auto' }}>
-        <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: 2, pb: 1.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, px: 2 }}>
+        <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: compact ? 1.25 : 2, pb: compact ? 1 : 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: compact ? 1 : 2, px: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               <FavoriteIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#e91e63' }} />
               {isEnglish ? 'Heart rate (BPM)' : 'Frecvență cardiacă (BPM)'}
@@ -2413,7 +2367,7 @@ function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
               <Typography color="text.secondary">{isEnglish ? 'Waiting for data...' : 'Se așteaptă date...'}</Typography>
             </Box>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
               <AreaChart data={displayData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
                 <XAxis
@@ -2454,7 +2408,7 @@ function PulseChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   );
 }
 
-function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
+function TempChart({ data, latest, theme, fullHeight = false, isEnglish, chartHeight = 300, compact = false }) {
   const isDark = theme.palette.mode === 'dark';
 
   const displayData = useMemo(() => {
@@ -2497,8 +2451,8 @@ function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
   return (
     <Box sx={{ width: '100%', display: 'flex' }}>
       <Card sx={{ width: '100%', display: 'flex', flexDirection: 'column', height: fullHeight ? '100%' : 'auto' }}>
-        <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: 2, pb: 1.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, px: 2 }}>
+        <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 0, pt: compact ? 1.25 : 2, pb: compact ? 1 : 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: compact ? 1 : 2, px: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
               <ThermostatIcon sx={{ mr: 1, verticalAlign: 'middle', color: getTemperatureColor(latest) }} />
               {isEnglish ? 'Temperature trend' : 'Evoluție temperatură'}
@@ -2520,7 +2474,7 @@ function TempChart({ data, latest, theme, fullHeight = false, isEnglish }) {
               <Typography color="text.secondary">{isEnglish ? 'Waiting for data from the sensor...' : 'Se așteaptă date de la senzor...'}</Typography>
             </Box>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
               <AreaChart data={displayData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)'} />
                 <XAxis
