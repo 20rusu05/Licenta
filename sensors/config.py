@@ -36,6 +36,15 @@ SENSOR_TLS_CA_CERT = os.getenv("SENSOR_TLS_CA_CERT", "").strip()
 
 DEVICE_ID = "rpi5-01"
 
+# Forcează senzorul de puls în simulare. Backend-ul setează această variabilă
+# automat când ECG rulează, deoarece cele două nu pot citi hardware simultan.
+PULSE_FORCE_SIMULATION = os.getenv("PULSE_FORCE_SIMULATION", "false").strip().lower() in ("1", "true", "yes", "on")
+
+PULSE_SIMULATION = {
+    "min_bpm": 60.0,
+    "max_bpm": 80.0,
+}
+
 INTERVALS = {
     "ecg": 0.005,
     "puls": 1.0,

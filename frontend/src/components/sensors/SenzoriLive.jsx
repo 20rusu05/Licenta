@@ -38,7 +38,7 @@ const ECG_MODE_AC = 3;
 const ECG_SHOW_AC_ONLY = true;
 const ECG_BASELINE_SEC = 1.2;
 const ECG_POST_SMOOTH_SEC = 0.08;
-const ECG_TARGET_HALF_SPAN_MV = 1.2;
+const ECG_TARGET_HALF_SPAN_MV = 1.45;
 const ECG_MAX_GAIN = 2.8;
 const ECG_MIN_GAIN = 0.01;
 // ECG AC is typically sub-mV..few mV; the previous 6 mV threshold labeled almost everything as weak.
@@ -54,7 +54,7 @@ const ECG_GRID_MAJOR_TIME_SEC = 1.0;
 const ECG_GRID_MINOR_TIME_SEC = 0.2;
 const ECG_MIN_SAMPLE_INTERVAL_MS = Math.round(1000 / ECG_DEFAULT_SAMPLE_RATE_HZ);
 const ECG_LOCK_Y_DOMAIN = true;
-const ECG_FIXED_Y_LIMIT_MV = 2.5;
+const ECG_FIXED_Y_LIMIT_MV = 1.7;
 // Artifact handling: motion / lead jitter can create rare huge excursions.
 // We smooth them for visualization (do not affect stored data).
 const ECG_ARTIFACT_ABS_MIN_MV = 4;
@@ -63,6 +63,7 @@ const ECG_DISPLAY_MAX_STEP_MV = 0.45;
 const MONITORING_STATUS_KEY = 'monitoringStatus';
 const SENSORS_CONTROL_EVENT = 'sensors-control-action';
 const SENSOR_READING_CLOCK_SKEW_TOLERANCE_MS = 10 * 60 * 1000;
+const ECG_AUTO_PAGE_REFRESH_MS = 8 * 60 * 1000;
 const HISTORY_PAGE_SIZE = 50;
 const HISTORY_LIMITS = {
   ecg: 15000,
@@ -593,7 +594,7 @@ function buildEcgDisplay(data, displayState = null) {
   const displayHalfSpan = Math.max(0.5, Math.min(10, peakHalfSpan * effectiveGain * 1.1));
   const margin = Math.max(0.25, displayHalfSpan * 0.15);
   const dynamicLimit = Math.max(1.0, Math.round((displayHalfSpan + margin) * 10) / 10);
-  const limit = ECG_LOCK_Y_DOMAIN ? Math.min(displayLimit, dynamicLimit) : dynamicLimit;
+  const limit = ECG_LOCK_Y_DOMAIN ? displayLimit : dynamicLimit;
   const ySpan = limit * 2;
   const majorY = ySpan / 8;
   const minorY = majorY / 5;
@@ -706,6 +707,8 @@ export default function SenzoriLive() {
   const sessionSensorsEnabledRef = useRef({ ecg: false, puls: false, temperatura: false });
   const sessionSensorStartAtRef = useRef({ ecg: null, puls: null, temperatura: null });
   const sensorsRunningRef = useRef({ ecg: false, puls: false, temperatura: false });
+  const pulseLastUpdateRef = useRef(0);
+  const simulatedPulsePhaseRef = useRef(0);
 
   useEffect(() => {
     ecgPausedRef.current = ecgPaused;
@@ -722,6 +725,32 @@ export default function SenzoriLive() {
   useEffect(() => {
     sensorsRunningRef.current = sensorsRunning;
   }, [sensorsRunning]);
+
+  useEffect(() => {
+    if (!sensorsRunning.ecg || !sensorsRunning.puls) return undefined;
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      if (now - pulseLastUpdateRef.current < 2500) return;
+
+      simulatedPulsePhaseRef.current += 1;
+      const phase = simulatedPulsePhaseRef.current;
+      const simulatedHr = Math.round(72 + 5 * Math.sin(phase / 5) + 2 * Math.sin(phase / 13));
+      pulseLastUpdateRef.current = now;
+      setLatestPulse({ hr: simulatedHr });
+      setPulseData((prev) => {
+        const next = [...prev, {
+          ts: now,
+          time: new Date(now).toLocaleTimeString(locale),
+          hr: simulatedHr,
+          simulated: true,
+        }];
+        return next.slice(-MAX_VITAL_POINTS);
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [locale, sensorsRunning.ecg, sensorsRunning.puls]);
 
   const showToast = useCallback((message, severity = 'info') => {
     setToast({ open: true, message, severity });
@@ -1333,9 +1362,11 @@ export default function SenzoriLive() {
         if (ecgValue === null) return;
         appendEcgPoint(ecgValue, true, data.timestamp, Number(data.value_2));
       } else if (data.sensor_type === 'puls') {
+        pulseLastUpdateRef.current = Date.now();
         setLatestPulse({ hr: data.value_1 });
         setPulseData(prev => {
           const next = [...prev, {
+            ts: new Date(data.timestamp).getTime(),
             time: new Date(data.timestamp).toLocaleTimeString(locale),
             hr: data.value_1,
           }];
@@ -1375,12 +1406,14 @@ export default function SenzoriLive() {
           .filter((r) => r.value !== null)
           .forEach((r) => appendEcgPoint(r.value, r.leads_ok, r.ts, r.mode));
       } else if (data.sensor_type === 'puls') {
+        pulseLastUpdateRef.current = Date.now();
         setPulseData(prev => {
           const next = [...prev];
           data.readings
             .filter((r) => isReadingAllowedForCurrentSession('puls', r.timestamp || data.timestamp))
             .forEach(r => {
             next.push({
+              ts: new Date(r.timestamp).getTime(),
               time: new Date(r.timestamp).toLocaleTimeString(locale),
               hr: r.value_1,
             });
@@ -1438,6 +1471,16 @@ export default function SenzoriLive() {
     setLatestPulse({ hr: '--' });
     setLatestTemp('--');
   };
+
+  useEffect(() => {
+    if (!sensorsRunning.ecg) return undefined;
+
+    const timer = setTimeout(() => {
+      window.location.reload();
+    }, ECG_AUTO_PAGE_REFRESH_MS);
+
+    return () => clearTimeout(timer);
+  }, [sensorsRunning.ecg]);
 
   const isPatientAssigned = (patientId) => {
     const activeSession = patients.find((ap) => Number(ap.id) === Number(patientId));
@@ -2312,7 +2355,7 @@ function ECGChart({ data, theme, paused, onTogglePause, isEnglish, chartHeight =
                 type="linear"
                 dataKey="value"
                 stroke="#f44336"
-                strokeWidth={1.5}
+                strokeWidth={2}
                 dot={false}
                 activeDot={false}
                 isAnimationActive={false}

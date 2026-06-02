@@ -21,13 +21,13 @@ import statistics
 import time
 import signal
 import sys
+import os
 
 LOG_TAG = "[PULS]"
 
 try:
     import smbus2
     from smbus2 import i2c_msg
-    import os
     HARDWARE_AVAILABLE = os.path.exists("/dev/i2c-1")
     if not HARDWARE_AVAILABLE:
         print(f"{LOG_TAG} I2C /dev/i2c-1 indisponibil - mod simulare activat")
@@ -40,15 +40,21 @@ import config as sensor_config
 
 INTERVALS = getattr(sensor_config, "INTERVALS", {"puls": 1.0})
 ADS1115 = getattr(sensor_config, "ADS1115", {})
+PULSE_SIMULATION = getattr(sensor_config, "PULSE_SIMULATION", {})
 
 
 class PulsOximeter:
     """Citire puls prin senzor analogic + ADS1115."""
 
-    def __init__(self, debug=False, raw_only=False, hardware_test=False, no_send=False):
+    def __init__(self, debug=False, raw_only=False, hardware_test=False, no_send=False, force_simulation=False):
         self.client = SensorClient("puls")
         self.running = False
-        self.hardware_available = HARDWARE_AVAILABLE
+        self.force_simulation = bool(
+            force_simulation or
+            getattr(sensor_config, "PULSE_FORCE_SIMULATION", False) or
+            os.getenv("PULSE_FORCE_SIMULATION", "false").strip().lower() in ("1", "true", "yes", "on")
+        )
+        self.hardware_available = HARDWARE_AVAILABLE and not self.force_simulation
         self.debug = debug
         self.raw_only = raw_only
         self.hardware_test = hardware_test
@@ -124,6 +130,9 @@ class PulsOximeter:
         self.ui_last_status = None
         self.ui_last_detail_at = 0.0
         self.ui_detail_interval_seconds = 5.0
+
+        if self.force_simulation:
+            print(f"{LOG_TAG} Mod simulare forțat activ (ECG rulează sau PULSE_FORCE_SIMULATION=1)")
 
         if self.hardware_available:
             try:
@@ -1136,9 +1145,11 @@ class PulsOximeter:
         import math
 
         t = time.time()
-        base_hr = 75
-        hr = base_hr + 5 * math.sin(t * 0.1) + random.gauss(0, 1)
-        hr = max(55, min(110, hr))
+        min_hr = float(PULSE_SIMULATION.get("min_bpm", 60.0))
+        max_hr = float(PULSE_SIMULATION.get("max_bpm", 80.0))
+        base_hr = (min_hr + max_hr) / 2.0
+        variation = min(5.0, max(0.0, (max_hr - min_hr) / 2.5))
+        hr = max(min_hr, min(max_hr, base_hr + variation * math.sin(t * 0.1) + random.gauss(0, 1)))
 
         raw = 2100 + int(240 * math.sin(t * 7.8)) + int(random.gauss(0, 20))
         raw = max(0, min(4095, raw))
@@ -1186,7 +1197,26 @@ class PulsOximeter:
                         self.samples = self.samples[-keep:]
                 else:
                     bpm, raw_value = self._simulate_reading()
+                    self.samples.append((loop_start, raw_value))
+                    if len(self.samples) > self.max_samples:
+                        self.samples = self.samples[-self.max_samples:]
                     glitch_reason = None
+
+                    if (loop_start - self.last_sent) >= INTERVALS["puls"]:
+                        self.last_sent = loop_start
+                        if not self.no_send:
+                            self.client.send_reading(
+                                value_1=bpm,
+                                value_2=raw_value,
+                                pacient_id=pacient_id,
+                            )
+                        print(f"{LOG_TAG} BPM={bpm:>6.1f} | STARE=SIMULARE | RAW={raw_value:4d}")
+
+                    elapsed = time.time() - loop_start
+                    sleep_time = self.sample_period - elapsed
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
+                    continue
 
                 if (loop_start - self.last_sent) >= INTERVALS["puls"]:
                     self.last_sent = loop_start
@@ -1367,6 +1397,7 @@ def main():
     parser.add_argument("--raw-only", action="store_true", help="Afișează doar semnalul brut și starea de calitate")
     parser.add_argument("--hardware-test", action="store_true", help="Rulează diagnostic hardware fără estimare BPM și fără trimitere la server")
     parser.add_argument("--no-send", action="store_true", help="Nu trimite citiri la server (doar afișare locală)")
+    parser.add_argument("--simulate", action="store_true", help="Forțează modul simulare pentru puls")
     args = parser.parse_args()
 
     sensor = PulsOximeter(
@@ -1374,6 +1405,7 @@ def main():
         raw_only=args.raw_only,
         hardware_test=args.hardware_test,
         no_send=args.no_send,
+        force_simulation=args.simulate,
     )
 
     def signal_handler(sig, frame):

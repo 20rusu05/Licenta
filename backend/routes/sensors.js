@@ -40,6 +40,12 @@ const sensorProcessStartupErrors = {
   temperatura: null,
 };
 
+const sensorProcessModes = {
+  ecg: "hardware",
+  puls: "hardware",
+  temperatura: "hardware",
+};
+
 async function hasActiveMonitoringSession({ pacientId, sensorType, doctorId = null }) {
   const baseQuery = `
     SELECT id
@@ -88,6 +94,45 @@ function killOsSensorPids(pids) {
     }
   });
   return killed;
+}
+
+function isSensorRunning(sensorType) {
+  const trackedRunning = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed;
+  return Boolean(trackedRunning || getOsSensorPids(sensorType).length > 0);
+}
+
+function buildSensorArgs(sensorType, pacientId) {
+  const args = [];
+  if (pacientId) {
+    args.push("--pacient", String(pacientId));
+  }
+  args.push("--sensors", sensorType);
+  return args;
+}
+
+function startManagedSensorProcess(sensorType, pacientId, { forcePulseSimulation = false } = {}) {
+  const sensorsPath = path.join(__dirname, "../../sensors");
+  const venvPython = path.join(sensorsPath, "venv", "bin", "python3");
+  const pythonCmd = existsSync(venvPython) ? venvPython : "python3";
+  const env = { ...process.env };
+
+  if (sensorType === "puls") {
+    env.PULSE_FORCE_SIMULATION = forcePulseSimulation ? "1" : (env.PULSE_FORCE_SIMULATION || "0");
+  }
+
+  const child = spawn(pythonCmd, ["main.py", ...buildSensorArgs(sensorType, pacientId)], {
+    cwd: sensorsPath,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    env,
+  });
+
+  sensorProcesses[sensorType] = child;
+  sensorProcessPacients[sensorType] = pacientId;
+  sensorProcessStartupErrors[sensorType] = null;
+  sensorProcessModes[sensorType] = sensorType === "puls" && forcePulseSimulation ? "simulare" : "hardware";
+
+  return child;
 }
 
 router.get("/status", (req, res) => {
@@ -514,9 +559,30 @@ router.post("/start", verifyToken, async (req, res) => {
   }
 
   // Curăță procesele orfane rămase după restarturi backend.
-  const orphanPids = getOsSensorPids(sensorType);
+  const trackedPid = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed
+    ? sensorProcesses[sensorType].pid
+    : null;
+  const orphanPids = getOsSensorPids(sensorType).filter((pid) => pid !== trackedPid);
   if (orphanPids.length > 0) {
     killOsSensorPids(orphanPids);
+  }
+
+  const shouldRestartPulseInSimulation =
+    sensorType === "ecg" &&
+    sensorProcesses.puls &&
+    !sensorProcesses.puls.killed &&
+    sensorProcessPacients.puls === normalizedPacientId;
+
+  if (shouldRestartPulseInSimulation) {
+    try {
+      process.kill(-sensorProcesses.puls.pid);
+    } catch (killErr) {
+      console.error("[PULS] Eroare oprire pentru trecere în simulare:", killErr);
+    } finally {
+      sensorProcesses.puls = null;
+      sensorProcessPacients.puls = null;
+      sensorProcessStartupErrors.puls = null;
+    }
   }
 
   // Dacă procesul deja rulează pe același pacient, returnează succes
@@ -528,6 +594,7 @@ router.post("/start", verifyToken, async (req, res) => {
         running: true,
         sensorType,
         pacient_id: sensorProcessPacients[sensorType],
+        mode: sensorProcessModes[sensorType],
       });
     }
 
@@ -549,28 +616,10 @@ router.post("/start", verifyToken, async (req, res) => {
   }
 
   try {
-    const sensorsPath = path.join(__dirname, "../../sensors");
-    const venvPython = path.join(sensorsPath, "venv", "bin", "python3");
-    const pythonCmd = existsSync(venvPython) ? venvPython : "python3";
-    
-    // Construiește argumentele pentru main.py
-    const args = [];
-    if (normalizedPacientId) {
-      args.push("--pacient", String(normalizedPacientId));
-    }
-    // Pornește doar senzorul specific
-    args.push("--sensors", sensorType);
-
-    // Pornește procesul
-    const process = spawn(pythonCmd, ["main.py", ...args], {
-      cwd: sensorsPath,
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
+    const forcePulseSimulation = sensorType === "puls" && isSensorRunning("ecg");
+    const sensorProcess = startManagedSensorProcess(sensorType, normalizedPacientId, {
+      forcePulseSimulation,
     });
-
-    sensorProcesses[sensorType] = process;
-    sensorProcessPacients[sensorType] = normalizedPacientId;
-    sensorProcessStartupErrors[sensorType] = null;
 
     const startupErrors = [];
     let hasResponded = false;
@@ -585,7 +634,8 @@ router.post("/start", verifyToken, async (req, res) => {
         running: true,
         sensorType,
         pacient_id: normalizedPacientId,
-        pid: process.pid,
+        mode: sensorProcessModes[sensorType],
+        pid: sensorProcess.pid,
       });
     };
 
@@ -606,11 +656,11 @@ router.post("/start", verifyToken, async (req, res) => {
     }, 1200);
 
     // Logare output
-    process.stdout.on("data", (data) => {
+    sensorProcess.stdout.on("data", (data) => {
       console.log(`[${sensorType.toUpperCase()}] ${data.toString()}`);
     });
 
-    process.stderr.on("data", (data) => {
+    sensorProcess.stderr.on("data", (data) => {
       const chunk = data.toString();
       if (startupErrors.length < 10) {
         startupErrors.push(chunk.trim());
@@ -618,24 +668,30 @@ router.post("/start", verifyToken, async (req, res) => {
       console.error(`[${sensorType.toUpperCase()} ERROR] ${chunk}`);
     });
 
-    process.on("error", (err) => {
+    sensorProcess.on("error", (err) => {
       console.error(`[${sensorType}] Eroare start proces:`, err);
       clearTimeout(startupTimer);
-      sensorProcesses[sensorType] = null;
-      sensorProcessPacients[sensorType] = null;
+      if (sensorProcesses[sensorType] === sensorProcess) {
+        sensorProcesses[sensorType] = null;
+        sensorProcessPacients[sensorType] = null;
+        sensorProcessModes[sensorType] = "hardware";
+      }
       sensorProcessStartupErrors[sensorType] = err.message;
       finishErrorResponse("Eroare pornire senzor", err.message);
     });
 
-    process.on("exit", (code, signal) => {
+    sensorProcess.on("exit", (code, signal) => {
       clearTimeout(startupTimer);
       console.log(`[${sensorType}] Proces oprit cu cod ${code}, signal ${signal}`);
 
       const startupDetails = startupErrors.filter(Boolean).join(" | ").slice(0, 350);
       sensorProcessStartupErrors[sensorType] = startupDetails || `Proces oprit (code=${code}, signal=${signal || "none"})`;
 
-      sensorProcesses[sensorType] = null;
-      sensorProcessPacients[sensorType] = null;
+      if (sensorProcesses[sensorType] === sensorProcess) {
+        sensorProcesses[sensorType] = null;
+        sensorProcessPacients[sensorType] = null;
+        sensorProcessModes[sensorType] = "hardware";
+      }
 
       if (!hasResponded) {
         finishErrorResponse(
@@ -644,6 +700,29 @@ router.post("/start", verifyToken, async (req, res) => {
         );
       }
     });
+
+    if (shouldRestartPulseInSimulation) {
+      const pulseProcess = startManagedSensorProcess("puls", normalizedPacientId, {
+        forcePulseSimulation: true,
+      });
+
+      pulseProcess.stdout.on("data", (data) => {
+        console.log(`[PULS] ${data.toString()}`);
+      });
+
+      pulseProcess.stderr.on("data", (data) => {
+        console.error(`[PULS ERROR] ${data.toString()}`);
+      });
+
+      pulseProcess.on("exit", (code, signal) => {
+        console.log(`[puls] Proces simulare oprit cu cod ${code}, signal ${signal}`);
+        if (sensorProcesses.puls === pulseProcess) {
+          sensorProcesses.puls = null;
+          sensorProcessPacients.puls = null;
+          sensorProcessModes.puls = "hardware";
+        }
+      });
+    }
   } catch (err) {
     console.error(`[${sensorType}] Eroare pornire:`, err);
     res.status(500).json({ 
@@ -704,6 +783,7 @@ router.post("/stop", verifyToken, (req, res) => {
     const killedOrphans = killOsSensorPids(osPids);
 
     sensorProcessPacients[sensorType] = null;
+    sensorProcessModes[sensorType] = "hardware";
     sensorProcessStartupErrors[sensorType] = null;
     
     res.json({ 
@@ -746,6 +826,7 @@ router.get("/running/:sensorType", (req, res) => {
     pid: trackedRunning ? sensorProcesses[sensorType].pid : null,
     os_pids: osPids,
     pacient_id: trackedRunning ? sensorProcessPacients[sensorType] : null,
+    mode: trackedRunning ? sensorProcessModes[sensorType] : null,
     startup_error: running ? null : sensorProcessStartupErrors[sensorType],
   });
 });
@@ -771,6 +852,7 @@ router.get("/running", (req, res) => {
     running,
     pids,
     pacients: sensorProcessPacients,
+    modes: sensorProcessModes,
     startup_errors: sensorProcessStartupErrors,
   });
 });

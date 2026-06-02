@@ -64,7 +64,10 @@ class SensorManager:
                 if name in self.sensors:
                     continue
                 try:
-                    self.sensors[name] = available_sensors[name]()
+                    if name == "puls" and "ecg" in sensors_to_run:
+                        self.sensors[name] = available_sensors[name](force_simulation=True)
+                    else:
+                        self.sensors[name] = available_sensors[name]()
                     print(f"[MANAGER] Senzor '{name}' inițializat")
                 except Exception as e:
                     print(f"[MANAGER] Eroare inițializare '{name}': {e}")
