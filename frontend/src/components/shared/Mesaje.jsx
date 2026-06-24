@@ -194,7 +194,7 @@ export default function Mesaje() {
         setContacts(rows);
         setContactsQuery(searchInput);
       } catch {
-        // Keep existing contacts if search fails.
+        // Pastram contactele curente daca refresh-ul cautarii esueaza.
       }
     }, 300);
 

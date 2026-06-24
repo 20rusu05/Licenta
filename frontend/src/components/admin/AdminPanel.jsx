@@ -333,7 +333,6 @@ export default function AdminPanel() {
           </Box>
         </Paper>
 
-        {/* Delete Confirmation Dialog */}
         <Dialog
           open={deleteDialog.open}
           onClose={() => setDeleteDialog({ open: false, user: null, role: null })}
@@ -381,7 +380,6 @@ export default function AdminPanel() {
           </DialogActions>
         </Dialog>
 
-        {/* Details Dialog */}
         <Dialog
           open={detailsDialog.open}
           onClose={() => setDetailsDialog({ open: false, user: null, data: null })}

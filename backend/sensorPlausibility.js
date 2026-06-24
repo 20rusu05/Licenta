@@ -40,8 +40,7 @@ export function applyPlausibilityFilter({
       };
     }
 
-    // DS18B20 may report 85.0°C right after power-up or -127°C on bus faults.
-    // Keep the accepted range wide enough for ambient testing, but reject obvious sensor errors.
+    // DS18B20 poate raporta valori fixe la pornire sau cand bus-ul are erori.
     if (numericTemp === 85 || numericTemp === -127 || numericTemp < 5 || numericTemp > 45) {
       return {
         value1: null,

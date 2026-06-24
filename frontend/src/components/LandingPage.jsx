@@ -55,7 +55,6 @@ export default function LandingPage() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* Header/Navbar */}
       <Box 
         sx={{ 
           py: 2,
@@ -101,7 +100,6 @@ export default function LandingPage() {
         </Box>
       </Box>
 
-      {/* Hero Section */}
       <Box
         sx={{
           background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
@@ -110,7 +108,6 @@ export default function LandingPage() {
           overflow: 'hidden'
         }}
       >
-        {/* Background decoration */}
         <Box
           sx={{
             position: 'absolute',
@@ -173,7 +170,6 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* Features Section */}
   <Container maxWidth="lg" sx={{ py: 10 }}>
        <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
           {isEnglish ? 'Why NewMed?' : 'De ce NewMed?'}
@@ -233,7 +229,6 @@ export default function LandingPage() {
         </Grid>
       </Container>
 
-      {/* Benefits Section */}
       <Box sx={{ bgcolor: 'background.paper', py: 10 }}>
         <Container maxWidth="lg">
           <Grid container spacing={6} alignItems="center">
@@ -314,7 +309,6 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* Despre Noi Section */}
       <Container maxWidth="md" sx={{ py: 10 }}>
         <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
           {isEnglish ? 'About Us' : 'Despre Noi'}
@@ -366,7 +360,6 @@ export default function LandingPage() {
           </Box>
       </Container>
 
-      {/* CTA Section */}
       <Box
         sx={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -403,7 +396,6 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* Footer */}
       <Box sx={{ bgcolor: 'background.paper', py: 4, borderTop: '1px solid', borderColor: 'divider' }}>
         <Container maxWidth="lg">
           <Typography variant="body2" align="center" color="text.secondary">

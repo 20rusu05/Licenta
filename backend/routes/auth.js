@@ -10,7 +10,7 @@ router.post("/register", async (req, res) => {
   if (!nume || !prenume || !email || !parola || !telefon)
     return res.status(400).json({ error: "Campuri lipsa" });
 
-  // Orice email care se termină cu @newmed.ro este doctor
+  // Domeniul intern marcheaza automat conturile de doctor.
   const isDoctor = email.toLowerCase().endsWith('@newmed.ro');
   const tableName = isDoctor ? "doctori" : "pacienti";
 

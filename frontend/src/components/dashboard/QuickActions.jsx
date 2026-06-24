@@ -72,7 +72,6 @@ export default function QuickActions() {
               }}
               elevation={2}
             >
-              {/* Background decoration */}
               <Box sx={{
                 position: 'absolute',
                 right: -15,

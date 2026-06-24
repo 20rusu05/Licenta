@@ -35,20 +35,13 @@ export default function Login() {
     }
 
     try {
-      // apel backend login
       const response = await api.post('/auth/login', formData);
 
-      // salvăm user și token în sessionStorage ca să rămână per-tab
       sessionStorage.setItem('user', JSON.stringify(response.data.user));
       sessionStorage.setItem('token', response.data.token);
 
-      console.log('Token salvat:', response.data.token);
-      console.log('User salvat:', response.data.user);
-
-      // emitem eveniment local pentru a notifica componentele din același tab
       window.dispatchEvent(new Event('auth-changed'));
 
-      // redirect către dashboard
       navigate('/dashboard');
     } catch (err) {
       console.error('Eroare la autentificare:', err);

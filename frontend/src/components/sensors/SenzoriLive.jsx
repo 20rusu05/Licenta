@@ -41,10 +41,9 @@ const ECG_POST_SMOOTH_SEC = 0.08;
 const ECG_TARGET_HALF_SPAN_MV = 1.45;
 const ECG_MAX_GAIN = 2.8;
 const ECG_MIN_GAIN = 0.01;
-// ECG AC is typically sub-mV..few mV; the previous 6 mV threshold labeled almost everything as weak.
+// ECG AC are amplitudini mici; pragul marcheaza doar semnalul foarte slab.
 const ECG_MIN_USEFUL_HALF_SPAN_MV = 0.25;
-// AC ECG streams can have steep QRS upstrokes/downslope; keep spike limiter loose
-// so we don't turn QRS peaks into long ramps or bias the gain estimator.
+// QRS are pante abrupte, deci limitarea de spike ramane larga.
 const ECG_SPIKE_MAX_STEP = 80;
 const ECG_DEFAULT_SAMPLE_RATE_HZ = 250;
 const ECG_NOTCH_FREQ_HZ = 50;
@@ -55,8 +54,7 @@ const ECG_GRID_MINOR_TIME_SEC = 0.2;
 const ECG_MIN_SAMPLE_INTERVAL_MS = Math.round(1000 / ECG_DEFAULT_SAMPLE_RATE_HZ);
 const ECG_LOCK_Y_DOMAIN = true;
 const ECG_FIXED_Y_LIMIT_MV = 1.7;
-// Artifact handling: motion / lead jitter can create rare huge excursions.
-// We smooth them for visualization (do not affect stored data).
+// Artefactele de miscare sunt netezite doar pentru afisare.
 const ECG_ARTIFACT_ABS_MIN_MV = 4;
 const ECG_ARTIFACT_MULT = 6.0;
 const ECG_DISPLAY_MAX_STEP_MV = 0.45;
@@ -149,25 +147,24 @@ function normalizeEcgValue(value, leadsOk = true, modeCode = null) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
 
-  // Treat lead-off / missing samples as null.
+  // Lead-off sau esantioanele lipsa nu intra in grafic.
   if (leadsOk === false) return null;
   if (numeric === 0) return null;
 
   const mode = Number(modeCode);
 
-  // If the sensor says it already sends filtered AC mV (centered around 0), keep it.
+  // Modul AC vine deja centrat in jurul lui 0 mV.
   if (mode === ECG_MODE_AC) {
     return numeric;
   }
 
-  // Heuristic fallback (legacy streams without mode).
+  // Fallback pentru stream-uri vechi fara mode code.
   if (numeric < 0) return numeric;
   if (Math.abs(numeric) <= ECG_AC_DETECT_ABS_MAX_MV && numeric !== 3300) return numeric;
 
-  // Otherwise assume raw 0..3300mV from ADC.
   if (numeric <= ECG_LEADOFF_THRESHOLD) return null;
   const clamped = Math.max(0, Math.min(3300, numeric));
-  // If the ADC/analog front-end saturates, treat it as an artifact.
+  // Saturatia ADC-ului este artefact, nu semnal ECG util.
   if (clamped <= 5 || clamped >= 3295) return null;
   return ECG_INVERT_DISPLAY ? (3300 - clamped) : clamped;
 }
@@ -176,8 +173,7 @@ function normalizeTemperatureValue(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
 
-  // DS18B20 can briefly report 85.0°C on power-up or during bus glitches.
-  // Keep only obvious sensor errors out of the chart; low ambient values are still valid.
+  // DS18B20 poate raporta valori fixe la pornire sau cand bus-ul are erori.
   if (numeric === 85 || numeric === -127 || numeric < 5 || numeric > 45) return null;
 
   return Math.round(numeric * 10) / 10;
@@ -210,7 +206,7 @@ function robustClipSeries(values) {
   const absDeviations = values.map((v) => Math.abs(v - med));
   const mad = median(absDeviations);
 
-  // Convert MAD to a robust sigma estimate; keep a minimum for very flat windows.
+  // MAD estimeaza robust dispersia si ramane stabil pe ferestre aproape plate.
   const robustSigma = Math.max(1.5, mad * 1.4826);
   const limit = robustSigma * 4.5;
   const min = med - limit;
@@ -363,7 +359,7 @@ function clampSymmetric(value, limit) {
 
 function softClip(value, limit) {
   if (!Number.isFinite(value) || !Number.isFinite(limit) || limit <= 0) return value;
-  // Smooth compression: keeps morphology but prevents hard saturation lines.
+  // Compresie lina: pastreaza forma fara linii de saturatie dure.
   return limit * Math.tanh(value / limit);
 }
 
@@ -393,7 +389,7 @@ function detectRPeaks(values, sampleRateHz) {
   const robust = quantile(abs, 0.985);
   if (!Number.isFinite(robust) || robust <= 0) return [];
 
-  // Peak threshold: high enough to prefer QRS over P/T.
+  // Pragul favorizeaza QRS fata de undele P/T.
   const thr = Math.max(robust * 1.8, 0.08);
   const refractory = Math.round(sampleRateHz * 0.25);
   const peaks = [];
@@ -402,7 +398,7 @@ function detectRPeaks(values, sampleRateHz) {
   while (i < values.length - 2) {
     const v = values[i];
     if (v > thr && v >= values[i - 1] && v >= values[i + 1]) {
-      // local max; refine to true max within a short neighborhood
+      // Rafinam maximul local intr-o vecinatate scurta.
       let bestI = i;
       let bestV = v;
       const end = Math.min(values.length - 1, i + Math.round(sampleRateHz * 0.04));
@@ -422,7 +418,7 @@ function detectRPeaks(values, sampleRateHz) {
 }
 
 function synthEcgTemplate(phase01) {
-  // phase01 in [0,1). A simple sum of gaussians resembling P-QRS-T.
+  // Model P-QRS-T simplu, construit din gaussiene.
   const p = phase01;
   const gauss = (x, mu, sigma) => {
     const z = (x - mu) / sigma;
@@ -444,7 +440,7 @@ function synthesizeEcgLike(valuesCount, sampleRateHz, xSecList, rrSec, alignXSec
 
   for (let i = 0; i < valuesCount; i += 1) {
     const x = Number.isFinite(xSecList?.[i]) ? xSecList[i] : (i / sampleRateHz);
-    // alignXSec anchors an R-peak near its observed time.
+    // Ancoram varful R aproape de timpul observat.
     const t = (x - (alignXSec || 0));
     const phase = ((t % rr) + rr) % rr;
     const p = phase / rr;
@@ -454,7 +450,7 @@ function synthesizeEcgLike(valuesCount, sampleRateHz, xSecList, rrSec, alignXSec
 }
 
 function computeMixAmount({ robustHalfSpan, artifactRate }) {
-  // 0..~0.35, higher when signal has usable amplitude and few artifacts.
+  // Mix mai mare doar cand amplitudinea e utila si artefactele sunt rare.
   const ampScore = clamp((Number(robustHalfSpan) - 0.08) / 0.30, 0, 1);
   const cleanScore = clamp(1 - (Number(artifactRate) * 3.0), 0, 1);
   return 0.35 * ampScore * cleanScore;
@@ -478,10 +474,7 @@ function isLargeGapMs(prevTs, nextTs, gapMs) {
 }
 
 function preprocessRawEcgToAc(rawMvValues, sampleRateHz) {
-  // Convert raw 0..3300mV stream into AC around 0:
-  //  - slow baseline tracking (high-pass effect)
-  //  - notch 50Hz
-  //  - gentle low-pass for display
+  // Transformam raw 0..3300mV in AC: baseline lent, notch 50Hz, low-pass pentru afisare.
   if (!rawMvValues.length) return rawMvValues;
 
   const baseline = applyLowpassFilter(rawMvValues, sampleRateHz, 0.7);
@@ -489,7 +482,7 @@ function preprocessRawEcgToAc(rawMvValues, sampleRateHz) {
   const notched = applyNotchFilter(centered, sampleRateHz, ECG_NOTCH_FREQ_HZ);
   const bandLimited = applyLowpassFilter(notched, sampleRateHz, 28);
 
-  // Very light post-smoothing to reduce quantization noise without killing QRS.
+  // Netezire usoara: reduce cuantizarea fara sa aplatizeze QRS.
   const postWin = toOddWindowBySeconds(sampleRateHz, ECG_POST_SMOOTH_SEC, 3, 81);
   const smoothed = smoothSeries(bandLimited, postWin);
   return medianFilter3(smoothed);
@@ -531,7 +524,7 @@ function buildEcgDisplay(data, displayState = null) {
   const lastMode = Number(data[data.length - 1]?.mode);
   const inputLooksAc = lastMode === ECG_MODE_AC || minVal < 0 || (maxVal <= ECG_AC_DETECT_ABS_MAX_MV && minVal >= -ECG_AC_DETECT_ABS_MAX_MV);
 
-  // Always render as AC mV (around 0). If stream is raw, compute AC in frontend.
+  // Afisam mereu AC mV; pentru raw calculam componenta AC in frontend.
   const acValues = inputLooksAc
     ? rawValues
     : preprocessRawEcgToAc(rawValues, sampleRateHz);
@@ -547,19 +540,18 @@ function buildEcgDisplay(data, displayState = null) {
   const oriented = invert ? clippedCentered.map((v) => -v) : clippedCentered;
 
   const absValues = oriented.map((v) => Math.abs(v));
-  // Use a high quantile (captures narrow QRS peaks) for stable gain.
+  // Cuantila inalta prinde varfurile QRS inguste fara outlieri rari.
   const robustHalfSpan = quantile(absValues, 0.985);
-  // Use percentile peak estimate to avoid rare outliers collapsing zoom.
   const peakHalfSpan = quantile(absValues, 0.999);
   const displayLimit = ECG_FIXED_Y_LIMIT_MV;
 
-  // Despike based on robust amplitude so frequent artifacts don't inflate the threshold.
+  // Pragul de artefact se bazeaza pe amplitudinea robusta, nu pe varfuri rare.
   const artifactLimit = Math.max(ECG_ARTIFACT_ABS_MIN_MV, robustHalfSpan * ECG_ARTIFACT_MULT);
   const artifactCount = oriented.reduce((acc, v) => (Math.abs(v) > artifactLimit ? acc + 1 : acc), 0);
   const artifactRate = oriented.length ? (artifactCount / oriented.length) : 0;
   const cleaned = despikeHold(oriented, artifactLimit);
 
-  // Auto-scale the display to keep the trace readable without needing manual zoom.
+  // Auto-scalarea pastreaza traseul lizibil fara zoom manual.
   const targetHalfSpan = ECG_TARGET_HALF_SPAN_MV;
   const effectiveGain = Math.max(0.002, Math.min(12, targetHalfSpan / Math.max(robustHalfSpan, 0.05)));
   if (state) {
@@ -665,7 +657,6 @@ export default function SenzoriLive() {
   });
   const [loadingControl, setLoadingControl] = useState({});
   
-  // Pacienți și sesiuni
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [loadingPatients, setLoadingPatients] = useState(false);
@@ -767,8 +758,7 @@ export default function SenzoriLive() {
     const running = Boolean(sensorsRunningRef.current?.[sensorType]);
     if (!enabled && !running) return false;
 
-    // ECG packets can carry device timestamps with drift/low precision.
-    // Gate ECG only by current session state to avoid intermittent chart freeze.
+    // Timestamp-urile ECG pot avea drift; filtram doar dupa starea sesiunii curente.
     if (sensorType === 'ecg') return true;
 
     const startedAt = sessionSensorStartAtRef.current?.[sensorType];
@@ -905,15 +895,13 @@ export default function SenzoriLive() {
     }
   }, []);
 
-  // Fetch pacienții doctorului cu sesiuni active
   const fetchPatients = async () => {
     try {
       setLoadingPatients(true);
       const response = await api.get('/sensors/doctor/patients');
       const rawPatients = response.data.patients || [];
 
-      // Normalizează rezultatul pentru compatibilitate cu ambele variante de backend
-      // (vechi: session_id/sensor_type pe rând, nou: session_ids/sensor_types agregate).
+      // Compatibilitate intre raspunsul vechi pe randuri si cel nou agregat.
       const byPatientId = new Map();
       rawPatients.forEach((row) => {
         const key = Number(row.id);
@@ -996,7 +984,6 @@ export default function SenzoriLive() {
     }
   };
 
-  // Fetch toți pacienții pentru căutare și asignare
   const fetchAllPatients = async (search = '') => {
     try {
       setLoadingAllPatients(true);
@@ -1011,7 +998,6 @@ export default function SenzoriLive() {
     }
   };
 
-  // Asignează dispozitiv la pacient
   const handleAssignDevice = async (pacient_id) => {
     const targetPatient = allPatients.find((p) => Number(p.id) === Number(pacient_id));
     setPendingAssignPatientId(pacient_id);
@@ -1047,7 +1033,7 @@ export default function SenzoriLive() {
           throw firstErr;
         }
 
-        // Compatibilitate cu backend vechi care cere și sensor_type.
+        // Backend-ul vechi cerea explicit sensor_type.
         response = await api.post('/sensors/doctor/assign-session', {
           pacient_id: normalizedPacientId,
           sensor_type: 'ecg'
@@ -1091,7 +1077,7 @@ export default function SenzoriLive() {
       try {
         response = await api.put(`/sensors/doctor/end-patient-sessions/${pendingUnassignPatientId}`);
       } catch (firstErr) {
-        // Compatibilitate cu backend vechi unde există doar end-session/:sessionId
+        // Backend-ul vechi avea doar endpoint pe sesiune individuala.
         const activeSession = patients.find((p) => Number(p.id) === Number(pendingUnassignPatientId));
         if (!activeSession?.session_id) {
           throw firstErr;
@@ -1296,7 +1282,7 @@ export default function SenzoriLive() {
     if (!Number.isFinite(plotTs)) {
       plotTs = Number.isFinite(prevTs) ? (prevTs + ECG_MIN_SAMPLE_INTERVAL_MS) : Date.now();
     } else if (Number.isFinite(prevTs) && plotTs <= prevTs) {
-      // Ensure strictly increasing timestamps for stable X-axis progression.
+      // X-axis-ul ramane stabil doar cu timestamp-uri strict crescatoare.
       plotTs = prevTs + ECG_MIN_SAMPLE_INTERVAL_MS;
     }
 
@@ -1346,7 +1332,6 @@ export default function SenzoriLive() {
     });
 
     socket.on('sensor_update', (data) => {
-      // Filtrează datele pentru pacientul selectat
       const selected = selectedPatientRef.current;
       if (selected && Number(data.pacient_id) !== Number(selected.id)) {
         return;
@@ -1387,7 +1372,6 @@ export default function SenzoriLive() {
     });
 
     socket.on('sensor_batch_update', (data) => {
-      // Filtrează datele pentru pacientul selectat
       const selected = selectedPatientRef.current;
       if (selected && data.pacient_id && Number(data.pacient_id) !== Number(selected.id)) {
         return;
@@ -1640,7 +1624,6 @@ export default function SenzoriLive() {
   return (
     <AppLayout>
       <Box sx={{ p: 1.5 }}>
-        {/* Secțiunea de selectare pacient și asignare dispozitiv */}
         <Card sx={{ mb: 2, bgcolor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#f5f5f5' }}>
           <CardContent sx={{ py: 1.5, px: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1.5 }}>

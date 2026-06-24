@@ -127,7 +127,6 @@ router.get("/", authMiddleware, async (req, res) => {
     
     const medicamenteWithAplicanti = await Promise.all(
       medicamenteFiltered.map(async (m) => {
-        // Count total aplicanti pentru acest medicament
         const [[{ totalAplicanti }]] = await db.promise().query(
           `SELECT COUNT(*) AS totalAplicanti FROM aplicari_medicamente WHERE medicament_id = ?`,
           [m.id]

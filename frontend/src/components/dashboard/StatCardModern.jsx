@@ -66,7 +66,6 @@ export default function StatCardModern({ icon, label, value, subtitle, trend, co
         )}
       </Box>
       
-      {/* Background decoration */}
       <Box sx={{
         position: 'absolute',
         right: -20,

@@ -12,7 +12,7 @@ import os
 import urllib3
 from urllib.parse import urlparse
 
-# Suprimă warninguri pentru self-signed certs în dev
+# In mediul local se folosesc des certificate auto-semnate.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 try:
@@ -54,13 +54,12 @@ class SensorClient:
         self._start_sender_thread()
 
     def _resolve_tls_verify(self):
-        # Prefer explicit certificate path when provided.
+        # Certificatul explicit are prioritate fata de flag-ul boolean.
         if SENSOR_TLS_CA_CERT:
             if os.path.exists(SENSOR_TLS_CA_CERT):
                 return SENSOR_TLS_CA_CERT
             print(f"[{self.sensor_type}] Atenție: SENSOR_TLS_CA_CERT inexistent: {SENSOR_TLS_CA_CERT}")
 
-        # In local development we often use self-signed certs.
         if self.is_https and not SENSOR_TLS_VERIFY:
             print(f"[{self.sensor_type}] HTTPS activ cu verificare TLS dezactivată (mod dev)")
             return False

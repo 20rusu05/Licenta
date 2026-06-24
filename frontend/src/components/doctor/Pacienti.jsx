@@ -170,7 +170,6 @@ export default function Patients() {
             </Table>
           </TableContainer>
           
-          {/* Paginare */}
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 2 }}>
             <Button 
               variant="outlined"
@@ -198,5 +197,4 @@ export default function Patients() {
     </AppLayout>
   );
 }
-
 

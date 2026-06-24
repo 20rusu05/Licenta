@@ -3,14 +3,12 @@ import { db } from './db.js';
 
 const createAdmin = async () => {
   try {
-    // Admin credentials
     const email = 'admin1@newmed.ro';
     const parola = 'newmed.ro';
     const nume = 'Admin';
     const prenume = 'NewMed';
     const telefon = '0700000000';
 
-    // Check if admin already exists
     const [existingAdmin] = await db
       .promise()
       .query('SELECT id FROM admini WHERE email = ?', [email]);
@@ -22,10 +20,8 @@ const createAdmin = async () => {
       process.exit(0);
     }
 
-    // Hash password
     const hash = await bcrypt.hash(parola, 10);
 
-    // Insert admin
     const [result] = await db
       .promise()
       .query(

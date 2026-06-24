@@ -86,11 +86,10 @@ router.get('/stats', verifyToken, async (req, res) => {
         [userId]
       );
 
-      // Convertește datele la format string YYYY-MM-DD
       const programariSaptamanala = programariSaptamanalaRaw.map(row => {
         let dateStr;
         if (row.data instanceof Date) {
-          // Conversie corectă din Date la YYYY-MM-DD în timezone local
+          // Folosim data locala, nu conversia UTC a lui toISOString().
           const year = row.data.getFullYear();
           const month = String(row.data.getMonth() + 1).padStart(2, '0');
           const day = String(row.data.getDate()).padStart(2, '0');

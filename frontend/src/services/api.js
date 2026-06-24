@@ -15,7 +15,6 @@ export const getBackendAssetUrl = (assetPath) => {
   return new URL(assetPath, BACKEND_ORIGIN).toString();
 };
 
-// Attach token automatically from sessionStorage for every request
 api.interceptors.request.use((config) => {
   try {
     const token = sessionStorage.getItem('token');
@@ -23,13 +22,12 @@ api.interceptors.request.use((config) => {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
-  } catch (e) {
-    // ignore
+  } catch {
+    return config;
   }
   return config;
 });
 
-// Global response handler: on 401 remove stored user and redirect to login
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -38,8 +36,9 @@ api.interceptors.response.use(
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('user');
         window.dispatchEvent(new Event('auth-changed'));
-      } catch (e) {}
-      // navigate to login only if not already on login/register/forgot-password pages
+      } catch {
+        // Continuam redirectul chiar daca sessionStorage nu este disponibil.
+      }
       if (typeof window !== 'undefined') {
         const currentPath = window.location.pathname;
         if (!currentPath.includes('/login') && !currentPath.includes('/register') && !currentPath.includes('/forgot-password')) {

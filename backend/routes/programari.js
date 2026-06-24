@@ -4,7 +4,6 @@ import { verifyToken } from "./middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Creează programare
 router.post("/", verifyToken, async (req, res) => {
   const { pacient_id, data_programare } = req.body;
   const doctor_id = req.user.id;
@@ -25,7 +24,6 @@ router.post("/", verifyToken, async (req, res) => {
   }
 });
 
-// Preia programările
 router.get("/", verifyToken, async (req, res) => {
   const userId = req.user.id;
   const role = req.user.role;
@@ -190,7 +188,6 @@ router.get("/", verifyToken, async (req, res) => {
   }
 });
 
-// Actualizează data programării (reprogramare)
 router.put("/:id", verifyToken, async (req, res) => {
   const programareId = req.params.id;
   const { data_programare, resetStatus } = req.body;
@@ -216,7 +213,6 @@ router.put("/:id", verifyToken, async (req, res) => {
     const mysqlDateTime = new Date(data_programare).toISOString().slice(0, 19).replace('T', ' ');
 
     if (resetStatus) {
-      // Dacă programarea era completată și o reprogramăm, o resetăm la 'programata'
       await db.promise().query(
         "UPDATE programari SET data_programare = ?, status = 'programata' WHERE id = ?",
         [mysqlDateTime, programareId]

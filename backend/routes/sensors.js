@@ -21,7 +21,6 @@ function parseDateParam(value) {
   return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
 }
 
-// Obiect global pentru a ține referințe la procesele de senzori
 const sensorProcesses = {
   ecg: null,
   puls: null,
@@ -90,7 +89,7 @@ function killOsSensorPids(pids) {
       process.kill(pid);
       killed += 1;
     } catch (_err) {
-      // ignore processes that already exited
+      // Procesul poate fi deja inchis intre scanarea OS si kill().
     }
   });
   return killed;
@@ -187,7 +186,7 @@ router.get("/latest/:sensorType", verifyToken, (req, res) => {
       console.error("Eroare citire senzori:", err);
       return res.status(500).json({ error: "Eroare server" });
     }
-    // Inversează pentru ordinea cronologică
+    // Query-ul citeste DESC; graficele primesc datele cronologic.
     res.json({ readings: results.reverse() });
   });
 });
@@ -249,11 +248,9 @@ router.get("/history/:sensorType", verifyToken, (req, res) => {
   });
 });
 
-// GET /api/sensors/device-patient/:deviceId - Get currently assigned patient for a device
 router.get("/device-patient/:deviceId", (req, res) => {
   const { deviceId } = req.params;
 
-  // First, find the doctor who owns this device
   const getDoctorQuery = `
     SELECT doctor_id FROM device_assignments
     WHERE device_id = ?
@@ -272,7 +269,6 @@ router.get("/device-patient/:deviceId", (req, res) => {
 
     const doctorId = assignmentResults[0].doctor_id;
 
-    // Now find the currently active patient for this doctor
     const getPatientQuery = `
       SELECT DISTINCT pacient_id
       FROM monitoring_sessions
@@ -296,7 +292,6 @@ router.get("/device-patient/:deviceId", (req, res) => {
   });
 });
 
-// POST /api/sensors/reading - Primește o citire de la senzor (fallback HTTP)
 router.post("/reading", (req, res) => {
   const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp, leads_ok } = req.body;
 
@@ -340,7 +335,7 @@ router.post("/reading", (req, res) => {
         device_id,
         pacient_id,
         leads_ok: leads_ok === false ? false : true,
-        // Preserve the sensor-provided timestamp for stable chart sampling.
+        // Pastram timestamp-ul senzorului pentru esantionare stabila in grafice.
         timestamp: new Date(readingTimestampMs).toISOString(),
         filtered: filtered.filtered,
         filter_reason: filtered.reason,
@@ -385,7 +380,6 @@ router.post("/reading", (req, res) => {
   );
 });
 
-// GET /api/sensors/sessions - Sesiuni de monitorizare
 router.get("/sessions", verifyToken, (req, res) => {
   const { pacient_id, doctor_id, status } = req.query;
   const isPacient = req.user?.role === "pacient";
@@ -428,7 +422,6 @@ router.get("/sessions", verifyToken, (req, res) => {
   });
 });
 
-// POST /api/sensors/sessions - Creează sesiune nouă
 router.post("/sessions", (req, res) => {
   const { pacient_id, doctor_id, sensor_type, notes } = req.body;
 
@@ -454,7 +447,6 @@ router.post("/sessions", (req, res) => {
   );
 });
 
-// PUT /api/sensors/sessions/:id/end - Finalizare sesiune
 router.put("/sessions/:id/end", (req, res) => {
   const { id } = req.params;
 
@@ -473,7 +465,6 @@ router.put("/sessions/:id/end", (req, res) => {
   });
 });
 
-// DELETE /api/sensors/cleanup - Șterge citiri vechi (> 30 zile)
 router.delete("/cleanup", (req, res) => {
   const days = parseInt(req.query.days) || 30;
 
@@ -491,14 +482,12 @@ router.delete("/cleanup", (req, res) => {
   });
 });
 
-// POST /api/sensors/start - Pornește un senzor specific
 router.post("/start", verifyToken, async (req, res) => {
   const { sensorType, pacient_id } = req.body;
   const normalizedPacientId = pacient_id ? parseInt(pacient_id, 10) : null;
   const userRole = req.user?.role;
   const userId = req.user?.id ? Number(req.user.id) : null;
 
-  // Validează tipul senzorului
   const validTypes = ["ecg", "puls", "temperatura"];
   if (!sensorType || !validTypes.includes(sensorType)) {
     return res.status(400).json({ 
@@ -558,7 +547,7 @@ router.post("/start", verifyToken, async (req, res) => {
     });
   }
 
-  // Curăță procesele orfane rămase după restarturi backend.
+  // Curata procesele ramase dupa restarturi backend.
   const trackedPid = sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed
     ? sensorProcesses[sensorType].pid
     : null;
@@ -585,7 +574,7 @@ router.post("/start", verifyToken, async (req, res) => {
     }
   }
 
-  // Dacă procesul deja rulează pe același pacient, returnează succes
+  // Exista un singur proces per tip de senzor; schimbarea pacientului cere restart.
   if (sensorProcesses[sensorType] && !sensorProcesses[sensorType].killed) {
     if (sensorProcessPacients[sensorType] === normalizedPacientId) {
       return res.json({
@@ -598,7 +587,6 @@ router.post("/start", verifyToken, async (req, res) => {
       });
     }
 
-    // Dacă rulează pe alt pacient, îl repornim cu noul pacient selectat.
     try {
       process.kill(-sensorProcesses[sensorType].pid);
       sensorProcesses[sensorType] = null;
@@ -612,7 +600,6 @@ router.post("/start", verifyToken, async (req, res) => {
       });
     }
 
-    // Continuăm aceeași cerere și pornim imediat procesul nou pe pacientul selectat.
   }
 
   try {
@@ -655,7 +642,6 @@ router.post("/start", verifyToken, async (req, res) => {
       finishSuccessResponse();
     }, 1200);
 
-    // Logare output
     sensorProcess.stdout.on("data", (data) => {
       console.log(`[${sensorType.toUpperCase()}] ${data.toString()}`);
     });
@@ -734,13 +720,11 @@ router.post("/start", verifyToken, async (req, res) => {
   }
 });
 
-// POST /api/sensors/stop - Oprește un senzor specific
 router.post("/stop", verifyToken, (req, res) => {
   const { sensorType } = req.body;
   const userRole = req.user?.role;
   const userId = req.user?.id ? Number(req.user.id) : null;
 
-  // Validează tipul senzorului
   const validTypes = ["ecg", "puls", "temperatura"];
   if (!sensorType || !validTypes.includes(sensorType)) {
     return res.status(400).json({ 
@@ -776,7 +760,6 @@ router.post("/stop", verifyToken, (req, res) => {
 
   try {
     if (hasTracked) {
-      // Trimite SIGTERM pentru procesul gestionat direct de backend.
       process.kill(-sensorProcesses[sensorType].pid);
     }
 
@@ -804,11 +787,9 @@ router.post("/stop", verifyToken, (req, res) => {
   }
 });
 
-// GET /api/sensors/running/:sensorType - Verifică dacă un senzor rulează
 router.get("/running/:sensorType", (req, res) => {
   const { sensorType } = req.params;
 
-  // Validează tipul senzorului
   const validTypes = ["ecg", "puls", "temperatura"];
   if (!validTypes.includes(sensorType)) {
     return res.status(400).json({ 
@@ -831,7 +812,6 @@ router.get("/running/:sensorType", (req, res) => {
   });
 });
 
-// GET /api/sensors/running - Verifică statusul tuturor senzorilor
 router.get("/running", (req, res) => {
   const running = {};
   const pids = {};
@@ -857,7 +837,6 @@ router.get("/running", (req, res) => {
   });
 });
 
-// GET /api/sensors/doctor/patients - Obține toți pacienții doctorului cu sesiuni active
 router.get("/doctor/patients", verifyToken, (req, res) => {
   const doctorId = req.user.id;
 
@@ -891,7 +870,6 @@ router.get("/doctor/patients", verifyToken, (req, res) => {
   });
 });
 
-// GET /api/sensors/doctor/all-patients - Obține TOȚI pacienții doctorului (nu doar cei cu sesiuni active)
 router.get("/doctor/all-patients", verifyToken, (req, res) => {
   const doctorId = req.user.id;
   const { search } = req.query;
@@ -921,7 +899,6 @@ router.get("/doctor/all-patients", verifyToken, (req, res) => {
   });
 });
 
-// POST /api/sensors/doctor/assign-session - Creează sesiune de monitorizare
 router.post("/doctor/assign-session", verifyToken, (req, res) => {
   const doctorId = req.user.id;
   const { pacient_id } = req.body;
@@ -932,7 +909,6 @@ router.post("/doctor/assign-session", verifyToken, (req, res) => {
 
   const validTypes = ["ecg", "puls", "temperatura"];
 
-  // Verifică dacă pacientul aparține doctorului (are programare cu el)
   const checkQuery = `
     SELECT COUNT(*) as count FROM programari 
     WHERE pacient_id = ? AND doctor_id = ?
@@ -993,7 +969,6 @@ router.post("/doctor/assign-session", verifyToken, (req, res) => {
   });
 });
 
-// PUT /api/sensors/doctor/end-patient-sessions/:pacientId - Finalizează toate sesiunile active ale pacientului la doctorul curent
 router.put("/doctor/end-patient-sessions/:pacientId", verifyToken, (req, res) => {
   const doctorId = req.user.id;
   const { pacientId } = req.params;
@@ -1018,12 +993,10 @@ router.put("/doctor/end-patient-sessions/:pacientId", verifyToken, (req, res) =>
   });
 });
 
-// PUT /api/sensors/doctor/end-session/:sessionId - Finalizeaza sesiune
 router.put("/doctor/end-session/:sessionId", verifyToken, (req, res) => {
   const doctorId = req.user.id;
   const { sessionId } = req.params;
 
-  // Verifică că sesiunea aparține doctorului curent
   const checkQuery = `
     SELECT id FROM monitoring_sessions 
     WHERE id = ? AND doctor_id = ? AND status = 'activa'
@@ -1039,7 +1012,6 @@ router.put("/doctor/end-session/:sessionId", verifyToken, (req, res) => {
       return res.status(403).json({ error: "Sesiune not found or access denied" });
     }
 
-    // Finalizează sesiunea
     const updateQuery = `
       UPDATE monitoring_sessions 
       SET status = 'finalizata', ended_at = NOW()

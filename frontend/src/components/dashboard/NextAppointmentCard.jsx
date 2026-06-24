@@ -119,7 +119,6 @@ export default function NextAppointmentCard({ appointment }) {
       }} 
       elevation={3}
     >
-      {/* Background decoration */}
       <Box sx={{
         position: 'absolute',
         right: -40,
@@ -195,7 +194,6 @@ export default function NextAppointmentCard({ appointment }) {
         </Button>
       </Box>
 
-      {/* Dialog cu detalii programare */}
       <Dialog 
         open={dialogOpen} 
         onClose={handleCloseDialog}
@@ -224,7 +222,6 @@ export default function NextAppointmentCard({ appointment }) {
         </DialogTitle>
         
         <DialogContent sx={{ mt: 3 }}>
-          {/* Status */}
           <Box sx={{ mb: 3, textAlign: 'center' }}>
             <Chip 
               label={appointment.status} 
@@ -239,7 +236,6 @@ export default function NextAppointmentCard({ appointment }) {
             />
           </Box>
 
-          {/* Data și ora */}
           <Box sx={{ mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Box
@@ -292,7 +288,6 @@ export default function NextAppointmentCard({ appointment }) {
             </Box>
           </Box>
 
-          {/* Doctor */}
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Box

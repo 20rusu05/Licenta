@@ -58,7 +58,6 @@ CREATE TABLE aplicari_medicamente (
   pacient_id INT NOT NULL,
   medicament_id INT NOT NULL,
   status ENUM('pending', 'acceptat', 'respins') DEFAULT 'pending',
-  -- Date formular medical
   fumeaza ENUM('da', 'nu', 'fost') NULL,
   activitate_fizica ENUM('sedentar', 'usoara', 'moderata', 'intensa') NULL,
   probleme_inima BOOLEAN NULL,
@@ -133,7 +132,6 @@ CREATE TABLE programari (
     INDEX idx_user_deleted (user_role, user_id)
   );
 	
--- Tabel pentru datele senzorilor Raspberry Pi
 CREATE TABLE sensor_readings (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   sensor_type ENUM('ecg', 'puls', 'temperatura') NOT NULL,
@@ -149,7 +147,6 @@ CREATE TABLE sensor_readings (
   INDEX idx_sensor_device (device_id, sensor_type, created_at)
 );
 
--- Tabel sesiuni de monitorizare
 CREATE TABLE monitoring_sessions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   pacient_id INT NOT NULL,

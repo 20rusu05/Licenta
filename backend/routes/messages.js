@@ -141,6 +141,7 @@ router.get("/conversations", verifyToken, async (req, res) => {
   const unreadRole = role === "doctor" ? "pacient" : "doctor";
 
   try {
+    // Conversatiile ascunse local reapar doar cand exista mesaje mai noi decat deleted_at.
     const [rows] = await db.promise().query(
       `
       SELECT
@@ -395,6 +396,7 @@ router.delete("/conversations/:id", verifyToken, async (req, res) => {
       [conversationId]
     );
 
+    // Stergerea devine definitiva doar cand ambele parti au ascuns ultimul mesaj vizibil.
     const [deleteRows] = await db.promise().query(
       `
       SELECT user_role, deleted_at

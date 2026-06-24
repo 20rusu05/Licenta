@@ -50,7 +50,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 3600000); // 1 hour
+    const expires = new Date(Date.now() + 60 * 60 * 1000);
 
     await db.promise().query(
       `UPDATE ${tableName} SET reset_token = ?, reset_token_expiry = ? WHERE email = ?`,

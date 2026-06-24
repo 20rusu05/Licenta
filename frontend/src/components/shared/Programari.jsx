@@ -25,9 +25,6 @@ import {
   ToggleButton,
   Tooltip,
 } from "@mui/material";
-// Comentat pentru a evita eroarea de hook
-// import { LocalizationProvider, DateTimePicker } from "@mui/x-date-pickers";
-// import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import EventIcon from '@mui/icons-material/Event';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditCalendarIcon from '@mui/icons-material/EditCalendar';
@@ -66,7 +63,6 @@ export default function Programari() {
   try {
     const encodedSearch = encodeURIComponent(searchTerm.trim());
     const res = await api.get(`${API_URL}?page=${pageNum}&limit=10&filter=${filter}&search=${encodedSearch}`);
-    console.log('Programari response:', res.data);
     setProgramari(res.data.data || []);
     setTotalPages(res.data.total_pages || 1);
     setCounts(res.data.counts || { toate: 0, viitoare: 0, trecute: 0, completate: 0 });
@@ -79,7 +75,7 @@ export default function Programari() {
 }, [filter]);
 
 
-  // Reload când se schimbă pagina sau filtrul (dar nu pe searchInput, pe care le handle debounce-ul)
+  // Search-ul este reincarcat separat prin debounce.
   useEffect(() => {
     reload(currentPage, searchInput);
   }, [currentPage, filter, reload]);
@@ -88,7 +84,6 @@ export default function Programari() {
   const openCalendar = (programare) => {
     setSelectedProgramare(programare);
     setCalendarOpen(true);
-    // Convertim la format datetime-local (YYYY-MM-DDTHH:mm)
     if (programare.data_programare) {
       const date = new Date(programare.data_programare);
       const formattedDate = date.toISOString().slice(0, 16);
@@ -192,7 +187,6 @@ export default function Programari() {
     setSearchInput(e.target.value);
   };
 
-  // Debounce search input - apelează reload cu pagina 1 și search curent
   useEffect(() => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -429,7 +423,6 @@ export default function Programari() {
           </Box>
         )}
 
-        {/* Calendar pentru doctor */}
         {user.role === "doctor" && (
           <Dialog open={calendarOpen} onClose={() => setCalendarOpen(false)} maxWidth="sm" fullWidth>
             <DialogTitle>
@@ -467,7 +460,6 @@ export default function Programari() {
           </Dialog>
         )}
 
-        {/* Dialog confirmare anulare */}
         <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
           <DialogTitle>{isEnglish ? 'Confirm cancellation' : 'Confirmă anularea'}</DialogTitle>
           <DialogContent>
@@ -488,7 +480,6 @@ export default function Programari() {
           </DialogActions>
         </Dialog>
 
-        {/* Snackbar pentru notificări */}
         <Snackbar 
           open={snackbar.open} 
           autoHideDuration={4000} 

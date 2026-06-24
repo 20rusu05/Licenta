@@ -29,7 +29,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
     return allAppointments.filter(apt => {
       if (!apt.data_programare) return false;
       
-      // Creează un obiect Date și extrage partea de dată în timezone local
+      // Comparam in timezone local ca sa nu mutam ziua prin conversie UTC.
       const date = new Date(apt.data_programare);
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -39,7 +39,6 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
       return aptDate === selectedDate;
     });
   };
-  // Creează un array cu următoarele 7 zile
   const getNext7Days = () => {
     const days = [];
     for (let i = 0; i <= 6; i++) {
@@ -55,7 +54,6 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
 
   const days = getNext7Days();
   
-  // Mapează datele primite cu zilele
   const chartData = days.map(day => {
     const found = data.find(d => d.data === day.date);
     return {
@@ -261,7 +259,6 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
         })}
       </Box>
 
-      {/* Dialog cu programările din ziua selectată */}
       <Dialog 
         open={dialogOpen} 
         onClose={handleCloseDialog}

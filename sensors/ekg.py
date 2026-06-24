@@ -254,13 +254,13 @@ class ECGSensor:
         heart_rate = max(40.0, min(160.0, heart_rate))
 
         period = 60.0 / heart_rate
-        phase = (t % period) / period  # 0..1
+        phase = (t % period) / period
 
         def gauss(mu, sigma, amp):
             x = (phase - mu) / max(1e-6, sigma)
             return amp * math.exp(-0.5 * x * x)
 
-        # P-QRS-T model (unitless), then scale to ADC counts.
+        # Model P-QRS-T simplu, scalat apoi la valori ADC.
         p = gauss(0.18, 0.025, 0.12)
         q = gauss(0.37, 0.010, -0.15)
         r = gauss(0.40, 0.008, 1.00)
@@ -268,8 +268,7 @@ class ECGSensor:
         tw = gauss(0.66, 0.045, 0.35)
         beat = p + q + r + s + tw
 
-        # Optional very slow baseline wander (respiration/motion).
-        # Default is OFF to keep the simulated waveform clean and repetitive.
+        # Drift lent optional pentru respiratie/miscare; implicit ramane oprit.
         wander_env = os.getenv("ECG_SIM_WANDER", "0").strip()
         try:
             wander_amp = float(wander_env)
@@ -281,7 +280,7 @@ class ECGSensor:
 
         mid = self.adc_max_value / 2.0
 
-        # Default amplitude is intentionally modest; the UI further detrends and scales.
+        # Amplitudine moderata: UI-ul aplica oricum detrend si scalare.
         amp_env = os.getenv("ECG_SIM_AMP", "").strip()
         if amp_env:
             try:
@@ -293,7 +292,7 @@ class ECGSensor:
 
         value = mid + (signal * amp_counts)
 
-        # Small measurement noise (default very low for a stable, repetitive trace).
+        # Zgomot mic, doar cat sa nu fie un semnal perfect sintetic.
         noise_env = os.getenv("ECG_SIM_NOISE", "").strip()
         if noise_env:
             try:
@@ -342,7 +341,7 @@ class ECGSensor:
     def _filter_ecg_ac_mv(self, raw_mv):
         """Filtrare ECG: returnează doar componenta AC (mV), centrată în jurul lui 0."""
         _baseline_mv, ac_mv = self._filter_ecg_components(raw_mv)
-        # Keep a very wide clamp (safety net); UI can still scale/clip if needed.
+        # Clamp larg de siguranta; UI-ul decide scalarea finala.
         return max(-2000.0, min(2000.0, ac_mv))
 
     def _filter_ecg_components(self, raw_mv):
@@ -356,7 +355,7 @@ class ECGSensor:
                 self._baseline_mv = raw_mv
             return self._baseline_mv, raw_mv - self._baseline_mv
 
-        # Reject impulsive ADC glitches before shaping the ECG band.
+        # Eliminam impulsurile ADC inainte de filtrarea benzii ECG.
         self._median_buffer_mv.append(raw_mv)
         if len(self._median_buffer_mv) > self.median_window_size:
             self._median_buffer_mv = self._median_buffer_mv[-self.median_window_size:]
@@ -366,11 +365,11 @@ class ECGSensor:
         if self._baseline_mv is None:
             self._baseline_mv = raw_mv
 
-        # Baseline estimation (very slow EMA) to separate AC component from DC offset.
+        # EMA lenta separa componenta AC de offset-ul DC.
         self._baseline_mv = self._baseline_mv + (self.baseline_alpha * (raw_mv - self._baseline_mv))
         centered = raw_mv - self._baseline_mv
 
-        # 50Hz hum suppression for setups sampling near a target rate.
+        # Atenuare 50Hz pentru setup-uri apropiate de rata tinta.
         if self.hum_suppress_50hz:
             target = self.hum_sample_rate_target
             tol = max(0.01, self.hum_sample_rate_tolerance)
@@ -401,7 +400,7 @@ class ECGSensor:
         lowpassed = self._lp_prev_output + (self.lowpass_alpha * (highpassed - self._lp_prev_output))
         self._lp_prev_output = lowpassed
 
-        # Slew limiter to cut rare spikes while preserving ECG morphology.
+        # Limitare slew pentru spike-uri rare, fara a distruge morfologia ECG.
         if self._last_filtered_mv is not None and self.max_step_mv > 0:
             delta = lowpassed - self._last_filtered_mv
             if delta > self.max_step_mv:
@@ -479,7 +478,7 @@ class ECGSensor:
                     value = self.read_adc(self.ecg_channel)
                     raw_mv = (value / self.adc_max_value) * 3300.0
 
-                    # Update effective sampling rate (helps notch accuracy on systems with jitter).
+                    # Rata efectiva ajuta notch-ul cand sistemul are jitter.
                     now = time.time()
                     if self._last_sample_ts is not None:
                         dt = now - self._last_sample_ts
@@ -492,10 +491,7 @@ class ECGSensor:
                                 self._last_sr_update_at = now
                     self._last_sample_ts = now
 
-                    # Single-instance processing: choose the representation we send to backend/UI.
-                    # Attach a numeric mode code via value_2 (FLOAT in DB) so frontend can decide
-                    # how to display the stream without guessing.
-                    # 1=raw (0..3300mV), 2=filtered (0..3300mV), 3=ac (centered around 0mV)
+                    # value_2 transmite modul: 1=raw, 2=filtered, 3=AC centrat pe 0mV.
                     mode_code = 1
                     if self.output_mode == "ac":
                         voltage_mv = self._filter_ecg_ac_mv(raw_mv)

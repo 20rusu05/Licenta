@@ -96,9 +96,6 @@ export default function Medicamente() {
 
   const user = JSON.parse(sessionStorage.getItem("user") || 'null');
   const isDoctor = user?.role === "doctor";
-  // `api` will attach Authorization header automatically via interceptor
-  const token = sessionStorage.getItem("token");
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
 const reload = async (specificMedicamentId = null, customAplicantiPage = null) => {
   if (!specificMedicamentId) {
@@ -204,7 +201,7 @@ useEffect(() => {
       `${API_URL}/${selectedMedForm.id}/aplica`,
       {
         ...formData,
-        observatii: formData.observatii || "", // optional
+        observatii: formData.observatii || "",
       }
     );
 
@@ -221,7 +218,6 @@ useEffect(() => {
 
 
   const updateStatus = async (id, status, medicamentId) => {
-    console.log('updateStatus called:', id, status, 'medicamentId:', medicamentId);
     try {
       await api.post(`${API_URL}/aplicari/${id}/status`, { status });
       if (medicamentId) {
@@ -235,14 +231,12 @@ useEffect(() => {
   };
 
   const handleAcceptWithProgramare = async (id, medicamentId) => {
-  console.log('handleAcceptWithProgramare called:', id, 'medicamentId:', medicamentId);
   setAplicareSelectata(id);
   setMedicamentCurent(medicamentId);
   setOpenProgramareDialog(true);
 };
 
   const creeazaProgramare = async () => {
-  console.log('creeazaProgramare called:', aplicareSelectata, dataProgramare, 'medicamentCurent:', medicamentCurent);
   try {
       if (!aplicareSelectata) throw new Error('Aplicare selectata invalida');
       await api.post(
@@ -288,20 +282,17 @@ useEffect(() => {
   };
 
   const handleEdit = (med) => {
-    console.log('handleEdit called:', med);
     setSelectedMed(med);
     setNewMed({ denumire: med.denumire, descriere: med.descriere });
     setEditOpen(true);
   };
 
   const handleDelete = (med) => {
-    console.log('handleDelete called:', med);
     setSelectedMed(med);
     setConfirmOpen(true);
   };
 
   const confirmDelete = async () => {
-    console.log('confirmDelete called:', selectedMed);
     try {
       await api.delete(`${API_URL}/${selectedMed.id}`);
       setConfirmOpen(false);
@@ -348,7 +339,6 @@ const handleConfirmRenunta = async () => {
 
 
   const addMedicament = async () => {
-    console.log('addMedicament called:', newMed);
     try {
       await api.post(API_URL, newMed);
       setAddOpen(false);
@@ -372,7 +362,6 @@ const handleConfirmRenunta = async () => {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => {
-              console.log('CLICK ADAUGA MEDICAMENT DETECTED!');
               setAddOpen(true);
             }}
           >
@@ -435,7 +424,6 @@ const handleConfirmRenunta = async () => {
                                 size="small"
                                 color="primary"
                                 onClick={() => {
-                                  console.log('CLICK EDITEAZA DETECTED!', m.id);
                                   handleEdit(m);
                                 }}
                               >
@@ -447,7 +435,6 @@ const handleConfirmRenunta = async () => {
                                 size="small"
                                 color="error"
                                 onClick={() => {
-                                  console.log('CLICK STERGE DETECTED!', m.id);
                                   handleDelete(m);
                                 }}
                               >
@@ -459,7 +446,6 @@ const handleConfirmRenunta = async () => {
                                 size="small"
                                 color={m.complet ? "warning" : "success"}
                                 onClick={async () => {
-                                  console.log('CLICK COMPLETEAZA MEDICAMENT!', m.id);
                                   try {
                                     await api.patch(`${API_URL}/${m.id}/completeaza`);
                                     setSnackbar({
@@ -496,7 +482,6 @@ const handleConfirmRenunta = async () => {
                                 const aplicare = m.aplicanti?.find(
                                   (a) => a.pacient_id === user.id
                                 );
-                                // Dacă medicamentul e complet și nu există aplicare, disable
                                 if (!aplicare && m.complet) return true;
                                 if (!aplicare) return false;
                                 return aplicare.status !== "pending";
@@ -534,7 +519,6 @@ const handleConfirmRenunta = async () => {
                       </TableCell>
                     </TableRow>
 
-                    {/* Colaps aplicanți doctor */}
                     {isDoctor && (
                       <TableRow>
                         <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={5}>
@@ -567,7 +551,6 @@ const handleConfirmRenunta = async () => {
                                               size="small"
                                               color="success"
                                               onClick={() => {
-                                                console.log('CLICK ACCEPTA DETECTED!', a.id, 'medicament:', m.id);
                                                 handleAcceptWithProgramare(a.id, m.id);
                                               }}
                                             >
@@ -579,7 +562,6 @@ const handleConfirmRenunta = async () => {
                                               size="small"
                                               color="error"
                                               onClick={() => {
-                                                console.log('CLICK RESPINGE DETECTED!', a.id, 'medicament:', m.id);
                                                 updateStatus(a.id, "respins", m.id);
                                               }}
                                             >
@@ -869,7 +851,6 @@ const handleConfirmRenunta = async () => {
           <Button onClick={() => setEditOpen(false)}>{isEnglish ? 'Cancel' : 'Anulează'}</Button>
           <Button 
             onClick={async () => {
-              console.log('Salvare editare:', selectedMed, newMed);
               try {
                 await api.put(`${API_URL}/${selectedMed.id}`, newMed);
                 setEditOpen(false);

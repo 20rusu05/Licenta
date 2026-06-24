@@ -56,7 +56,6 @@ const deleteAvatarIfLocal = async (avatarUrl) => {
   }
 };
 
-// Obține toți pacienții care au interacționat cu doctorul
 router.get("/", verifyToken, async (req, res) => {
   const userId = req.user.id;
   const role = req.user.role;
@@ -138,7 +137,6 @@ router.get("/", verifyToken, async (req, res) => {
   }
 });
 
-// Actualizează datele unui utilizator (pacient sau doctor)
 router.put("/:id", verifyToken, async (req, res) => {
   const profileId = req.params.id;
   const userId = req.user.id;

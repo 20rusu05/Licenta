@@ -63,7 +63,6 @@ router.get("/statistics", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// Delete doctor (cascade delete will handle related data)
 router.delete("/users/doctor/:id", verifyToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -90,7 +89,6 @@ router.delete("/users/doctor/:id", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// Delete patient (cascade delete will handle related data)
 router.delete("/users/pacient/:id", verifyToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 

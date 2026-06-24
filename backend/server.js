@@ -55,6 +55,7 @@ const sensorFilterState = new Map();
 const sensorDbPersistState = new Map();
 const SENSOR_DB_MIN_INTERVAL_MS = parseInt(process.env.SENSOR_DB_MIN_INTERVAL_MS || "3000", 10);
 
+// Limitam scrierile in DB, dar pastram fluxul live prin Socket.IO.
 function shouldPersistSensorReading({ sensorType, pacientId, deviceId, timestampMs }) {
   const key = `${sensorType || "unknown"}|${pacientId || "no-patient"}|${deviceId || "unknown"}`;
   const lastPersistedAt = sensorDbPersistState.get(key) || 0;
@@ -132,7 +133,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Update last reading
     if (connectedSensors[socket.id]) {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }
@@ -165,13 +165,11 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Primire batch de date senzor (ECG - multiple citiri)
   socket.on("sensor_batch", (data) => {
     const { sensor_type, readings, device_id, pacient_id } = data;
 
     if (!readings || !readings.length) return;
 
-    // Update last reading
     if (connectedSensors[socket.id]) {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }

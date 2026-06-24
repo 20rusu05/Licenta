@@ -143,7 +143,6 @@ Exemple de utilizare:
 
     pacient_id = args.pacient
     
-    # Auto-detect patient if --auto flag is set
     if args.auto and not pacient_id:
         pacient_id = get_assigned_patient_for_device()
         if not pacient_id:

@@ -670,8 +670,7 @@ class PulsOximeter:
             return None
 
         if stability["moving"]:
-            # În loc să tăiem complet, păstrăm foarte scurt ultima valoare bună
-            # (doar pentru afișare locală; nu publicăm către server).
+            # Pentru afisare locala pastram foarte scurt ultima valoare buna.
             if age <= 1.5:
                 return round(self.last_valid_bpm, 1)
             return None
@@ -698,8 +697,7 @@ class PulsOximeter:
         if len(filtered) >= 2:
             intervals = filtered
 
-        # Mean robust: intervale false prea scurte pot trage media în jos -> BPM supraestimat.
-        # Folosim o medie "trimmed" când avem suficiente intervale.
+        # Media trimmed reduce efectul intervalelor false prea scurte.
         ordered = sorted(intervals)
         if len(ordered) >= 5:
             trim = max(1, int(len(ordered) * 0.2))
@@ -764,9 +762,7 @@ class PulsOximeter:
 
         bpm = 60.0 * self.sample_rate_hz / best_lag
 
-        # Guard armonici: uneori autocorelația preferă un lag prea mic (BPM prea mare)
-        # dacă există o componentă periodică secundară. Dacă 2x lag are corelație apropiată,
-        # preferăm BPM-ul mai mic, mai ales dacă se potrivește cu ultima valoare validă.
+        # Guard de armonici: 2x lag poate fi BPM-ul real cand autocorelatia supranumara.
         harmonic_lag = best_lag * 2
         if harmonic_lag in corr_by_lag:
             harmonic_corr = corr_by_lag[harmonic_lag]
@@ -819,11 +815,10 @@ class PulsOximeter:
             [abs(value) for value in bandpassed],
             max(3, int(self.sample_rate_hz * 0.18)),
         )
-        # Percentil inferior în loc de mediană: pragurile nu mai "sar" în sus
-        # când apare un spike rar (mișcare/contact imperfect).
+        # Percentila joasa tine pragurile stabile cand apar spike-uri rare.
         envelope_floor = self._percentile(envelope, 0.30) if envelope else 0.0
         noise_floor = max(0.8, envelope_floor)
-        # Când SPAN e mic, un prag prea permisiv poate număra "zgomot" drept vârfuri -> BPM prea mare.
+        # La span mic, pragurile prea permisive pot numara zgomot drept puls.
         low_span_scale = 1.0
         if metrics["span"] < 90:
             low_span_scale = 1.12
@@ -855,8 +850,7 @@ class PulsOximeter:
 
         peak_candidates = find_peak_candidates(peak_threshold, prominence_threshold, search_radius)
 
-        # Fallback pentru semnal slab, dar stabil: praguri mai permisive
-        # ca sa nu ratam pulsuri reale cu amplitudine mica.
+        # Fallback pentru semnal slab, dar stabil: praguri mai permisive.
         if len(peak_candidates) < 3 and metrics["span"] <= 220 and not motion_confirmed:
             relaxed_peak_threshold = max(noise_floor * 1.08, metrics["span"] * 0.016, 0.8)
             relaxed_prominence_threshold = max(noise_floor * 0.34, metrics["span"] * 0.007, 0.45)
@@ -922,8 +916,7 @@ class PulsOximeter:
                     chosen_intervals, mean_interval, variability = pair_stats
                     bpm = pair_bpm
 
-            # Corectie pentru half-rate: uneori detectorul rateaza fiecare a doua bataie
-            # si raporteaza BPM prea mic (aprox. jumatate din real).
+            # Corectie half-rate: detectorul poate rata fiecare a doua bataie.
             doubled_intervals = [value / 2.0 for value in intervals if min_interval <= (value / 2.0) <= max_interval]
             half_rate_stats = self._interval_stats(doubled_intervals) if len(doubled_intervals) >= 2 else None
             if half_rate_stats is not None:
@@ -938,8 +931,7 @@ class PulsOximeter:
                     chosen_intervals, mean_interval, variability = half_rate_stats
                     bpm = doubled_bpm
 
-            # Cross-check cu autocorelația: dacă metoda pe vârfuri supra-numără (BPM prea mare)
-            # dar autocorelația are o corelație bună, preferăm valoarea autocorr (mai stabilă).
+            # Cross-check: autocorelatia corecteaza varfurile supra-numarate.
             autocorr_bpm, corr_quality = self._estimate_bpm_autocorr(bandpassed)
             if autocorr_bpm is not None and corr_quality >= 0.28:
                 overcount = bpm - autocorr_bpm
@@ -1086,8 +1078,7 @@ class PulsOximeter:
             self._enter_settle_mode(now)
             return f" | auto-PGA: {old_pga} -> {self.pga} pentru a evita saturatia"
 
-        # Dacă semnalul rămâne aproape plat câteva secunde fără clipping,
-        # creștem gradual sensibilitatea ca să captăm pulsuri foarte mici.
+        # Semnal plat fara clipping: crestem gradual sensibilitatea.
         low_span = metrics["span"] <= self.low_span_threshold_for_gain
         no_clipping = clipped_high_ratio <= 0.02 and clipped_low_ratio <= 0.02
         in_mid_range = 120 <= metrics["median"] <= 3975
@@ -1191,8 +1182,7 @@ class PulsOximeter:
                         self._reset_validation_state(keep_prediction=True)
                         self.reacquire_active = False
                         self.finger_latch_until = 0.0
-                        # Păstrează fereastra minimă necesară pentru a putea reintra rapid
-                        # în starea "deget prezent" când semnalul revine.
+                        # Pastram fereastra minima pentru reacquisitie rapida.
                         keep = self.sample_rate_hz * 5
                         self.samples = self.samples[-keep:]
                 else:
