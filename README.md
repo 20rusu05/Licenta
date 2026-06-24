@@ -81,23 +81,23 @@ Licenta/
 - Python 3.13+ pentru modulul de senzori.
 - Opțional: Raspberry Pi 5 cu SPI/I2C activate pentru rularea pe hardware real.
 
-### 1. Clonarea repository-ului
+### 1. Clonare repository
 
 ```bash
 git clone <repository-url>
 cd Licenta
 ```
 
-### 2. Configurarea bazei de date
+### 2. Configurare bază de date
 
-Fișierul `bd.sql` folosește baza de date `licenta`, deci aceasta trebuie creată înainte de import.
+Fișierul `bd.sql` folosește baza de date `licenta`, deci trebuie creată înainte de import.
 
 ```bash
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS licenta CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 mysql -u root -p < bd.sql
 ```
 
-### 3. Configurarea backend-ului
+### 3. Configurare backend
 
 ```bash
 cd backend
@@ -105,7 +105,7 @@ npm install
 cp .env.example .env
 ```
 
-Valorile din `backend/.env` trebuie completate, apoi se generează certificate locale pentru HTTPS:
+Completează valorile din `backend/.env`, apoi generează certificate locale pentru HTTPS:
 
 ```bash
 mkdir -p certs
@@ -116,7 +116,7 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -subj "/CN=localhost"
 ```
 
-API-ul se pornește cu:
+Pornește API-ul:
 
 ```bash
 node server.js
@@ -124,18 +124,18 @@ node server.js
 
 Backend-ul rulează implicit pe `https://localhost:3001`.
 
-### 4. Crearea contului admin inițial
+### 4. Creeare cont admin inițial
 
-Într-un terminal separat se rulează:
+Într-un terminal separat:
 
 ```bash
 cd backend
 node create-admin.js
 ```
 
-Scriptul creează contul admin definit în `backend/create-admin.js`. Pentru un mediu real, datele implicite trebuie schimbate înainte de rulare.
+Scriptul creează contul admin definit în `backend/create-admin.js`. Pentru un mediu real, schimbă datele implicite înainte de rulare.
 
-### 5. Configurarea frontend-ului
+### 5. Configurare frontend
 
 ```bash
 cd frontend
@@ -177,7 +177,7 @@ SENSOR_DB_MIN_INTERVAL_MS=3000
 VITE_BACKEND_URL=https://localhost:3001
 ```
 
-Dacă aplicația este accesată de pe alt dispozitiv din rețea, `VITE_BACKEND_URL` trebuie setat către IP-ul mașinii pe care rulează backend-ul.
+Dacă accesezi aplicația de pe alt dispozitiv din rețea, setează `VITE_BACKEND_URL` către IP-ul mașinii pe care rulează backend-ul.
 
 ## Senzori Raspberry Pi
 
@@ -226,28 +226,28 @@ Authorization: Bearer <jwt_token>
 | --- | --- | --- | --- |
 | POST | `/api/auth/register` | Înregistrare pacient sau doctor. Emailurile `@newmed.ro` sunt tratate ca doctori. | Public |
 | POST | `/api/auth/login` | Autentificare și returnare JWT. | Public |
-| POST | `/api/forgot-password` | Generare token și trimitere email de resetare. | Public |
-| POST | `/api/reset-password` | Setare parolă nouă folosind tokenul primit. | Public |
+| POST | `/api/forgot-password` | Generează token și trimite email de resetare. | Public |
+| POST | `/api/reset-password` | Setează o parolă nouă folosind tokenul primit. | Public |
 | GET | `/api/dashboard/stats` | Statistici pentru dashboard, adaptate rolului. | Pacient/Doctor |
-| GET | `/api/programari` | Listare programări cu filtrare, căutare și paginare. | Pacient/Doctor |
-| POST | `/api/programari` | Creare programare. | Doctor |
-| PUT | `/api/programari/:id` | Actualizare dată programare. | Doctor |
-| PATCH | `/api/programari/:id/completeaza` | Marcare/debifare programare finalizată. | Doctor |
-| GET | `/api/medicamente` | Listare medicamente și aplicări relevante. | Pacient/Doctor |
-| POST | `/api/medicamente` | Creare medicament/tratament. | Doctor |
+| GET | `/api/programari` | Listează programările cu filtrare, căutare și paginare. | Pacient/Doctor |
+| POST | `/api/programari` | Creează o programare. | Doctor |
+| PUT | `/api/programari/:id` | Actualizează data unei programări. | Doctor |
+| PATCH | `/api/programari/:id/completeaza` | Marchează/debifează o programare ca finalizată. | Doctor |
+| GET | `/api/medicamente` | Listează medicamentele și aplicările relevante. | Pacient/Doctor |
+| POST | `/api/medicamente` | Creează medicament/tratament. | Doctor |
 | POST | `/api/medicamente/:id/aplica` | Pacientul aplică la un medicament/tratament. | Pacient |
-| GET | `/api/pacienti` | Listare pacienți asociați doctorului. | Doctor |
-| GET | `/api/messages/conversations` | Listare conversații. | Pacient/Doctor |
-| POST | `/api/messages/conversations/:id/messages` | Trimitere mesaj într-o conversație. | Pacient/Doctor |
-| GET | `/api/sensors/status` | Listare senzori conectați prin Socket.IO. | Public |
+| GET | `/api/pacienti` | Listează pacienții asociați doctorului. | Doctor |
+| GET | `/api/messages/conversations` | Listează conversațiile. | Pacient/Doctor |
+| POST | `/api/messages/conversations/:id/messages` | Trimite mesaj într-o conversație. | Pacient/Doctor |
+| GET | `/api/sensors/status` | Listează senzorii conectați prin Socket.IO. | Public |
 | GET | `/api/sensors/latest/:sensorType` | Ultimele citiri pentru `ecg`, `puls` sau `temperatura`. | Autentificat |
 | GET | `/api/sensors/history/:sensorType` | Istoric citiri pe interval. | Autentificat |
-| POST | `/api/sensors/start` | Pornire proces de senzor gestionat de backend. | Autentificat |
-| POST | `/api/sensors/stop` | Oprire proces de senzor. | Autentificat |
-| GET | `/api/admin/users` | Listare utilizatori. | Admin |
+| POST | `/api/sensors/start` | Pornește un proces de senzor gestionat de backend. | Autentificat |
+| POST | `/api/sensors/stop` | Oprește un proces de senzor. | Autentificat |
+| GET | `/api/admin/users` | Listează utilizatorii. | Admin |
 | GET | `/api/admin/statistics` | Statistici globale. | Admin |
-| DELETE | `/api/admin/users/doctor/:id` | Ștergere doctor. | Admin |
-| DELETE | `/api/admin/users/pacient/:id` | Ștergere pacient. | Admin |
+| DELETE | `/api/admin/users/doctor/:id` | Șterge un doctor. | Admin |
+| DELETE | `/api/admin/users/pacient/:id` | Șterge un pacient. | Admin |
 
 ## Structura bazei de date
 
@@ -264,4 +264,4 @@ Schema principală este în `bd.sql` și include:
 - Backend-ul folosește HTTPS și va eșua la pornire dacă lipsesc certificatele din `backend/certs/`.
 - Datele sensibile trebuie ținute doar în fișiere `.env`, care sunt ignorate de Git.
 - Avatarurile încărcate local sunt salvate în `backend/uploads/` și nu trebuie versionate.
-- Pentru producție, se recomandă CORS strict, secrete JWT puternice, parole admin unice și certificate TLS reale.
+- Pentru producție, configurează CORS strict, secrete JWT puternice, parole admin unice și certificate TLS reale.
