@@ -31,6 +31,7 @@ def swap16(value):
 
 
 def probe_ads1115(bus, preferred_addr):
+    # ADS1115 poate fi mutat pe 0x49-0x4B prin pinii de adresare.
     candidates = [preferred_addr, 0x49, 0x4A, 0x4B]
     seen = set()
     for addr in candidates:
@@ -88,6 +89,7 @@ def read_ads_single_ended(bus, addr, channel, pga, data_rate):
 
 
 def summarize(values):
+    # Statisticile simple sunt suficiente pentru a separa semnal plat, rail si zgomot util.
     if not values:
         return {
             "min": 0,
@@ -111,6 +113,7 @@ def summarize(values):
 
 
 def verdict(stats, lo_plus, lo_minus):
+    # Verdictul combina starea electrozilor cu dinamica analogica masurata.
     lead_text = "LO+/LO- indica electrozi neconectati (normal daca nu sunt pe piele)."
     if lo_plus == 0 and lo_minus == 0:
         lead_text = "LO+/LO- indica electrozi conectati (contact detectat)."

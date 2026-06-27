@@ -21,12 +21,14 @@ export default function Dashboard() {
   const isEnglish = lang === 'en';
   const user = JSON.parse(sessionStorage.getItem('user') || 'null');
   
+  // Adminul are panou dedicat si nu foloseste dashboardul medical.
   if (user?.role === 'admin') {
     window.location.href = '/dashboard/admin';
     return null;
   }
   
   const userEmail = (user?.email || '').toLowerCase();
+  // Domeniul intern este folosit si in frontend pentru mesajele specifice doctorului.
   const isDoctor = userEmail.endsWith('@newmed.ro');
   const displayName = isDoctor ? user?.nume?.split(' ')[1] || user?.nume : user?.prenume;
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
+      // Endpoint-ul intoarce deja structuri diferite pentru doctor si pacient.
       setLoading(true);
       const response = await api.get('/dashboard/stats');
       setDashboardData(response.data);

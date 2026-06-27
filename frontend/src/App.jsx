@@ -16,6 +16,7 @@ import AdminPanel from './components/admin/AdminPanel';
 import SenzoriLive from './components/sensors/SenzoriLive';
 import Mesaje from './components/shared/Mesaje';
 
+// Mutam autentificarea veche din localStorage in sessionStorage pentru sesiuni mai scurte.
 function migrateLegacyAuthToSessionStorage() {
   if (typeof window === 'undefined') {
     return null;
@@ -47,6 +48,7 @@ function migrateLegacyAuthToSessionStorage() {
 
 function readAuthUser() {
   try {
+    // Citirea userului este izolata ca sa nu cada aplicatia pe JSON invalid.
     const rawUser = migrateLegacyAuthToSessionStorage();
     return rawUser ? JSON.parse(rawUser) : null;
   } catch {
@@ -58,6 +60,7 @@ function App() {
   const [user, setUser] = useState(() => readAuthUser())
 
   useEffect(() => {
+	  // Evenimentul auth-changed sincronizeaza login/logout intre componente.
 	  const handleAuthChange = () => {
 	    setUser(readAuthUser())
 	  }

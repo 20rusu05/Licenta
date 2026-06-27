@@ -97,6 +97,7 @@ export default function Programari() {
     if (!selectedDate || !selectedProgramare) return;
 
     try {
+      // Acelasi dialog acopera atat creare, cat si reprogramare.
       const isoDate = new Date(selectedDate).toISOString();
       
       if (selectedProgramare.id) {
@@ -204,6 +205,7 @@ export default function Programari() {
   }, [searchInput, reload]);
 
   const getStatusChip = (dataOra, status) => {
+    // Statusul vizual combina starea salvata cu data programarii.
     if (status === 'completata') {
       return <Chip size="small" label={isEnglish ? 'Completed' : 'Completată'} color="info" />;
     }

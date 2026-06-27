@@ -2,7 +2,9 @@ import { Paper, Box, Typography } from '@mui/material';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 
+// Cardul modern este folosit pentru KPI-urile principale din dashboard.
 export default function StatCardModern({ icon, label, value, subtitle, trend, color = 'primary' }) {
+  // Culorile sunt configurate semantic, nu hardcodate in fiecare utilizare.
   const gradients = {
     primary: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     success: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -42,6 +44,7 @@ export default function StatCardModern({ icon, label, value, subtitle, trend, co
             {icon}
           </Box>
           {trend && (
+            // Trendul este optional si apare doar cand backendul trimite valoarea.
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               {trend > 0 ? <TrendingUpIcon fontSize="small" /> : <TrendingDownIcon fontSize="small" />}
               <Typography variant="caption" sx={{ fontWeight: 600 }}>

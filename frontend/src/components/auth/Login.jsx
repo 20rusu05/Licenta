@@ -28,6 +28,7 @@ export default function Login() {
     setLoading(true);
     setError('');
 
+    // Nu trimitem request daca lipsesc datele minime de autentificare.
     if (!formData.email.trim() || !formData.parola.trim()) {
       setError(isEnglish ? 'Fill in the email address and password.' : 'Completează adresa de email și parola.');
       setLoading(false);
@@ -37,9 +38,11 @@ export default function Login() {
     try {
       const response = await api.post('/auth/login', formData);
 
+      // Dupa login pastram sesiunea in sessionStorage si notificam rutele/layout-ul.
       sessionStorage.setItem('user', JSON.stringify(response.data.user));
       sessionStorage.setItem('token', response.data.token);
 
+      // App.jsx asculta evenimentul si actualizeaza rutele protejate.
       window.dispatchEvent(new Event('auth-changed'));
 
       navigate('/dashboard');

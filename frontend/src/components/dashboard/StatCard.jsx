@@ -1,5 +1,6 @@
 import { Paper, Box, Typography } from '@mui/material';
 
+// Varianta compacta de stat card ramane disponibila pentru panouri simple.
 export default function StatCard({ icon, label, value, trend }) {
   return (
     <Paper
@@ -13,6 +14,7 @@ export default function StatCard({ icon, label, value, trend }) {
       }}
       elevation={0}
     >
+      {/* Iconita separa vizual tipul metricii de valoarea afisata. */}
       <Box sx={{ p: 1.2, borderRadius: '10px', bgcolor: 'primary.light', color: 'primary.main', display: 'inline-flex' }}>
         {icon}
       </Box>
@@ -24,6 +26,7 @@ export default function StatCard({ icon, label, value, trend }) {
           {value}
         </Typography>
         {trend && (
+          // Trendul accepta valori textuale precum "+12%" sau "-4%".
           <Typography variant="caption" color={trend.startsWith('+') ? 'success.main' : 'error.main'}>
             {trend} față de săptămâna trecută
           </Typography>
@@ -32,5 +35,4 @@ export default function StatCard({ icon, label, value, trend }) {
     </Paper>
   );
 }
-
 

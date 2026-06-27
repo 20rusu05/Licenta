@@ -168,6 +168,7 @@ class ECGSensor:
         return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF)
 
     def _probe_ads1115(self, preferred_addr):
+        # Unele module ADS1115 folosesc adrese alternative in functie de pinul ADDR.
         candidates = [preferred_addr, 0x49, 0x4A, 0x4B]
         checked = set()
         for addr in candidates:
@@ -208,6 +209,7 @@ class ECGSensor:
 
         pga_bits = pga_map.get(self.pga, 0x0200)
         dr_bits = dr_map.get(self.data_rate, 0x00E0)
+        # Configuram conversie single-shot ca sa controlam explicit ritmul de esantionare.
         config = (
             0x8000 |
             mux |
@@ -235,6 +237,7 @@ class ECGSensor:
         if self.backend == "ads1115":
             return self._read_ads1115(channel)
 
+        # MCP3008 livreaza 10 biti prin SPI; ADS1115 este scalat separat la 12 biti.
         adc = self.spi.xfer2([1, (8 + channel) << 4, 0])
         value = ((adc[1] & 3) << 8) + adc[2]
         return value

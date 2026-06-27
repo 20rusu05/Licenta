@@ -7,11 +7,13 @@ import { getTheme } from './theme'
 import { ThemeModeProvider, ThemeModeContext } from './ThemeModeContext'
 import { LanguageProvider } from './LanguageContext'
 
+// Root grupeaza provider-ele globale folosite de toate paginile.
 function Root() {
   return (
     <React.StrictMode>
       <LanguageProvider>
         <ThemeModeProvider>
+          {/* Tema MUI se reconstruieste cand contextul dark/light se schimba. */}
           <ThemeModeContext.Consumer>
             {({ mode }) => (
               <ThemeProvider theme={getTheme(mode)}>
@@ -26,5 +28,6 @@ function Root() {
   )
 }
 
+// React monteaza aplicatia in containerul definit de Vite in index.html.
 const root = ReactDOM.createRoot(document.getElementById('root'))
 root.render(<Root />)

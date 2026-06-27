@@ -11,6 +11,7 @@ router.post("/", verifyToken, async (req, res) => {
   if (!pacient_id || !data_programare) return res.status(400).json({ error: "Date incomplete" });
 
   try {
+    // Convertim data in format MySQL pentru a pastra acelasi tip de valoare in tabela.
     const mysqlDateTime = new Date(data_programare).toISOString().slice(0, 19).replace('T', ' ');
     
     await db.promise().query(
@@ -42,6 +43,7 @@ router.get("/", verifyToken, async (req, res) => {
 
     const searchLike = `%${search}%`;
 
+    // Aceeasi filtrare alimenteaza lista, totalul si contoarele din taburi.
     if (role === "doctor") {
       let whereClause = "p.doctor_id = ?";
       let countsWhereClause = "p.doctor_id = ?";

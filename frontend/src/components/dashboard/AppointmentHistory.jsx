@@ -7,6 +7,7 @@ export default function AppointmentHistory({ appointments = [] }) {
   const { lang, locale } = useLanguage();
   const isEnglish = lang === 'en';
 
+  // Normalizam statusul ca sa acoperim valori venite cu litere mari sau spatii.
   const normalizeStatus = (status) => String(status ?? '').trim().toLowerCase();
 
   const getStatusLabel = (status) => {
@@ -22,6 +23,7 @@ export default function AppointmentHistory({ appointments = [] }) {
 
   const getStatusColor = (status) => {
     const key = normalizeStatus(status);
+    // Culorile sunt aliniate cu statusurile folosite in pagina de programari.
     const colors = {
       'programata': 'primary',
       'confirmata': 'success',
@@ -32,6 +34,7 @@ export default function AppointmentHistory({ appointments = [] }) {
   };
 
   const formatDate = (dateString) => {
+    // Istoricul afiseaza si ora, nu doar ziua programarii.
     const date = new Date(dateString);
     return date.toLocaleDateString(locale, { 
       day: 'numeric', 

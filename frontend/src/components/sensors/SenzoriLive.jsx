@@ -850,6 +850,7 @@ export default function SenzoriLive() {
     if (!pacientId) return;
 
     try {
+      // La schimbarea pacientului incarcam un snapshot scurt pentru toate graficele.
       const [ecgRes, pulsRes, tempRes] = await Promise.all([
         api.get('/sensors/history/ecg', { params: { pacient_id: pacientId, limit: 300 } }),
         api.get('/sensors/history/puls', { params: { pacient_id: pacientId, limit: 60 } }),
@@ -1299,6 +1300,7 @@ export default function SenzoriLive() {
   }, []);
 
   useEffect(() => {
+    // Socket-ul asculta toate tipurile de senzori si filtreaza local pacientul curent.
     const socket = io(SOCKET_URL, {
       transports: ['polling', 'websocket'],
       upgrade: true,
@@ -1482,6 +1484,7 @@ export default function SenzoriLive() {
 
     const bounds = getHistoryRangeBounds(range, customFrom, customTo);
 
+    // Intervalul custom este validat in UI inainte de request-ul catre backend.
     if (range === 'custom') {
       if (!bounds.from || !bounds.to) {
         showToast('Completează intervalul personalizat (de la / până la)', 'warning');

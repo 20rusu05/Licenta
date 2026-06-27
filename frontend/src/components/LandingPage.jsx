@@ -15,6 +15,7 @@ export default function LandingPage() {
   const { lang } = useLanguage();
   const isEnglish = lang === 'en';
 
+  // Listele tin continutul landing page-ului compact si usor de tradus.
   const features = [
     {
       icon: <CalendarMonthIcon sx={{ fontSize: 48 }} />,
@@ -25,7 +26,7 @@ export default function LandingPage() {
     {
       icon: <MedicationIcon sx={{ fontSize: 48 }} />,
       title: isEnglish ? 'Medication management' : 'Gestionare Medicamente',
-      description: isEnglish ? 'Track your medication and receive treatment notifications.' : 'Ține evidența medicamentelor tale și primește notificări despre tratament.',
+      description: isEnglish ? 'Track your medication and organize your treatment details.' : 'Ține evidența medicamentelor tale și organizează detaliile tratamentului.',
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
     },
     {
@@ -44,6 +45,7 @@ export default function LandingPage() {
     }
   ];
 
+  // Beneficiile sunt randate ca lista scurta in sectiunea de incredere.
   const benefits = [
     isEnglish ? 'Fast and simple appointments' : 'Programări rapide și simple',
     isEnglish ? '24/7 access to your medical information' : 'Acces 24/7 la informațiile tale medicale',
@@ -53,6 +55,7 @@ export default function LandingPage() {
     isEnglish ? 'Maximum data security' : 'Securitate maximă a datelor'
   ];
 
+  // Butoanele principale trimit direct spre fluxurile de login si creare cont.
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Box 
@@ -285,24 +288,6 @@ export default function LandingPage() {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <Paper
-                    sx={{
-                      p: 3,
-                      textAlign: 'center',
-                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                      color: 'white'
-                    }}
-                  >
-                    <PeopleIcon sx={{ fontSize: 48, mb: 1 }} />
-                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-                      1000+
-                    </Typography>
-                    <Typography variant="body2">
-                      {isEnglish ? 'Happy patients' : 'Pacienți mulțumiți'}
-                    </Typography>
-                  </Paper>
-                </Grid>
               </Grid>
             </Grid>
           </Grid>
@@ -332,22 +317,6 @@ export default function LandingPage() {
                 : 'Echipa noastră este formată din profesioniști medicali și experți în tehnologie care lucrează împreună pentru a oferi cele mai bune soluții digitale în domeniul sănătății. Vom continua să inovăm și să îmbunătățim platforma pentru a răspunde nevoilor în continuă schimbare ale pacienților și medicilor.'}
             </Typography>
             <Box sx={{ display: 'flex', gap: 3, mt: 4 }}>
-              <Box>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                  5+
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {isEnglish ? 'Years of experience' : 'Ani experiență'}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                  50+
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {isEnglish ? 'Partner doctors' : 'Doctori parteneri'}
-                </Typography>
-              </Box>
               <Box>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
                   24/7

@@ -4,6 +4,7 @@ import { verifyToken } from "./middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// verifyToken confirma identitatea, iar isAdmin limiteaza explicit rutele de administrare.
 const isAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: "Acces interzis. Doar adminii pot accesa aceasta resursa." });
@@ -135,6 +136,7 @@ router.get("/users/:role/:id", verifyToken, isAdmin, async (req, res) => {
 
     let relatedData = {};
 
+    // Detaliile admin includ si numarul de inregistrari legate de utilizator.
     if (role === 'doctor') {
       const [medicamente] = await db
         .promise()

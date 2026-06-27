@@ -7,7 +7,11 @@ export default function TermsAndConditions() {
   const navigate = useNavigate();
   const { lang } = useLanguage();
   const isEnglish = lang === 'en';
+  // Stilul comun pastreaza listele legale curate in ambele limbi.
+  const listSx = { pl: 0, listStyle: 'none' };
 
+  // Continutul legal este randat bilingv in aceeasi componenta.
+  // Navigarea inapoi pastreaza contextul din care utilizatorul a deschis pagina.
   return (
     <Box sx={{
       minHeight: '100vh',
@@ -84,7 +88,7 @@ export default function TermsAndConditions() {
                   ? 'To use our services, you must create an account. You are responsible for:'
                   : 'Pentru a utiliza serviciile noastre, trebuie să vă creați un cont. Sunteți responsabil pentru:'}
               </Typography>
-              <Typography variant="body1" component="ul" sx={{ pl: 3 }}>
+              <Typography variant="body1" component="ul" sx={listSx}>
                 <li>{isEnglish ? 'Maintaining the confidentiality of your password' : 'Menținerea confidențialității parolei dumneavoastră'}</li>
                 <li>{isEnglish ? 'Providing accurate and up-to-date information' : 'Furnizarea de informații exacte și actualizate'}</li>
                 <li>{isEnglish ? 'All activities that occur under your account' : 'Toate activitățile care au loc sub contul dumneavoastră'}</li>
@@ -100,7 +104,7 @@ export default function TermsAndConditions() {
                   ? 'We are committed to protecting your personal and medical data in accordance with GDPR and Romanian data protection law. Your data will be:'
                   : 'Ne angajăm să protejăm datele dumneavoastră personale și medicale în conformitate cu GDPR și legislația română privind protecția datelor. Datele dumneavoastră vor fi:'}
               </Typography>
-              <Typography variant="body1" component="ul" sx={{ pl: 3 }}>
+              <Typography variant="body1" component="ul" sx={listSx}>
                 <li>{isEnglish ? 'Stored securely on protected servers' : 'Stocate în mod securizat pe servere protejate'}</li>
                 <li>{isEnglish ? 'Used exclusively to provide medical services' : 'Utilizate exclusiv pentru furnizarea serviciilor medicale'}</li>
                 <li>{isEnglish ? 'Shared only with authorized medical staff' : 'Partajate doar cu personalul medical autorizat'}</li>
@@ -115,7 +119,7 @@ export default function TermsAndConditions() {
               <Typography variant="body1" paragraph>
                 {isEnglish ? 'You agree not to:' : 'Vă obligați să nu:'}
               </Typography>
-              <Typography variant="body1" component="ul" sx={{ pl: 3 }}>
+              <Typography variant="body1" component="ul" sx={listSx}>
                 <li>{isEnglish ? 'Use the platform for illegal or unauthorized purposes' : 'Utilizați platforma în scopuri ilegale sau neautorizate'}</li>
                 <li>{isEnglish ? 'Attempt to access restricted systems or data' : 'Încercați să accesați sisteme sau date restricționate'}</li>
                 <li>{isEnglish ? 'Transmit viruses or malicious code' : 'Transmiteți viruși sau cod malițios'}</li>
@@ -153,7 +157,7 @@ export default function TermsAndConditions() {
               <Typography variant="body1" paragraph>
                 {isEnglish ? 'NewMed cannot be held liable for:' : 'NewMed nu poate fi tras la răspundere pentru:'}
               </Typography>
-              <Typography variant="body1" component="ul" sx={{ pl: 3 }}>
+              <Typography variant="body1" component="ul" sx={listSx}>
                 <li>{isEnglish ? 'Losses or damages resulting from the use of the platform' : 'Pierderi sau daune rezultate din utilizarea platformei'}</li>
                 <li>{isEnglish ? 'Service interruptions or technical errors' : 'Întreruperi ale serviciului sau erori tehnice'}</li>
                 <li>{isEnglish ? 'Actions or omissions of healthcare providers' : 'Acțiunile sau omisiunile furnizorilor de servicii medicale'}</li>
@@ -203,10 +207,10 @@ export default function TermsAndConditions() {
                   ? 'For questions or concerns regarding these terms and conditions, you can contact us at:'
                   : 'Pentru întrebări sau nelămuriri legate de acești termeni și condiții, ne puteți contacta la:'}
               </Typography>
-              <Typography variant="body1" component="ul" sx={{ pl: 3 }}>
+              <Typography variant="body1" component="ul" sx={listSx}>
                 <li>Email: contact@newmed.ro</li>
-                <li>{isEnglish ? 'Phone' : 'Telefon'}: 0712 345 678</li>
-                <li>{isEnglish ? 'Address' : 'Adresa'}: Str. Medicală Nr. 1, București, România</li>
+                <li>{isEnglish ? 'Phone' : 'Telefon'}: 0723501698</li>
+                <li>{isEnglish ? 'Address' : 'Adresa'}: Bulevardul Take Ionescu, Timișoara</li>
               </Typography>
             </Box>
           </Box>

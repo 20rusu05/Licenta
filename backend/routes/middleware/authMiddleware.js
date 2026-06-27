@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 dotenv.config();
 
+// Rutele protejate primesc utilizatorul curent din JWT in req.user.
 export const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
 

@@ -9,6 +9,7 @@ export default function RecentActivity({ activities = [] }) {
   const isEnglish = lang === 'en';
 
   const formatDate = (dateString) => {
+    // Feed-ul afiseaza timp relativ pentru activitati recente.
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now - date;
@@ -25,6 +26,7 @@ export default function RecentActivity({ activities = [] }) {
   };
 
   const getActivityInfo = (activity) => {
+    // Activitatea recenta amesteca programari si cereri de medicamente in acelasi feed.
     if (activity.tip === 'programare') {
       return {
         icon: <CalendarTodayIcon />,
@@ -34,6 +36,7 @@ export default function RecentActivity({ activities = [] }) {
         subtitle: activity.detalii
       };
     } else {
+      // Orice alt tip din feed este tratat ca cerere de medicament.
       return {
         icon: <MedicationIcon />,
         color: 'success.main',

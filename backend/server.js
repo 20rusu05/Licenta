@@ -113,6 +113,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sensor_data", (data) => {
+    // Citirile live sunt filtrate inainte de salvare si apoi trimise abonatilor.
     const { sensor_type, value_1, value_2, device_id, pacient_id, timestamp, leads_ok } = data;
     const readingTimestampMs = typeof timestamp === "number" ? timestamp * 1000 : Date.now();
 
@@ -174,6 +175,7 @@ io.on("connection", (socket) => {
       connectedSensors[socket.id].last_reading = new Date().toISOString();
     }
 
+    // Batch-urile reduc numarul de inserturi, dar actualizarea live trimite toate citirile.
     const values = readings
       .filter((r) => shouldPersistSensorReading({
         sensorType: sensor_type,

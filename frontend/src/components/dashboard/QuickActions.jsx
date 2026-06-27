@@ -11,6 +11,7 @@ export default function QuickActions() {
   const isEnglish = lang === 'en';
   const navigate = useNavigate();
 
+  // Actiunile rapide sunt configuratie de navigare, nu logica separata pe butoane.
   const actions = [
     {
       icon: <CalendarMonthIcon />,
@@ -42,6 +43,8 @@ export default function QuickActions() {
     }
   ];
 
+  // Gridul se construieste din configuratie ca sa ramana usor de extins.
+  // Culorile gradientelor diferentiaza actiunile fara state suplimentar.
   return (
     <Paper sx={{ p: 3, height: '100%' }} elevation={0}>
       <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>

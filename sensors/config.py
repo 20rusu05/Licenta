@@ -44,6 +44,7 @@ PULSE_SIMULATION = {
     "max_bpm": 80.0,
 }
 
+# Intervalele controleaza frecventa de citire si volumul de date trimis spre backend.
 INTERVALS = {
     "ecg": 0.005,
     "puls": 1.0,
@@ -110,6 +111,7 @@ DS18B20 = {
     "device_folder_prefix": "28-",
 }
 
+# ECG trimite in loturi mici; pulsul si temperatura raman evenimente rare.
 BATCH_SIZE = {
     "ecg": 50,
     "puls": 1,

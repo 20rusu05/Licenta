@@ -15,6 +15,7 @@ router.post("/register", async (req, res) => {
   const tableName = isDoctor ? "doctori" : "pacienti";
 
   try {
+    // Emailul si telefonul trebuie sa ramana unice indiferent de rolul utilizatorului.
     const [existsEmailDoctori] = await db
       .promise()
       .query("SELECT id FROM doctori WHERE email = ?", [email]);
@@ -62,6 +63,7 @@ router.post("/login", async (req, res) => {
     let user = null;
     let role = null;
 
+    // Conturile sunt in tabele separate, deci identificam intai rolul dupa email.
     const [admini] = await db
       .promise()
       .query("SELECT id, nume, prenume, email, telefon, parola, NULL AS avatar_url FROM admini WHERE email = ?", [email]);

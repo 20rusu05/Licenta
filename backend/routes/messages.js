@@ -39,6 +39,7 @@ const CONTACTS_PACIENT_QUERY = `
   )
 `;
 
+// Conversatiile se pot crea doar intre contacte legate deja prin aplicari acceptate.
 async function getAllowedCounterpartIds(userId, role) {
   if (role === "doctor") {
     const [rows] = await db.promise().query(
@@ -272,6 +273,7 @@ router.get("/conversations/:id/messages", verifyToken, async (req, res) => {
     );
 
     const oppositeRole = role === "doctor" ? "pacient" : "doctor";
+    // Marcarea ca citit se aplica doar mesajelor inca vizibile pentru utilizator.
     await db.promise().query(
       `
       UPDATE mesaje
@@ -332,6 +334,7 @@ router.post("/conversations/:id/messages", verifyToken, async (req, res) => {
       [conversationId]
     );
 
+    // Citim mesajul din DB ca raspunsul sa contina timestampul si id-ul finale.
     const [rows] = await db.promise().query(
       `
       SELECT id, conversatie_id, sender_role, sender_id, continut, is_read, created_at

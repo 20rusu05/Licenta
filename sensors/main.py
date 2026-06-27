@@ -20,6 +20,7 @@ from config import SERVER_URL, SENSOR_TLS_VERIFY, SENSOR_TLS_CA_CERT, DEVICE_ID
 def get_assigned_patient_for_device():
     """Obține ID-ul pacientului asignat dispozitivului din backend."""
     try:
+        # Auto-detectarea leaga device_id-ul fizic de sesiunea activa din backend.
         verify_ssl = SENSOR_TLS_CA_CERT if SENSOR_TLS_CA_CERT else (not bool(SENSOR_TLS_VERIFY) == False)
         response = requests.get(
             f"{SERVER_URL}/api/sensors/device-patient/{DEVICE_ID}",
@@ -64,6 +65,7 @@ class SensorManager:
                 if name in self.sensors:
                     continue
                 try:
+                    # ECG si puls impart ADC-ul, deci pulsul trece in simulare cand pornesc impreuna.
                     if name == "puls" and "ecg" in sensors_to_run:
                         self.sensors[name] = available_sensors[name](force_simulation=True)
                     else:
@@ -113,6 +115,7 @@ class SensorManager:
                 print(f"[MANAGER] Eroare oprire '{name}': {e}")
 
         for name, thread in self.threads.items():
+            # Join cu timeout previne blocarea managerului la oprire.
             thread.join(timeout=5)
 
         print("[MANAGER] Toți senzorii opriți.")

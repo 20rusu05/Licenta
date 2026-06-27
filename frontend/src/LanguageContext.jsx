@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+// Dictionarul ramane mic aici; textele mari stau direct in componente.
 const translations = {
   ro: {
     'brand.name': 'NewMed',
@@ -19,6 +20,7 @@ const translations = {
   },
 };
 
+// Interpolarea permite texte de forma "Salut, {{name}}" fara o librarie separata.
 function interpolate(template, values = {}) {
   return String(template).replace(/\{\{(\w+)\}\}/g, (_, key) => String(values[key] ?? ''));
 }
@@ -34,6 +36,7 @@ const defaultValue = {
 export const LanguageContext = createContext(defaultValue);
 
 export function LanguageProvider({ children }) {
+  // Limba ramane pe durata sesiunii si seteaza atributul lang pentru accesibilitate.
   const [lang, setLangState] = useState(() => {
     if (typeof window === 'undefined') {
       return 'ro';

@@ -15,6 +15,7 @@ export const getBackendAssetUrl = (assetPath) => {
   return new URL(assetPath, BACKEND_ORIGIN).toString();
 };
 
+// Tokenul este atasat central, ca fiecare componenta sa foloseasca acelasi client API.
 api.interceptors.request.use((config) => {
   try {
     const token = sessionStorage.getItem('token');

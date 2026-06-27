@@ -53,6 +53,7 @@ export default function AdminPanel() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    // Panoul admin incarca separat lista de utilizatori si statisticile generale.
     fetchUsers();
     fetchStatistics();
   }, []);
@@ -99,6 +100,7 @@ export default function AdminPanel() {
 
   const handleDetailsClick = async (user, role) => {
     try {
+      // Detaliile sunt cerute doar la deschiderea dialogului, ca lista sa ramana rapida.
       const response = await api.get(`/admin/users/${role}/${user.id}`);
       setDetailsDialog({ open: true, user: response.data.user, data: response.data.relatedData });
     } catch (err) {
@@ -123,6 +125,7 @@ export default function AdminPanel() {
       .replace(/[\u0300-\u036f]/g, '');
   };
 
+  // Cautarea ignora diacriticele pentru nume si prenume.
   const filterUsers = (items) => {
     const normalizedQuery = normalizeText(searchQuery).trim();
 

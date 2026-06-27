@@ -45,6 +45,7 @@ class TemperatureSensor:
 
     def _find_device(self):
         """Găsește dispozitivul DS18B20 conectat."""
+        # Kernelul expune DS18B20 ca folder 28-* in bus-ul 1-Wire.
         device_folders = glob.glob(
             os.path.join(DS18B20["base_dir"], DS18B20["device_folder_prefix"] + "*")
         )
@@ -90,6 +91,7 @@ class TemperatureSensor:
 
         for attempt in range(1, DS18B20_MAX_RETRIES + 1):
             if not self._ensure_device():
+                # Daca senzorul a disparut, asteptam scurt si reincercam detectarea.
                 time.sleep(DS18B20_READ_POLL_S)
                 continue
 
@@ -125,6 +127,7 @@ class TemperatureSensor:
             time.sleep(DS18B20_READ_POLL_S)
 
         if self.last_valid_temperature is not None:
+            # Ultima valoare buna evita salturi artificiale cand bus-ul 1-Wire ezita.
             print("[TEMPERATURĂ] Folosesc ultima temperatură validă până revine senzorul")
             return self.last_valid_temperature
 

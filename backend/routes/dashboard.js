@@ -9,6 +9,7 @@ router.get('/stats', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
+    // Dashboardul intoarce agregari diferite pentru doctor si pacient.
     if (userRole === 'doctor') {
       const [totalPacienti] = await db.promise().query(
         'SELECT COUNT(DISTINCT pacient_id) as total FROM programari WHERE doctor_id = ?',

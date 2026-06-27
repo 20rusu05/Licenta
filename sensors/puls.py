@@ -628,6 +628,7 @@ class PulsOximeter:
         return bpm, ""
 
     def _should_reacquire(self, now, span, stability, confidence):
+        # Reachizitia permite revenirea dupa deget miscat sau semnal pierdut.
         if self.reacquire_active:
             return (
                 not stability["moving"] and
@@ -1045,6 +1046,7 @@ class PulsOximeter:
         return None
 
     def _enter_settle_mode(self, now):
+        # Dupa schimbari de gain pastram o fereastra scurta si invalidam validarea veche.
         self.settle_until = max(self.settle_until, now + self.settle_seconds)
         self._reset_validation_state(keep_prediction=True)
         self.reacquire_active = False

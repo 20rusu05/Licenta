@@ -45,6 +45,7 @@ const sensorProcessModes = {
   temperatura: "hardware",
 };
 
+// O sesiune activa este autorizatia care permite pornirea unui senzor pentru pacient.
 async function hasActiveMonitoringSession({ pacientId, sensorType, doctorId = null }) {
   const baseQuery = `
     SELECT id
@@ -67,6 +68,7 @@ async function hasActiveMonitoringSession({ pacientId, sensorType, doctorId = nu
   return rows.length > 0;
 }
 
+// Verificam si procesele OS ca sa gasim senzori ramasi dupa restarturi ale backendului.
 function getOsSensorPids(sensorType) {
   try {
     const output = execSync(
@@ -562,6 +564,7 @@ router.post("/start", verifyToken, async (req, res) => {
     !sensorProcesses.puls.killed &&
     sensorProcessPacients.puls === normalizedPacientId;
 
+  // Cand ECG ruleaza, pulsul trece in simulare ca sa evite conflictul pe acelasi hardware.
   if (shouldRestartPulseInSimulation) {
     try {
       process.kill(-sensorProcesses.puls.pid);
@@ -638,6 +641,7 @@ router.post("/start", verifyToken, async (req, res) => {
       });
     };
 
+    // Dupa o fereastra scurta fara exit/error consideram procesul pornit corect.
     const startupTimer = setTimeout(() => {
       finishSuccessResponse();
     }, 1200);
@@ -938,6 +942,7 @@ router.post("/doctor/assign-session", verifyToken, (req, res) => {
       const existingTypes = new Set(existingRows.map((r) => r.sensor_type));
       const missingTypes = validTypes.filter((t) => !existingTypes.has(t));
 
+      // Asignarea creeaza doar sesiunile lipsa, ca apelurile repetate sa fie idempotente.
       if (missingTypes.length === 0) {
         return res.json({
           success: true,

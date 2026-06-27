@@ -43,6 +43,7 @@ router.post('/forgot-password', async (req, res) => {
       }
     }
 
+    // Raspunsul generic evita confirmarea existentei unui cont pentru adresa ceruta.
     if (!user) {
       return res.status(200).json({ 
         message: 'Dacă email-ul există, veți primi un link de resetare.' 
@@ -57,6 +58,7 @@ router.post('/forgot-password', async (req, res) => {
       [token, expires, normalizedEmail]
     );
 
+    // Transportul SMTP este creat doar dupa ce exista un cont pentru emailul cerut.
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,

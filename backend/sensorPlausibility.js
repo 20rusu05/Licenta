@@ -77,6 +77,7 @@ export function applyPlausibilityFilter({
     };
   }
 
+  // Pentru puls pastram stare per senzor/pacient, ca salturile imposibile sa fie netezite local.
   const key = [sensorType, deviceId || "unknown", pacientId || "na"].join(":");
   const state = getState(stateMap, key);
   const now = Number.isFinite(timestampMs) ? timestampMs : Date.now();
@@ -87,6 +88,7 @@ export function applyPlausibilityFilter({
 
   if (state.lastValue !== null && state.lastTs !== null) {
     const dtSec = clamp((now - state.lastTs) / 1000.0, 0.25, 5.0);
+    // Limitele depind de timp, altfel citirile dese ar fi penalizate prea agresiv.
     const maxRise = 7.0 * dtSec + 1.5;
     const maxFall = 10.0 * dtSec + 2.5;
     const delta = candidate - state.lastValue;

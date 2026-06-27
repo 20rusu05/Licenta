@@ -55,6 +55,7 @@ router.get("/", authMiddleware, async (req, res) => {
       req.user.role === 'doctor' ? [...queryParams, limit, offset] : [limit, offset]
     );
 
+    // Cand se cere un medicament anume, aplicantii au paginare separata de lista principala.
     if (medicamentId) {
       let medicamentQuery = `SELECT id, denumire, descriere, complet, doctor_id FROM medicamente WHERE id = ?`;
       let medicamentParams = [medicamentId];
@@ -301,6 +302,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Aplicarea pastreaza criteriile medicale trimise de pacient pentru evaluarea doctorului.
 router.post("/:id/aplica", authMiddleware, async (req, res) => {
   if (req.user.role !== "pacient")
     return res.status(403).json({ error: "Doar pacienții pot aplica" });

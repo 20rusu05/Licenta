@@ -79,6 +79,7 @@ export default function Sidebar() {
   }, [isAdmin, isEnglish, user?.role]);
 
   useEffect(() => {
+    // Statusul monitorizarii este partajat cu pagina de senzori prin storage si event-uri.
     const readMonitoringStatus = () => {
       try {
         const sessionRaw = sessionStorage.getItem(MONITORING_STATUS_KEY);
@@ -122,6 +123,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     refreshRunningSensors();
+    // Sidebar-ul verifica periodic procesele pornite si in afara paginii de senzori.
     const intervalId = setInterval(refreshRunningSensors, 4000);
     return () => clearInterval(intervalId);
   }, [refreshRunningSensors]);
@@ -161,6 +163,7 @@ export default function Sidebar() {
 
     setActionLoading((prev) => ({ ...prev, startAll: true }));
     try {
+      // Pornirea globala incearca fiecare senzor si apoi sincronizeaza pagina live prin event.
       await Promise.allSettled(
         ['ecg', 'puls', 'temperatura'].map((sensorType) =>
           api.post('/sensors/start', {
@@ -505,5 +508,4 @@ export default function Sidebar() {
 }
 
 export { drawerWidth };
-
 

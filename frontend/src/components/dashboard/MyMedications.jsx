@@ -9,6 +9,7 @@ export default function MyMedications({ medications = [] }) {
   const { lang, locale } = useLanguage();
   const isEnglish = lang === 'en';
 
+  // Maparea statusului tine laolalta eticheta, culoarea si iconita din UI.
   const getStatusInfo = (status) => {
     const info = {
       'acceptat': { 
@@ -31,10 +32,12 @@ export default function MyMedications({ medications = [] }) {
   };
 
   const formatDate = (dateString) => {
+    // Cardul rezuma aplicarea, asa ca data ramane compacta.
     const date = new Date(dateString);
     return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
+  // Chip-ul din titlu arata rapid cate cereri sunt acceptate.
   return (
     <Paper sx={{ p: 3, height: '100%' }} elevation={0}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>

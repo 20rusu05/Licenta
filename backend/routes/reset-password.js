@@ -11,6 +11,7 @@ router.post('/reset-password', async (req, res) => {
     let user = null;
     let tableName = null;
 
+    // Tokenul de resetare poate apartine fie unui pacient, fie unui doctor.
     const [pacienti] = await db.promise().query(
       'SELECT id FROM pacienti WHERE reset_token = ? AND reset_token_expiry > NOW()',
       [token]

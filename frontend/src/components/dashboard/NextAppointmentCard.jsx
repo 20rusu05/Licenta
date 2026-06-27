@@ -14,6 +14,7 @@ export default function NextAppointmentCard({ appointment }) {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Etichetele statusurilor sunt localizate aici pentru card si dialogul de detalii.
   const statusLabels = {
     programata: isEnglish ? 'Scheduled' : 'Programată',
     confirmata: isEnglish ? 'Confirmed' : 'Confirmată',
@@ -44,6 +45,7 @@ export default function NextAppointmentCard({ appointment }) {
   };
 
   const getDaysUntil = (dateString) => {
+    // Mesajul relativ este mai util pacientului decat o diferenta numerica bruta.
     const date = new Date(dateString);
     const today = new Date();
     const diffTime = date - today;
@@ -56,6 +58,7 @@ export default function NextAppointmentCard({ appointment }) {
   };
 
   const getStatusColor = (status) => {
+    // Dialogul de detalii foloseste aceeasi semantica vizuala ca badge-ul principal.
     const colors = {
       'programata': 'primary',
       'confirmata': 'success',

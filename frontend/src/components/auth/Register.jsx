@@ -28,6 +28,8 @@ export default function Register() {
   const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
   const phoneRegex = /^(07\d{8}|02\d{8}|03\d{8})$/;
 
+  // Regulile de format sunt pastrate langa componenta ca formularul sa fie usor de citit.
+  // Validarile rapide din UI evita request-uri evidente invalide catre backend.
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'telefon' && !/^\d*$/.test(value)) {
@@ -79,6 +81,7 @@ export default function Register() {
     }
 
     try {
+      // Dupa creare, utilizatorul se autentifica separat pe pagina de login.
       await api.post('/auth/register', formData);
       navigate('/login');
     } catch (err) {

@@ -36,6 +36,7 @@ export default function Patients() {
   const [searchInput, setSearchInput] = useState('');
 
   const loadPatients = async (page, searchTerm = search) => {
+    // Backend-ul intoarce doar pacientii conectati cu doctorul curent.
     setLoading(true);
     try {
       const res = await api.get(`/pacienti?page=${page}&limit=10&search=${encodeURIComponent(searchTerm)}`);
@@ -52,6 +53,7 @@ export default function Patients() {
   };
 
   const handleSearch = () => {
+    // Cautarea reseteaza pagina ca rezultatele sa inceapa de la primul rand.
     setSearch(searchInput);
     loadPatients(1, searchInput);
   };
@@ -67,6 +69,7 @@ export default function Patients() {
   }, []);
 
   const formatDate = (dateString) => {
+    // Datele sunt afisate in locale-ul selectat de utilizator.
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString(locale, {
       day: '2-digit',
@@ -197,4 +200,3 @@ export default function Patients() {
     </AppLayout>
   );
 }
-

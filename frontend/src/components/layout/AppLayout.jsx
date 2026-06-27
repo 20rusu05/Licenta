@@ -22,6 +22,7 @@ export default function AppLayout({ children }) {
   const location = useLocation();
   const { t } = useLanguage();
   const [user, setUser] = useState(() => readAuthUser());
+  // Admin panel-ul are layout propriu, fara sidebar-ul aplicatiei medicale.
   const hideSidebar = location.pathname === '/dashboard/admin';
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function AppLayout({ children }) {
   }, []);
 
   const handleLogout = () => {
+    // Logout-ul sterge sesiunea locala si anunta restul aplicatiei.
     sessionStorage.removeItem('user');
     sessionStorage.removeItem('token');
     window.dispatchEvent(new Event('auth-changed'));
@@ -79,6 +81,7 @@ export default function AppLayout({ children }) {
 
       {!hideSidebar && <Sidebar />}
 
+      {/* Continutul principal compenseaza latimea sidebarului cand acesta exista. */}
       <Box
         component="main"
         sx={{
@@ -94,5 +97,3 @@ export default function AppLayout({ children }) {
     </Box>
   );
 }
-
-

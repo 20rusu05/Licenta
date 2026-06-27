@@ -107,6 +107,7 @@ class SensorClient:
         try:
             self.data_queue.put_nowait(data)
         except queue.Full:
+            # Daca backendul e lent, aruncam cea mai veche citire si pastram fluxul live.
             try:
                 self.data_queue.get_nowait()
             except queue.Empty:
@@ -159,9 +160,11 @@ class SensorClient:
                 try:
                     data = self.data_queue.get(timeout=1)
                     if self.connected:
+                        # Socket.IO este calea principala pentru grafice live.
                         self.sio.emit("sensor_data", data)
                     else:
                         try:
+                            # Fallback HTTP pastreaza salvarea chiar fara conexiune WebSocket.
                             requests.post(
                                 f"{self.server_url}/api/sensors/reading",
                                 json=data,

@@ -16,6 +16,7 @@ if (!existsSync(avatarsDir)) {
   mkdirSync(avatarsDir, { recursive: true });
 }
 
+// Avatarurile sunt salvate local cu nume generate, nu cu numele trimis de client.
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, avatarsDir);
@@ -39,6 +40,7 @@ const upload = multer({
   },
 });
 
+// Stergem doar fisiere incarcate local, nu URL-uri externe sau valori vechi invalide.
 const deleteAvatarIfLocal = async (avatarUrl) => {
   if (!avatarUrl || !avatarUrl.startsWith("/uploads/avatars/")) {
     return;
@@ -79,6 +81,7 @@ router.get("/", verifyToken, async (req, res) => {
       searchParams = [searchPattern, searchPattern, searchPattern, searchPattern];
     }
 
+    // Un pacient apare la doctor daca exista programari sau aplicari la medicamentele lui.
     const [[{ total }]] = await db.promise().query(
       `
       SELECT COUNT(DISTINCT p.id) AS total

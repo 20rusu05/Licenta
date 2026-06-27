@@ -136,6 +136,7 @@ export default function Mesaje() {
     const { silent = false } = options;
 
     try {
+      // Refresh-ul sincronizeaza conversatiile, contactele si mesajele selectate.
       const [conversationRows, contactRows] = await Promise.all([
         loadConversations(),
         loadContacts(contactsQuery),
@@ -173,6 +174,7 @@ export default function Mesaje() {
 
     refreshAll({ silent: false });
 
+    // Mesajele se actualizeaza prin polling ca sa ramana simple si compatibile cu API-ul REST.
     const intervalId = setInterval(() => {
       run();
     }, REFRESH_INTERVAL_MS);

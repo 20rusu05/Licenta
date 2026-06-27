@@ -18,6 +18,7 @@ export default function ForgotPassword() {
     setMessage('');
     setError('');
 
+    // Campul gol este tratat local ca sa nu apelam inutil endpointul de email.
     if (!email.trim()) {
       setError(isEnglish ? 'Fill in the email address.' : 'Completează adresa de email.');
       return;
@@ -25,7 +26,9 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
+      // Backend-ul raspunde generic, ca adresa de email sa nu poata fi enumerata.
       const res = await api.post('/forgot-password', { email });
+      // Mesajul de succes ramane acelasi indiferent daca adresa exista.
       setMessage(res.data.message || (isEnglish ? 'Check your email for instructions.' : 'Verifică-ți emailul pentru instrucțiuni.'));
     } catch (err) {
       setError(err.response?.data?.error || (isEnglish ? 'Something went wrong.' : 'A apărut o eroare.'));

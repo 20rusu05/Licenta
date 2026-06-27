@@ -54,6 +54,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
 
   const days = getNext7Days();
   
+  // Completam zilele fara programari cu 0, ca graficul sa ramana stabil.
   const chartData = days.map(day => {
     const found = data.find(d => d.data === day.date);
     return {
@@ -64,6 +65,7 @@ export default function AppointmentsChart({ data = [], allAppointments = [] }) {
   });
 
   const maxValue = Math.max(...chartData.map(d => d.value), 5);
+  // Pragul minim de 5 evita bare disproportionate cand exista o singura programare.
   const totalWeek = chartData.reduce((sum, item) => sum + item.value, 0);
 
   return (

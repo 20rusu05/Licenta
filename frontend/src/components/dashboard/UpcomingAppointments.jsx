@@ -8,6 +8,7 @@ export default function UpcomingAppointments({ appointments = [] }) {
   const { lang, locale } = useLanguage();
   const isEnglish = lang === 'en';
 
+  // Culorile statusurilor raman consistente cu restul cardurilor de dashboard.
   const getStatusColor = (status) => {
     const colors = {
       'programata': 'primary',
@@ -19,6 +20,7 @@ export default function UpcomingAppointments({ appointments = [] }) {
   };
 
   const formatDate = (dateString) => {
+    // Azi si maine primesc etichete scurte, restul folosesc format localizat.
     const date = new Date(dateString);
     const today = new Date();
     const tomorrow = new Date(today);
@@ -38,6 +40,7 @@ export default function UpcomingAppointments({ appointments = [] }) {
   };
 
   const getStatusLabel = (status) => {
+    // Etichetele sunt localizate aici pentru cardul de programari de azi.
     const labels = {
       programata: isEnglish ? 'Scheduled' : 'Programată',
       confirmata: isEnglish ? 'Confirmed' : 'Confirmată',

@@ -38,6 +38,7 @@ import { useLanguage } from '../../LanguageContext';
 
 const API_URL = "/medicamente";
 
+// Statusul aplicarii este redat uniform in tabel si in detaliile randului.
 function StatusChip({ status, isEnglish }) {
   if (!status) return <Chip size="small" label="-" color="default" />;
   let label = status.charAt(0).toUpperCase() + status.slice(1);
@@ -97,12 +98,14 @@ export default function Medicamente() {
   const user = JSON.parse(sessionStorage.getItem("user") || 'null');
   const isDoctor = user?.role === "doctor";
 
+// Lista principala si randurile expandate folosesc acelasi loader.
 const reload = async (specificMedicamentId = null, customAplicantiPage = null) => {
   if (!specificMedicamentId) {
     setLoading(true);
   }
   
   try {
+    // Pentru randurile expandate reincarcam doar medicamentul si aplicantii lui.
     let url = `${API_URL}?page=${page}&limit=${limit}`;
     
     if (specificMedicamentId) {

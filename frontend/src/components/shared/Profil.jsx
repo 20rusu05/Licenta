@@ -100,6 +100,7 @@ export default function Profil() {
     try {
       await api.put(`/pacienti/${user.id}`, formData);
 
+      // Profilul din sessionStorage este sursa pentru header si restul aplicatiei.
       const updatedUser = { ...user, ...formData };
       sessionStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
@@ -118,6 +119,7 @@ export default function Profil() {
     const file = e.target.files?.[0];
     if (!file || !user?.id) return;
 
+    // Validarea locala ofera feedback rapid inainte de upload.
     if (!file.type.startsWith('image/')) {
       setError(isEnglish ? 'The selected file must be an image.' : 'Fișierul selectat trebuie să fie o imagine.');
       return;
@@ -160,6 +162,7 @@ export default function Profil() {
   const handleAvatarDelete = async () => {
     if (!user?.id || !user?.avatar_url) return;
 
+    // Stergerea avatarului actualizeaza si sesiunea, nu doar backendul.
     setDeletingAvatar(true);
     setError('');
     setSuccess('');

@@ -17,12 +17,14 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Tokenul vine din URL, iar formularul trimite doar parola noua confirmata.
     if (!password.trim() || !confirm.trim()) {
       setError(isEnglish ? 'Fill in both password fields.' : 'Completează ambele câmpuri pentru parolă.');
       return;
     }
 
     if (password !== confirm) {
+      // Confirmarea locala previne resetari cu parola tastata gresit.
       setError(isEnglish ? 'Passwords do not match.' : 'Parolele nu coincid.');
       return;
     }
@@ -32,6 +34,7 @@ export default function ResetPassword() {
     try {
       const res = await api.post('/reset-password', { token, newPassword: password });
       setMessage(res.data.message || (isEnglish ? 'The password was reset successfully.' : 'Parola a fost resetată cu succes.'));
+      // Dupa resetare utilizatorul este trimis inapoi la autentificare.
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
       setError(err.response?.data?.error || (isEnglish ? 'Error resetting the password.' : 'Eroare la resetarea parolei.'));

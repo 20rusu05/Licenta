@@ -3,6 +3,7 @@ import { createTheme } from '@mui/material/styles';
 export function getTheme(mode) {
   const isDark = mode === 'dark';
 
+  // Tema centralizeaza paleta si override-urile MUI pentru dark/light mode.
   return createTheme({
     palette: {
       mode,
@@ -45,6 +46,7 @@ export function getTheme(mode) {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          // Browserul coloreaza autofill-ul diferit; il neutralizam pentru ambele teme.
           'input:-webkit-autofill, textarea:-webkit-autofill, select:-webkit-autofill': {
             WebkitTextFillColor: isDark ? '#E5E7EB' : '#2C3E50',
             caretColor: isDark ? '#E5E7EB' : '#2C3E50',
@@ -88,6 +90,7 @@ export function getTheme(mode) {
       },
       MuiTextField: {
         styleOverrides: {
+          // Inputurile folosesc borduri discrete ca sa nu concureze cu continutul medical.
           root: {
             '& .MuiOutlinedInput-root': {
               '& fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E0' },
@@ -125,5 +128,3 @@ export function getTheme(mode) {
     },
   });
 }
-
-

@@ -14,7 +14,7 @@ const createAdmin = async () => {
       .query('SELECT id FROM admini WHERE email = ?', [email]);
 
     if (existingAdmin.length > 0) {
-      console.log('✅ Admin-ul există deja în baza de date.');
+      console.log('Admin-ul există deja în baza de date.');
       console.log('Email: admin1@newmed.ro');
       console.log('Parola: newmed.ro');
       process.exit(0);
@@ -38,7 +38,7 @@ const createAdmin = async () => {
     
     process.exit(0);
   } catch (err) {
-    console.error('❌ Eroare la crearea adminului:', err.message);
+    console.error('Eroare la crearea adminului:', err.message);
     process.exit(1);
   }
 };
