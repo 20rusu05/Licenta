@@ -133,7 +133,7 @@ cd backend
 node create-admin.js
 ```
 
-Scriptul creează contul admin definit în `backend/create-admin.js`. Pentru un mediu real, schimbă datele implicite înainte de rulare.
+Scriptul creează contul admin folosind valorile `ADMIN_EMAIL` și `ADMIN_PASSWORD` din `backend/.env`. Completează aceste valori local înainte de rulare.
 
 ### 5. Configurare frontend
 
@@ -159,6 +159,12 @@ DB_PASSWORD=your_mysql_password
 DB_NAME=licenta
 
 JWT_SECRET=change_this_to_a_long_random_secret
+
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ADMIN_LAST_NAME=Admin
+ADMIN_FIRST_NAME=NewMed
+ADMIN_PHONE=0700000000
 
 FRONTEND_BASE_URL=http://localhost:5173
 EMAIL_USER=

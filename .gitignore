@@ -1,8 +1,16 @@
-node_modules
+node_modules/
 
 # Env files
 .env
 *.env
+.env.*
+!.env.example
+!*.env.example
+
+# Build/test output
+dist/
+dist-ssr/
+coverage/
 
 # System files
 .DS_Store
@@ -17,6 +25,9 @@ backend/uploads/
 # Python cache/venv
 **/__pycache__/
 *.py[cod]
+.pytest_cache/
+.venv/
+venv/
 sensors/venv/
 
 # secrets and local TLS files
@@ -25,5 +36,10 @@ backend/certs/server.crt
 backend/certs/server.key
 backend/certs/server.csr
 backend/certs/ca.key
+backend/certs/*.pem
 backend/certs/*.srl
 backend/certs/*.cnf
+
+# Codex/agent metadata
+.agents/
+.codex/

@@ -3,11 +3,21 @@ import { db } from './db.js';
 
 const createAdmin = async () => {
   try {
-    const email = 'admin1@newmed.ro';
-    const parola = 'newmed.ro';
-    const nume = 'Admin';
-    const prenume = 'NewMed';
-    const telefon = '0700000000';
+    const email = (process.env.ADMIN_EMAIL || '').trim();
+    const parola = process.env.ADMIN_PASSWORD || '';
+    const nume = (process.env.ADMIN_LAST_NAME || 'Admin').trim();
+    const prenume = (process.env.ADMIN_FIRST_NAME || 'NewMed').trim();
+    const telefon = (process.env.ADMIN_PHONE || '0700000000').trim();
+
+    const missingEnv = [];
+    if (!email) missingEnv.push('ADMIN_EMAIL');
+    if (!parola.trim()) missingEnv.push('ADMIN_PASSWORD');
+
+    if (missingEnv.length > 0) {
+      console.error(`Lipsesc variabilele de mediu: ${missingEnv.join(', ')}`);
+      console.error('Completeaza-le in backend/.env inainte de a crea contul admin.');
+      process.exit(1);
+    }
 
     const [existingAdmin] = await db
       .promise()
@@ -15,8 +25,7 @@ const createAdmin = async () => {
 
     if (existingAdmin.length > 0) {
       console.log('Admin-ul există deja în baza de date.');
-      console.log('Email: admin1@newmed.ro');
-      console.log('Parola: newmed.ro');
+      console.log('Email:', email);
       process.exit(0);
     }
 
@@ -31,8 +40,7 @@ const createAdmin = async () => {
 
     console.log('✅ Cont admin creat cu succes!');
     console.log('─────────────────────────────');
-    console.log('Email: admin1@newmed.ro');
-    console.log('Parola: newmed.ro');
+    console.log('Email:', email);
     console.log('─────────────────────────────');
     console.log('ID-ul adminului:', result.insertId);
     
